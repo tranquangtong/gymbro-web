@@ -42,3 +42,9 @@ Không migrate Config/Logs vận hành, `source_message_id`, messageId, messageD
 Rules giới hạn quyền theo Firebase UID và schema. Kiểm tra đồng thời khi sửa dùng transaction và revision; code giữ bản nháp khi lỗi. File nguồn Sheets giữ nguyên. Bộ nhập không tải Sheets trực tiếp bằng OAuth nữa; file chuyển đổi là dữ liệu riêng tư, không được commit.
 
 Đường dẫn `.migration/` bị ignore. Chỉ commit code, Rules và fixture giả. Không đưa lịch sử, bản sao JSON cá nhân, service-account key hoặc token lên repo public. File `firebase.json` chỉ cấu hình triển khai Rules bằng CLI nếu muốn; không chuyển hosting khỏi GitHub Pages.
+
+## Quản trị viên
+
+`tongquangtran@gmail.com` có quyền admin khi email được Firebase Auth xác minh. Firestore Rules kiểm tra token, không đọc role tự khai từ client. Admin mở màn hình Admin, làm mới danh sách tài khoản và chọn tài khoản để xem/sửa/xóa mềm log; Tư liệu hỗ trợ sửa nội dung báo cáo/giáo án dạng JSON. Banner luôn hiện UID đang quản lý. Nút quay về dữ liệu của mình tránh nhập nhầm tài khoản. Migrate/chuyển local bị chặn khi đang quản lý tài khoản khác.
+
+Mỗi tài khoản đăng nhập tạo một bản directory `users/{uid}` chỉ chứa uid, email, display_name và updated_at. Người thường không list directory hoặc mở dữ liệu của người khác. Không cấp IAM Owner hoặc quyền Firebase Console bằng vai trò admin của ứng dụng.

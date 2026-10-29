@@ -2,6 +2,8 @@ import {firebaseConfig} from './firebase-config.js';
 import {SCHEMAS,emptyData,validateRecord} from './core.js';
 import {cleanRecord,validateArchive} from './migration.js';
 
+export const ADMIN_EMAIL='tongquangtran@gmail.com';
+export const isAdmin = user => user?.emailVerified === true && user.email === ADMIN_EMAIL;
 let service;
 export async function firebaseService() {
   if(!service) service=(async()=>{
@@ -24,10 +26,12 @@ export async function logoutFirebase(){const s=await firebaseService();await s.a
 export function firebaseError(e){return ({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':'Không kết nối được Firestore. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
 
 export class FirebaseRepository {
-  constructor(s){this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.title='Firebase · '+s.auth.currentUser.email;}
-  check(){if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');}
-  ref(table,id){if(![...Object.keys(SCHEMAS),'Archive'].includes(table))throw Error('Loại dữ liệu không hợp lệ.');return this.s.dbSDK.doc(this.s.db,'users',this.uid,table,id);}
-  async load(){this.check();const data=emptyData();try{await Promise.all([...Object.keys(SCHEMAS),'Archive'].map(async table=>{const q=this.s.dbSDK.collection(this.s.db,'users',this.uid,table);const snapshot=await this.s.dbSDK.getDocsFromServer(q);data[table]=snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}));this.check();return data;}catch(e){throw Error(firebaseError(e));}}
+  constructor(s,targetUid=null){this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.ownerUid=targetUid||this.uid;this.check();this.title=this.ownerUid===this.uid?'Firebase · '+s.auth.currentUser.email:'ADMIN · dữ liệu UID '+this.ownerUid;}
+  check(){if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
+  ref(table,id){if(![...Object.keys(SCHEMAS),'Archive'].includes(table))throw Error('Loại dữ liệu không hợp lệ.');return this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,table,id);}
+  async registerOwner(){this.check();const user=this.s.auth.currentUser;await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.uid),{uid:this.uid,email:user.email,display_name:user.displayName||'',updated_at:new Date().toISOString()});}
+  async listUsers(){this.check();if(!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được xem danh sách tài khoản.');const snapshot=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users'));return snapshot.docs.map(d=>({...d.data(),uid:d.id}));}
+  async load(){this.check();const data=emptyData();try{await Promise.all([...Object.keys(SCHEMAS),'Archive'].map(async table=>{const q=this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,table);const snapshot=await this.s.dbSDK.getDocsFromServer(q);data[table]=snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}));this.check();return data;}catch(e){throw Error(firebaseError(e));}}
   async save(table,record,{insertOnly=false}={}){
     this.check();const clean=cleanRecord(table,record);if(table==='Archive')validateArchive(clean);else validateRecord(table,clean);
     let inserted=false;

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cleanRecord,convertSheets,validateBundle} from '../migration.js';
-import {FirebaseRepository} from '../firebase.js';
+import {FirebaseRepository,isAdmin} from '../firebase.js';
 
 const meal={id:'meal1',date:'2026-10-29',meal:'lunch',food:'Đậu hũ',portion:'',kcal:200,protein:'',carbs:'',fat:'',nutrition_source:'manual',skipped:false,notes:'',created_at:'2026-10-29T01:00:00Z',updated_at:'v1',deleted:false};
 test('Firebase writes use an allowlist and strip all messaging and unknown fields',()=>{
@@ -33,4 +33,16 @@ test('Firebase uses the signed-in UID, rejects changed revisions and resumes imp
   const result=await repo.importBundle({data:{WebMeals:[meal,{...meal,id:'new'}]}});
   assert.deepEqual(result,{inserted:1,skipped:1});assert.equal(storage.size,2);
   s.auth.currentUser={uid:'other'};await assert.rejects(()=>repo.save('WebMeals',meal),/Tài khoản/);
+});
+test('Only the verified administrator can target another user namespace',async()=>{
+  const {s,storage}=service();
+  s.auth.currentUser={uid:'admin',email:'tongquangtran@gmail.com',emailVerified:false};
+  assert.equal(isAdmin(s.auth.currentUser),false);
+  assert.throws(()=>new FirebaseRepository(s,'other'),/admin/);
+  s.auth.currentUser.emailVerified=true;
+  const admin=new FirebaseRepository(s,'other');await admin.save('WebMeals',meal);
+  assert.ok(storage.has('users/other/WebMeals/meal1'));
+  assert.equal(storage.has('users/admin/WebMeals/meal1'),false);
+  s.auth.currentUser.email='not-admin@example.test';
+  await assert.rejects(()=>admin.save('WebMeals',meal),/admin/);
 });

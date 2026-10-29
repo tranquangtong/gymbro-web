@@ -1,7 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function admin() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.email == 'tongquangtran@gmail.com';
+    }
+    function owner(uid) { return request.auth != null && (request.auth.uid == uid || admin()); }
+    match /users/{uid} {
+      allow get: if owner(uid);
+      allow list: if admin();
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid','email','display_name','updated_at'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.display_name is string && request.resource.data.updated_at is string;
+    }
     function common(id) {
       let d = request.resource.data;
       return d.id == id && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
@@ -37,6 +50,6 @@ service cloud.firestore {
         && request.resource.data.title is string && request.resource.data.payload is map
         && request.resource.data.payload.keys().hasOnly(['weekday','kcal_intake','kcal_target','kcal_delta','protein_g','protein_target','carb_g','carb_target','fiber_g','fiber_target','fat_g','fat_target','macro_status','meals_logged','missing_meals','workout_sets','workout_volume_kg','kcal_burned','workout_summary','confidence','insight','action','generated_at','eatlog_rows','workoutlog_rows','report_version','muscle_group','exercise','target_sets','target_reps','target_weight','notes','status','meal','target_kcal','target_protein','target_carbs','target_fat','weight_kg','reps','set_no','volume_kg','kcal_burned_est','reason']);
     }
-    // Unmatched paths, hard deletes and access to other users are denied.
+    // Cross-user access is restricted to the verified administrator email. Hard deletes remain denied.
   }
 }
