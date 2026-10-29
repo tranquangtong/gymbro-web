@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function common(id) {
+      let d = request.resource.data;
+      return d.id == id && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.created_at is string && d.updated_at is string && d.deleted is bool;
+    }
+    match /users/{uid}/WebMeals/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid) && common(id)
+        && request.resource.data.keys().hasOnly(['id','date','meal','food','portion','kcal','protein','carbs','fat','nutrition_source','skipped','notes','created_at','updated_at','deleted','fiber','kcal_known','kcal_estimated','kcal_buffer','confidence','nutrition_notes'])
+        && request.resource.data.meal in ['breakfast','lunch','dinner','snack']
+        && request.resource.data.food is string && request.resource.data.food.size() <= 10000
+        && request.resource.data.skipped is bool;
+    }
+    match /users/{uid}/WebWorkouts/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid) && common(id)
+        && request.resource.data.keys().hasOnly(['id','date','exercise','kind','sets_json','duration_min','notes','created_at','updated_at','deleted','kcal_burned_est','legacy_set_no','legacy_volume_kg','load_uncertain','legacy_activity'])
+        && request.resource.data.kind in ['strength','assisted','bodyweight','cardio','rest']
+        && request.resource.data.exercise is string
+        && request.resource.data.sets_json is string && request.resource.data.sets_json.size() <= 30000;
+    }
+    match /users/{uid}/WebProfile/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid) && common(id)
+        && request.resource.data.keys().hasOnly(['id','date','weight_kg','kcal_target','protein_target','notes','created_at','updated_at','deleted','height_cm','age','gender','goal','BMI','TDEE'])
+        && request.resource.data.weight_kg is number && request.resource.data.weight_kg > 0 && request.resource.data.weight_kg <= 500;
+    }
+    match /users/{uid}/Archive/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid) && common(id)
+        && request.resource.data.keys().hasOnly(['id','date','type','title','payload','created_at','updated_at','deleted'])
+        && request.resource.data.type in ['report','workout_plan','diet_plan','review']
+        && request.resource.data.title is string && request.resource.data.payload is map
+        && request.resource.data.payload.keys().hasOnly(['weekday','kcal_intake','kcal_target','kcal_delta','protein_g','protein_target','carb_g','carb_target','fiber_g','fiber_target','fat_g','fat_target','macro_status','meals_logged','missing_meals','workout_sets','workout_volume_kg','kcal_burned','workout_summary','confidence','insight','action','generated_at','eatlog_rows','workoutlog_rows','report_version','muscle_group','exercise','target_sets','target_reps','target_weight','notes','status','meal','target_kcal','target_protein','target_carbs','target_fat','weight_kg','reps','set_no','volume_kg','kcal_burned_est','reason']);
+    }
+    // Unmatched paths, hard deletes and access to other users are denied.
+  }
+}

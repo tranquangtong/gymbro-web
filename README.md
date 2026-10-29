@@ -1,53 +1,44 @@
 # GymBro Web
 
-Web app tiếng Việt để ghi ăn uống, tập luyện và theo dõi tiến bộ. HTML/CSS/JavaScript thuần, không cần build hoặc backend; dành cho GitHub Pages + Google Sheets riêng tư. Không dùng Telegram hoặc GAS.
+Ứng dụng web tiếng Việt để ghi ăn uống, tập luyện và xem tiến bộ. GitHub Pages + Firebase Authentication (Google) + Cloud Firestore. Không cần GAS hoặc Telegram.
 
-## Chạy trên máy
-
-Yêu cầu Python 3, Node.js 18+ cho kiểm thử. Không có npm dependencies.
+## Chạy và kiểm thử
 
 ```sh
 npm run dev
-```
-
-Mở http://127.0.0.1:4173. Thư mục chạy lệnh là thư mục repo `gymbro-web`.
-
-```sh
 npm run check
 npm test
 ```
 
-## Chức năng
+Mở http://127.0.0.1:4173. Không có npm dependencies; Firebase SDK được nạp động từ CDN chính thức khi cần đăng nhập. Cấu hình web public nằm trong `firebase-config.js`; không có Admin SDK private key. Không bật Analytics.
 
-- Dashboard: dinh dưỡng hôm nay, số buổi và set, lịch tuần, biểu đồ tiến bộ riêng theo bài và loại tải.
-- Nhật ký ăn: ngày, bữa, món, khẩu phần, dinh dưỡng tùy chọn, nguồn số liệu, bỏ bữa.
-- Nhật ký tập: nhiều set/bài, tạ ngoài, trợ lực, bodyweight, cardio, ngày nghỉ; preset chin-up và lặp buổi tập gần nhất.
-- Sửa, xóa mềm, lọc lịch sử, cân nặng và mục tiêu theo ngày, xuất JSON.
-- Lưu trên thiết bị, minh họa và Google Sheets là các chế độ riêng. Không tự đồng bộ chéo.
-- Giữ bản nháp form mới trong sessionStorage; access token Google chỉ nằm trong bộ nhớ.
+## Thiết lập
 
-## Google Sheets và GitHub Pages
+Xem [hướng dẫn Firebase](docs/setup.md). Cần bật Google provider, thêm domain GitHub Pages và publish [firestore.rules](firestore.rules). Trước khi publish, database Production mode vẫn từ chối đọc/ghi. App không tự mở quyền.
 
-Xem [hướng dẫn thiết lập](docs/setup.md). Vào **Kết nối** trên web để nhập OAuth Client ID và link spreadsheet. Cấu hình này lưu trong trình duyệt của bạn, không có ID file cá nhân hay secret trong source.
+## Các chế độ
 
-Ứng dụng chỉ tạo/đọc/ghi ba tab `WebMeals`, `WebWorkouts`, `WebProfile`. Các tab cũ của GymBro được giữ nguyên. **Chưa triển khai nhập lịch sử từ EatLog/WorkoutLog hoặc đọc Daily Report cũ.** Dữ liệu trên thiết bị có nút chuyển riêng lên Sheets; dữ liệu minh họa không được chuyển.
+- **Firebase**: tài khoản Google sở hữu dữ liệu ở `users/{uid}/WebMeals`, `WebWorkouts`, `WebProfile`, `Archive`.
+- **Trên thiết bị**: dùng localStorage của trình duyệt; không tự đồng bộ.
+- **Minh họa**: dữ liệu giả lưu riêng, không được import lên cloud.
 
-Google OAuth scope bản đầu: `https://www.googleapis.com/auth/spreadsheets`. Scope có quyền rộng trên các spreadsheet mà tài khoản truy cập được; UI mô tả rõ trước khi đăng nhập. Dùng `drive.file` cùng Picker là hướng thu hẹp quyền cho phiên bản sau.
+Giao diện giữ bản nháp form mới trong sessionStorage. Phiên Firebase Auth được SDK lưu trên trình duyệt; đăng xuất khi dùng máy chung. Firestore hiện đọc từ server; chưa có hàng đợi ghi offline. Dữ liệu cập nhật khi tải lại, quay lại tab hoặc bấm Làm mới, chưa dùng realtime listener.
 
-## Quy ước dữ liệu
+## Dữ liệu và lịch sử
 
-- Ngày nhật ký: `YYYY-MM-DD`, mặc định theo `Asia/Ho_Chi_Minh`; timestamp: ISO UTC.
-- Một dòng `WebWorkouts` là một bài trong buổi; `sets_json` chứa mảng `{weight_kg, reps}`. Cardio dùng `duration_min`; nghỉ dùng `kind=rest`.
-- Volume tạ ngoài chỉ tính `kind=strength`. Không cộng trợ lực hoặc bodyweight vào volume.
-- Cột dinh dưỡng trống nghĩa là chưa biết. `0` là giá trị đã biết bằng 0.
-- Ghi Sheets bằng `RAW`, tên món và ghi chú không được thực thi thành công thức.
-- `id` ổn định để sửa và hạn chế trùng. `deleted=true` là xóa mềm, có thể khôi phục bằng cách chỉnh trong Sheets hoặc bản JSON.
-- Mỗi bản ghi profile là ảnh chụp cân nặng và mục tiêu tại ngày ghi; dashboard dùng bản mới nhất không nằm trong tương lai.
+Log tập hỗ trợ nhiều set, tạ ngoài, trợ lực, bodyweight, cardio, ngày nghỉ và preset chin-up. Volume tạ ngoài không bao gồm trợ lực/bodyweight. Kcal/macro trống nghĩa là chưa biết, khác với 0. Các bản ghi profile lưu cân nặng và mục tiêu theo ngày.
 
-## Giới hạn
+Bộ chuyển đổi `migration.js` nhận bảng nguồn đã đọc theo header, tạo file JSON GymBro version 2. File riêng tư được chọn ở **Kết nối → Nhập lịch sử từ Sheets**. Có bước xem trước và xác nhận tài khoản. Toàn bộ file được kiểm tra trước khi bắt đầu ghi; mỗi bản ghi nhập qua transaction theo ID ổn định. ID đã tồn tại được bỏ qua, không ghi đè log đã sửa. Nếu ngắt mạng có thể chọn lại cùng file và chạy tiếp. Quá trình không atomic cho toàn bộ file; có thể đã nhập một phần khi bị gián đoạn.
 
-OAuth và Sheets thật cần cấu hình Google Cloud và tài khoản có quyền chỉnh sửa file. Chưa có AI, tải ảnh, offline sync queue hoặc import JSON. JSON hiện dùng để sao lưu/đọc bằng công cụ khác. Bản nháp chỉnh sửa được giữ khi token hết hạn trong lúc form còn mở; bản nháp form mới còn được lưu trong sessionStorage.
+- `EatLog` → `WebMeals`: giữ kcal đã biết/ước tính, tổng kcal, buffer, macro gồm fiber, confidence và ghi chú dinh dưỡng. Ưu tiên kcal đã biết, sau đó tổng đã tính, rồi kcal ước tính.
+- `WorkoutLog` → `WebWorkouts`: giữ mỗi set gốc thành một mục riêng để không thay đổi số set lịch sử. Các buổi mới có thể lưu nhiều set trong một mục. Nhận diện chin-up trợ lực; cardio thiếu thời lượng được giữ trong Archive để rà lại.
+- `Profile` → `WebProfile`: giữ dữ liệu gốc, không tự đoán mục tiêu từ ghi chú.
+- `Daily Report`, `WorkoutPlan`, `DietPlan` → `Archive`, xem ở **Tư liệu**. Báo cáo lịch sử không được tính lại hoặc coi là khuyến nghị hiện tại.
 
-Sheets không có transaction/CAS cho chỉnh sửa theo ID. Code đọc lại trước khi sửa, từ chối revision đã đổi và kiểm tra lại khi mất phản hồi, nhưng không đảm bảo chống trùng tuyệt đối nếu hai thiết bị ghi cùng ID đồng thời. Dành cho một người, tránh chỉnh cùng log đồng thời. Không tự retry append sau lỗi mạng chưa rõ kết quả.
+Không migrate Config/Logs vận hành, `source_message_id`, messageId, messageDateTime, chat/user ID Telegram, telegram_message, is_sent hoặc sent_at. `date`, `created_at`, `updated_at`, `generated_at` là mốc nghiệp vụ và được giữ. Chỉ các field trong allowlist được ghi/export/import. Không đưa bảng raw của nguồn vào Archive.
 
-Không đưa dữ liệu ăn uống/tập luyện thật, token, Client Secret hoặc file export vào repo public.
+## Giới hạn và bảo mật
+
+Rules giới hạn quyền theo Firebase UID và schema. Kiểm tra đồng thời khi sửa dùng transaction và revision; code giữ bản nháp khi lỗi. File nguồn Sheets giữ nguyên. Bộ nhập không tải Sheets trực tiếp bằng OAuth nữa; file chuyển đổi là dữ liệu riêng tư, không được commit.
+
+Đường dẫn `.migration/` bị ignore. Chỉ commit code, Rules và fixture giả. Không đưa lịch sử, bản sao JSON cá nhân, service-account key hoặc token lên repo public. File `firebase.json` chỉ cấu hình triển khai Rules bằng CLI nếu muốn; không chuyển hosting khỏi GitHub Pages.
