@@ -70,3 +70,22 @@ Không gửi dữ liệu/ảnh tự động đến ChatGPT. File ảnh chỉ g�
 Ảnh có nội dung bất biến; bỏ ảnh là gỡ tham chiếu, không hard delete tài liệu ảnh. Bản sao lưu JSON hiện chỉ gồm log và ID ảnh, **không gồm byte ảnh hoặc FoodLibrary**; tải ảnh riêng nếu cần. Chế độ local lưu ảnh trong IndexedDB và thư viện trong localStorage, tách khỏi chế độ mẫu. Không có hàng đợi ghi offline.
 
 Publish bản `firestore.rules` mới trước khi sử dụng FoodLibrary/MealPhotos. Giữ nguyên owner/admin, không mở public reads. Không đổi billing plan.
+
+
+## Bản sửa đồng bộ điện thoại (v2.0.1)
+
+- Mỗi lần mở app mặc định khôi phục Firebase, không tiếp tục âm thầm lưu local do preference cũ. Chế độ trên thiết bị phải được chọn rõ trong phiên hiện tại và có thông báo không đồng bộ.
+- Firestore realtime listeners nhận tạo/sửa/xóa mềm từ thiết bị khác trong cùng tài khoản, không cần refresh. Listener tách khi đăng xuất/đổi UID, mở dữ liệu admin khác hoặc rời trang; callback cũ không được đưa dữ liệu sang tài khoản mới. Cache ban đầu không ghi đè dữ liệu đã tải từ server.
+- Kết nối được khôi phục khi có mạng, quay lại tab hoặc quay lại trang từ bộ nhớ của trình duyệt. Khi đang nhập, app không tự đóng form để refresh.
+- Nút Lưu chờ Firebase xác nhận; thông báo thành công kèm email đang lưu. Khi mất mạng không báo đã đồng bộ và giữ form để lưu lại sau khi có mạng. Chưa hỗ trợ tự gửi draft offline khi chưa bấm Lưu lại.
+- Nếu còn log local chưa có trên Firebase, Thêm hiển thị số lượng và nút chuyển. Dùng chính điện thoại đã tạo log để chuyển: cả byte ảnh và món quen được đưa sang trước khi nhập nhật ký. Giữ ID để chạy lại không tạo bản sao; không chuyển dữ liệu mẫu, không ghi đè mục cloud đã có và không chuyển sang tài khoản người khác khi đang mở ở Admin.
+- Kiểm thử bản này bằng Node tests; không điều khiển Chrome hoặc trình duyệt của người dùng. Kiểm thử thực tế trên điện thoại được bàn giao cho người dùng.
+
+### Test thủ công trên điện thoại
+
+1. Tải lại https://tranquangtong.github.io/gymbro-web/ (không xóa dữ liệu trình duyệt nếu có log local). Thêm → đăng nhập đúng tài khoản Google trên cả điện thoại và máy tính; nhãn phía trên phải là Firebase · tự đồng bộ.
+2. Nếu Thêm báo có log trên thiết bị, bấm Chuyển log trên thiết bị và kiểm tra email ở hộp xác nhận. Bước này thực hiện trên đúng điện thoại/trình duyệt đã nhập log cũ, không phải trên máy tính.
+3. Trên điện thoại thêm 1 chuối ở ngày hiện tại → Xem trước → Lưu. Chờ thông báo đã lưu vào Firebase, đúng email. Trên máy tính mở cùng ngày, mục mới phải hiện tự động trong vài giây mà không bấm refresh.
+4. Sửa khẩu phần/macro hoặc xóa mềm mục đó trên điện thoại; máy tính phải tự cập nhật. Thử thêm một bài tập có định dạng được hỗ trợ rồi kiểm tra tương tự.
+5. Đóng/mở lại trang điện thoại: vẫn phải khôi phục Firebase và thấy log đã lưu. Khi app đang mở, tắt mạng, nhập rồi bấm lưu: phải báo chưa lưu và giữ nội dung; bật mạng và bấm Lưu lại, chỉ có một bản ghi.
+6. Có thể đối chiếu Firestore → users → UID của tài khoản → WebMeals / WebWorkouts. Xóa là deleted:true nên tài liệu vẫn còn trong Console nhưng không xuất hiện trong nhật ký.

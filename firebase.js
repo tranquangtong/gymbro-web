@@ -34,6 +34,18 @@ export class FirebaseRepository {
   async registerOwner(){this.check();const user=this.s.auth.currentUser;await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.uid),{uid:this.uid,email:user.email,display_name:user.displayName||'',updated_at:new Date().toISOString()});}
   async listUsers(){this.check();if(!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được xem danh sách tài khoản.');const snapshot=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users'));return snapshot.docs.map(d=>({...d.data(),uid:d.id}));}
   async load(){this.check();const data=emptyData();try{await Promise.all([...Object.keys(SCHEMAS),'Archive'].map(async table=>{const q=this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,table);const snapshot=await this.s.dbSDK.getDocsFromServer(q);data[table]=snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}));this.check();return data;}catch(e){throw Error(firebaseError(e));}}
+  subscribe(onRows,onError){
+    this.check();let stopped=false;const stops=[];
+    const stop=()=>{stopped=true;stops.splice(0).forEach(fn=>fn());};
+    try{for(const table of [...Object.keys(SCHEMAS),'Archive']){
+      const q=this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,table);
+      stops.push(this.s.dbSDK.onSnapshot(q,{includeMetadataChanges:true},snapshot=>{
+        if(stopped||snapshot.metadata?.fromCache)return;
+        try{this.check();onRows(table,snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at})));}catch(e){stop();onError(e);}
+      },e=>{if(!stopped){stop();onError(Error(firebaseError(e)));}}));
+    }}catch(e){stop();throw e;}
+    return stop;
+  }
   async save(table,record,{insertOnly=false}={}){
     this.check();const clean=cleanRecord(table,record);if(table==='Archive')validateArchive(clean);else validateRecord(table,clean);
     let inserted=false;
@@ -61,7 +73,7 @@ export class FirebaseRepository {
   }
   async loadFoods(){this.check();try{const snap=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,'FoodLibrary'));return snap.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}catch(e){throw Error(firebaseError(e));}}
   async seedFoods(){this.check();for(const food of DEFAULT_FOODS){const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',food.id);await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const snap=await tx.get(ref);if(!snap.exists())tx.set(ref,cleanFood({...food,updated_at:new Date().toISOString()}));});}return this.loadFoods();}
-  async saveFood(food){this.check();const clean=cleanFood(food);validateFood(clean);const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',clean.id);try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const old=await tx.get(ref);if(food._revision&&(!old.exists()||old.data().updated_at!==food._revision))throw Error('Món đã thay đổi trên thiết bị khác. Mở lại thư viện.');tx.set(ref,clean);});}catch(e){throw Error(firebaseError(e));}}
+  async saveFood(food,{insertOnly=false}={}){this.check();const clean=cleanFood(food);validateFood(clean);const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',clean.id);try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const old=await tx.get(ref);if(insertOnly&&old.exists())return;if(food._revision&&(!old.exists()||old.data().updated_at!==food._revision))throw Error('Món đã thay đổi trên thiết bị khác. Mở lại thư viện.');tx.set(ref,clean);});}catch(e){throw Error(firebaseError(e));}}
   async savePhoto(photo){this.check();validatePhoto(photo);try{await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',photo.id),photo);}catch(e){throw Error(firebaseError(e));}}
   async getPhoto(id){this.check();const d=await this.s.dbSDK.getDocFromServer(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',id));this.check();if(!d.exists())throw Error('Không tìm thấy ảnh.');return validatePhoto({...d.data(),id:d.id});}
   async importBundle(bundle,onProgress=()=>{}){

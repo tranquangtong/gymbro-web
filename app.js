@@ -1,3 +1,4 @@
+import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from './sync.js';
 import './local-extras.js';
 import {createQuickUI} from './quick-ui.js';
 import {MEALS,KINDS,EXERCISES,SCHEMAS,today,shiftDate,dateLabel,num,active,setsOf,norm,nutrition,workoutSummary,latestProfile,uid,emptyData,demoData,LocalRepository,validateRecord} from './core.js';
@@ -13,12 +14,12 @@ const $=s=>document.querySelector(s);
 const nav=[['dashboard','dashboard','Hôm nay'],['eat','food','Ăn uống'],['gym','gym','Tập luyện'],['history','history','Nhật ký'],['archive','history','Tư liệu'],['settings','settings','Thêm']];
 const STORE='gymbro.v1.preferences';
 let preferences={};try{preferences=JSON.parse(localStorage.getItem(STORE)||'{}');}catch{}
-const state={mode:preferences.mode==='local'?'local':'firebase',data:emptyData(),repo:null,connected:false,range:7,date:today(),historyFrom:shiftDate(today(),-27),historyTo:today(),historyType:'all',search:'',exercise:'',busy:false,connectionError:'',initialized:false};
+const state={mode:startupMode(preferences),data:emptyData(),repo:null,connected:false,range:7,date:today(),historyFrom:shiftDate(today(),-27),historyTo:today(),historyType:'all',search:'',exercise:'',busy:false,connectionError:'',initialized:false,authRestoring:true,localPending:0};
 let toastTimer,editorContext=null,localError='',authVersion=0,authWatch=null;let pendingImport=null;let adminUsers=[];
 function toast(message,error=false){clearTimeout(toastTimer);$('#toast').className='toast'+(error?' error':'');$('#toast').textContent=message;toastTimer=setTimeout(()=>{$('#toast').textContent='';$('#toast').className='';},6500);}
 function route(){if(location.hash==='#admin'&&state.connected&&isAdmin(state.repo?.s.auth.currentUser))return 'admin';return nav.some(n=>n[0]===location.hash.slice(1))?location.hash.slice(1):'dashboard';}
 function remember(){try{localStorage.setItem(STORE,JSON.stringify({...preferences,mode:state.mode==='demo'?'local':state.mode}));}catch{toast('Không lưu được cài đặt trên thiết bị.',true);}}
-function setRepo(mode){state.mode=mode;state.connected=false;state.repo=mode==='firebase'?null:new LocalRepository(localStorage,mode==='demo'?'gymbro.v1.demo':'gymbro.v1.local');remember();}
+function setRepo(mode){liveSync.stop();state.mode=mode;state.localPending=0;state.connected=false;state.repo=mode==='firebase'?null:new LocalRepository(localStorage,mode==='demo'?'gymbro.v1.demo':'gymbro.v1.local');remember();}
 function filtered(table,from,to=from){return active(state.data[table]).filter(r=>r.date>=from&&r.date<=to);}
 function button(text,action,cls='',ico='plus',extra=''){return `<button class="button ${cls}" data-action="${action}" ${extra}>${ico?icon(ico):''}${text}</button>`;}
 function empty(title,text,action='',actionText=''){return `<div class="empty-state"><div class="empty-icon">${icon('leaf')}</div><h3>${title}</h3><p>${text}</p>${action?button(actionText,action,'primary'):''}</div>`;}
@@ -27,13 +28,13 @@ function card(title,subtitle,body,tools='',cls=''){return `<section class="card 
 function renderChrome(){
   const visibleNav=nav.filter(n=>n[0]!=='archive');$('#navigation').innerHTML=visibleNav.map(([id,ico,label])=>`<a href="#${id}" class="nav-link ${route()===id?'active':''}" ${route()===id?'aria-current="page"':''} title="${label}">${icon(ico)}<span class="nav-text">${label}</span></a>`).join('');
   $('#page-label').textContent=route()==='admin'?'Admin':nav.find(n=>n[0]===route())?.[2]||'GymBro';
-  const mode=state.mode==='demo'?'Dữ liệu mẫu':state.mode==='local'?'Trên thiết bị':state.connected?'Firebase':'Chưa đăng nhập';
+  const mode=state.mode==='demo'?'Dữ liệu mẫu':state.mode==='local'?'Trên thiết bị':state.connected?(state.initialized?'Firebase · tự đồng bộ':'Firebase · chờ kết nối'):state.authRestoring?'Đang khôi phục…':'Chưa đăng nhập';
   $('#mode-button').innerHTML=`<span class="status-dot"></span>${mode}`;
   $('#refresh').innerHTML=icon('refresh');
   const banner=$('#storage-banner');banner.className='storage-banner'+(state.mode==='demo'?' demo':'')+(state.connectionError||localError?' error':'');
-  banner.textContent=state.connected&&state.repo?.ownerUid!==state.repo?.uid?'ADMIN · Đang xem/sửa dữ liệu UID '+state.repo.ownerUid+' · Vào Admin để quay lại tài khoản mình.':localError||state.connectionError||(state.mode==='demo'?'ĐANG XEM DỮ LIỆU MINH HỌA · Các số liệu này không phải nhật ký thật của bạn.':state.mode==='local'?'Lưu trên trình duyệt này · Chưa đồng bộ Firebase. Xuất bản sao để giữ dữ liệu khi đổi thiết bị.':state.connected?'':'Đăng nhập Google trong Thêm để đồng bộ nhật ký.');
+  banner.textContent=state.connected&&state.repo?.ownerUid!==state.repo?.uid?'ADMIN · Đang xem/sửa dữ liệu UID '+state.repo.ownerUid+' · Vào Admin để quay lại tài khoản mình.':localError||state.connectionError||(state.mode==='demo'?'ĐANG XEM DỮ LIỆU MINH HỌA · Các số liệu này không phải nhật ký thật của bạn.':state.mode==='local'?'Lưu trên trình duyệt này · Chưa đồng bộ Firebase. Xuất bản sao để giữ dữ liệu khi đổi thiết bị.':state.connected?(state.localPending?`Có ${state.localPending} log trên thiết bị chưa có trên Firebase. Vào Thêm → Chuyển log trên thiết bị.`:''):state.authRestoring?'Đang khôi phục tài khoản Firebase…':'Đăng nhập Google trong Thêm để đồng bộ nhật ký.');
 }
-async function load(){if(!state.repo){state.data=emptyData();return;}state.data=await state.repo.load();}
+async function load(){if(!state.repo){state.data=emptyData();return;}if(await loadCurrentData(state)){if(state.mode==='firebase'){state.connectionError='';state.initialized=true;}}}
 function render(){renderChrome();$('#main').innerHTML=({dashboard:dashboard,eat:eatPage,gym:gymPage,history:historyPage,archive:archivePage,settings:settingsPage,admin:adminPage})[route()]();}
 
 function metric(label,value,unit,note,ico,progress=null){return `<article class="metric"><div class="metric-header">${label}<span class="metric-icon">${icon(ico)}</span></div><div class="metric-value">${value}<small>${unit}</small></div>${progress!==null?`<div class="progress-track"><span style="width:${Math.max(0,Math.min(100,progress))}%"></span></div>`:''}<div class="metric-note">${note}</div></article>`;}
@@ -73,7 +74,7 @@ function archivePage(){const rows=active(state.data.Archive||[]).sort((a,b)=>b.d
 
 function field(label,name,type='text',value='',placeholder='',extra=''){return `<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}" ${extra}></label>`;}
 function selectField(label,name,options,value){return `<label class="field">${label}<select name="${name}">${Object.entries(options).map(([key,text])=>`<option value="${key}" ${key===value?'selected':''}>${text}</option>`).join('')}</select></label>`;}
-function writable(){if(localError){toast(localError,true);return false;}if(state.mode==='firebase'&&(!state.connected||!state.initialized)){toast('Vào Kết nối và đăng nhập Google trước khi ghi log.',true);location.hash='settings';return false;}return true;}
+function writable(){if(state.mode==='firebase'&&navigator.onLine===false){toast('Đang mất mạng. Chưa lưu lên Firebase; nội dung đang nhập vẫn được giữ. Bật mạng rồi bấm Lưu lại.',true);return false;}if(state.authRestoring&&state.mode==='firebase'){toast('Đang khôi phục đăng nhập. Chờ một chút rồi thử lại.',true);return false;}if(localError){toast(localError,true);return false;}if(state.mode==='firebase'&&(!state.connected||!state.initialized)){toast('Vào Thêm và đăng nhập Google trước khi ghi log.',true);location.hash='settings';return false;}return true;}
 function draftKey(table){return 'gymbro.v1.draft.'+state.mode+'.'+table;}
 function openEditor(table,record=null,prefill={}){
   if(!writable())return;
@@ -105,13 +106,37 @@ function closeEditor(){if(state.busy)return;saveDraft();$('#editor').close();edi
 async function submitEntry(e){e.preventDefault();if(state.busy)return;const error=$('#entry-error');error.textContent='';let saved=false;try{const r=formRecord(),table=editorContext.table;table==='Archive'?validateArchive(r):validateRecord(table,r);state.busy=true;lockEditor(true);if(table==='WebWorkouts'){
       const fresh=await state.repo.load(),same=active(fresh.WebWorkouts).filter(x=>x.date===r.date&&x.id!==r.id);if(r.kind==='rest'&&same.length)throw Error('Ngày này đã có nhật ký tập/nghỉ. Hãy kiểm tra nhật ký trước.');if(r.kind!=='rest'&&same.some(x=>x.kind==='rest'))throw Error('Ngày này đang được đánh dấu nghỉ. Hãy xóa mục ngày nghỉ trước khi ghi bài tập.');
     }
-    await state.repo.save(table,r);saved=true;try{sessionStorage.removeItem(draftKey(table));}catch{}$('#editor').close();editorContext=null;toast(state.mode==='firebase'?'Đã lưu vào Firebase.':state.mode==='demo'?'Đã lưu trong chế độ minh họa.':'Đã lưu trên trình duyệt này.');await load();render();
+    await state.repo.save(table,r);saved=true;try{sessionStorage.removeItem(draftKey(table));}catch{}$('#editor').close();editorContext=null;toast(saveMessage(state));await load();render();
   }catch(err){if(saved){state.connectionError='Đã lưu, nhưng chưa làm mới được dữ liệu: '+err.message;render();toast('Đã lưu. Hãy làm mới để cập nhật dashboard.',true);}else{error.textContent=err.message;saveDraft();}}finally{state.busy=false;lockEditor(false);}}
 function lockEditor(locked){$('#editor').querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=locked);if(!locked)updateForm();}
 function ask(title,message,actionText,callback,danger=false){const d=$('#confirm-dialog');d.innerHTML=`<div class="dialog-inner"><div class="dialog-header"><h2 id="confirm-title">${title}</h2><button class="close-button" data-action="cancel-confirm" aria-label="Đóng">${icon('close')}</button></div><p class="help-box">${message}</p><div class="form-error" role="alert"></div><div class="form-actions"><button class="button" data-action="cancel-confirm">Để sau</button><button class="button ${danger?'danger':'primary'}" id="confirm-action">${actionText}</button></div></div>`;d.showModal();$('#confirm-action').onclick=async()=>{if(state.busy)return;state.busy=true;d.querySelectorAll('button').forEach(b=>b.disabled=true);try{await callback();d.close();}catch(e){d.querySelector('.form-error').textContent=e.message;}finally{state.busy=false;d.querySelectorAll('button').forEach(b=>b.disabled=false);}};}
 async function connect(){if(state.busy)return;state.busy=true;try{const service=await loginGoogle();setRepo('firebase');await activateFirebase(service);toast('Đã kết nối Firebase.');}catch(e){state.connectionError=firebaseError(e);render();toast(state.connectionError,true);}finally{state.busy=false;}}
-async function activateFirebase(service){adminUsers=[];const generation=++authVersion;state.mode='firebase';state.repo=new FirebaseRepository(service);state.connected=true;state.initialized=true;state.connectionError='';state.data=emptyData();localError='';remember();render();try{await state.repo.registerOwner();const data=await state.repo.load();if(generation!==authVersion||state.mode!=='firebase')return;state.data=data;render();}catch(e){if(generation!==authVersion)return;state.connectionError=e.message;state.initialized=false;render();throw e;}}
-async function restoreFirebase(){try{const service=await firebaseService();authWatch=service.authSDK.onAuthStateChanged(service.auth,user=>{if(state.mode!=='firebase')return;if(!user){++authVersion;state.connected=false;state.initialized=false;state.repo=null;state.data=emptyData();render();}else if(!state.busy&&state.repo?.uid!==user.uid){activateFirebase(service).catch(()=>{});}});if(service.auth.currentUser&&state.mode==='firebase'&&state.repo?.uid!==service.auth.currentUser.uid)await activateFirebase(service);}catch(e){if(state.mode==='firebase'){state.connectionError=firebaseError(e);render();}}}
+async function activateFirebase(service){
+  liveSync.stop();adminUsers=[];const generation=++authVersion;
+  state.mode='firebase';state.repo=new FirebaseRepository(service);const repo=state.repo;
+  state.connected=true;state.authRestoring=false;state.initialized=false;state.connectionError='';state.data=emptyData();localError='';remember();render();
+  try{
+    await repo.registerOwner();const data=await repo.load();
+    if(generation!==authVersion||state.mode!=='firebase'||state.repo!==repo)return;
+    state.data=data;state.initialized=true;liveSync.start(repo);await updateLocalPending();render();
+  }catch(e){if(generation!==authVersion||state.repo!==repo)return;state.connectionError=e.message;state.initialized=false;render();throw e;}
+}
+async function updateLocalPending(){const repo=state.repo;if(state.mode!=='firebase'||!state.connected||repo?.ownerUid!==repo?.uid){state.localPending=0;return;}try{const local=await new LocalRepository(localStorage).load();if(state.repo===repo)state.localPending=localMissingCount(local,state.data);}catch{if(state.repo===repo)state.localPending=0;}}
+let restoreTask=null;
+function restoreFirebase(){if(!restoreTask)restoreTask=restoreFirebaseOnce().finally(()=>{restoreTask=null;});return restoreTask;}
+async function restoreFirebaseOnce(){
+  authWatch?.();authWatch=null;
+  try{
+    const service=await firebaseService();state.authRestoring=false;
+    authWatch=service.authSDK.onAuthStateChanged(service.auth,user=>{
+      if(state.mode!=='firebase')return;
+      if(!user){liveSync.stop();++authVersion;state.connected=false;state.initialized=false;state.repo=null;state.data=emptyData();state.localPending=0;render();}
+      else if(state.repo?.uid!==user.uid){activateFirebase(service).catch(e=>toast(e.message,true));}
+    });
+    if(service.auth.currentUser&&state.mode==='firebase'&&state.repo?.uid!==service.auth.currentUser.uid)await activateFirebase(service);
+    else render();
+  }catch(e){state.authRestoring=false;if(state.mode==='firebase'){state.connectionError=firebaseError(e);render();}}
+}
 async function selectImport(file){pendingImport=null;const target=$('#migration-preview');if(!file||!target)return;try{if(file.size>15000000)throw Error('File quá lớn, tối đa 15 MB.');pendingImport=validateBundle(JSON.parse(await file.text()));const totals=Object.entries(pendingImport.data).map(([t,rows])=>`${t}: ${rows.length}`).join(' · ');target.innerHTML=`<div class="help-box">${esc(totals)}<br>Chỉ nhập vào tài khoản ${esc(state.repo?.s.auth.currentUser?.email||'')}.</div><br>${button('Nhập dữ liệu vào Firebase','import-bundle','primary','cloud')}<p id="import-progress" class="form-note"></p>`;}catch(e){target.textContent=e.message;}}
 
 function exportData(){const data=Object.fromEntries(Object.keys(SCHEMAS).map(t=>[t,state.data[t].map(r=>cleanRecord(t,r))]));data.Archive=(state.data.Archive||[]).map(r=>cleanRecord('Archive',r));const blob=new Blob([JSON.stringify({app:'GymBro Web',version:2,mode:state.mode,exported_at:new Date().toISOString(),timezone:'Asia/Ho_Chi_Minh',data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gymbro-'+state.mode+'-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -131,7 +156,7 @@ async function action(el){const a=el.dataset.action;if(state.busy&&a!=='cancel-c
   if(a==='remove-set'){if(document.querySelectorAll('.set-row').length<=1)return toast('Cần giữ ít nhất một set.',true);el.closest('.set-row').remove();renumberSets();saveDraft();return;}
   if(a==='export')return exportData();
   if(a==='admin-refresh'){adminUsers=await state.repo.listUsers();render();return;}
-  if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const repo=new FirebaseRepository(state.repo.s,el.dataset.uid);const data=await repo.load();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;state.historyFrom='2000-01-01';state.historyTo=today();location.hash='history';render();return;}
+  if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const repo=new FirebaseRepository(state.repo.s,el.dataset.uid);const data=await repo.load();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;liveSync.start(repo);state.localPending=0;state.historyFrom='2000-01-01';state.historyTo=today();location.hash='history';render();return;}
   if(a==='firebase-login')return connect();
   if(a==='import-bundle'){
     if(!pendingImport||!writable())return;const bundle=pendingImport,repo=state.repo;if(repo.ownerUid!==repo.uid)throw Error('Quay về dữ liệu của mình trước khi migrate.');
@@ -141,16 +166,16 @@ async function action(el){const a=el.dataset.action;if(state.busy&&a!=='cancel-c
       await load();pendingImport=null;render();toast(`Đã nhập ${result.inserted} mục; bỏ qua ${result.skipped} mục đã có.`);
     });
   }
-  if(a==='local'){setRepo('local');localError='';state.connectionError='';try{await load();}catch(e){localError=e.message;}render();return;}
+  if(a==='local'){return ask('Dùng riêng trên thiết bị?','Log trong chế độ này không được tự đồng bộ lên Firebase. Khi mở lại app, GymBro sẽ ưu tiên Firebase.','Dùng trên thiết bị',async()=>{setRepo('local');localError='';state.connectionError='';try{await load();}catch(e){localError=e.message;}render();});}
   if(a==='demo'){if(!localStorage.getItem('gymbro.v1.demo'))localStorage.setItem('gymbro.v1.demo',JSON.stringify(demoData()));setRepo('demo');state.connectionError='';localError='';await load();location.hash='dashboard';render();return;}
-  if(a==='disconnect'){await logoutFirebase();++authVersion;setRepo('firebase');state.initialized=false;state.data=emptyData();state.connectionError='';render();toast('Đã đăng xuất Firebase.');return;}
+  if(a==='disconnect'){await logoutFirebase();++authVersion;setRepo('firebase');state.initialized=false;state.authRestoring=false;state.data=emptyData();state.connectionError='';render();toast('Đã đăng xuất Firebase.');return;}
   if(a==='repeat'){
     if(!writable())return;const rows=active(state.data.WebWorkouts).filter(r=>r.kind!=='rest'&&r.date<state.date);const last=rows.map(r=>r.date).sort().at(-1);if(!last)return toast('Chưa có buổi tập trước ngày đang chọn để lặp lại.',true);const list=rows.filter(r=>r.date===last);const plans=list.map(r=>({...r,id:uid(),date:state.date,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),deleted:false,kcal_burned_est:'',kcal_estimation_notes:'',_row:undefined,_revision:undefined,_originalUpdatedAt:undefined}));
     return ask('Lặp buổi tập gần nhất?',`Sao chép ${list.length} bài từ ${dateLabel(last)} sang ${dateLabel(state.date)} với số kg và reps cũ. Dùng khi bạn đã hoàn thành buổi tập; có thể sửa từng bài sau đó.`, 'Ghi lại buổi tập',async()=>{const fresh=await state.repo.load();if(active(fresh.WebWorkouts).some(r=>r.date===state.date&&r.kind==='rest'))throw Error('Ngày đang chọn được đánh dấu nghỉ. Hãy sửa mục ngày nghỉ trước.');for(const r of plans)await state.repo.save('WebWorkouts',r);await load();render();toast('Đã sao chép buổi tập.');});
   }
   if(a==='upload-local'){
     if(!writable())return;if(state.repo.ownerUid!==state.repo.uid)throw Error('Quay về dữ liệu của mình trước khi chuyển log.');const local=await new LocalRepository(localStorage).load();const bundle=validateBundle({app:'GymBro Web',version:2,data:local});
-    return ask('Chuyển log trên thiết bị?',`Chuyển ${Object.values(bundle.data).reduce((n,r)=>n+r.length,0)} mục thật vào Firebase. Không bao gồm dữ liệu mẫu. ID đã có được bỏ qua.`, 'Chuyển dữ liệu',async()=>{const r=await state.repo.importBundle(bundle);await load();render();toast(`Đã chuyển ${r.inserted} mục.`);});
+    return ask('Chuyển log trên thiết bị?',`Chuyển ${Object.values(bundle.data).reduce((n,r)=>n+r.length,0)} mục thật vào Firebase. Không bao gồm dữ liệu mẫu. ID đã có được bỏ qua.`, 'Chuyển dữ liệu',async()=>{const repo=state.repo;const r=await transferLocalData(new LocalRepository(localStorage),repo);await load();await updateLocalPending();render();toast(`Đã chuyển ${r.inserted} mục vào Firebase; ${r.skipped} mục đã có.`);});
   }
 }
 
@@ -160,13 +185,31 @@ document.addEventListener('change',e=>{const t=e.target;if(t.id==='migration-fil
 document.addEventListener('input',e=>{if(e.target.closest('#entry-form'))saveDraft();if(e.target.id==='history-search'){const start=e.target.selectionStart;state.search=e.target.value;render();const input=$('#history-search');input.focus();input.setSelectionRange(start,start);}});
 $('#editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});$('#confirm-dialog').addEventListener('cancel',e=>{if(state.busy)e.preventDefault();});
 $('#mode-button').onclick=()=>location.hash='settings';
-$('#refresh').onclick=async()=>{if(state.busy)return;if(state.mode==='firebase'&&!state.connected){location.hash='settings';return toast('Đăng nhập Google để làm mới dữ liệu.',true);}state.busy=true;$('#refresh').disabled=true;try{await load();state.connectionError='';if(state.mode==='firebase')state.initialized=true;render();toast('Đã làm mới dữ liệu.');}catch(e){state.connectionError=e.message;render();toast(e.message,true);}finally{state.busy=false;$('#refresh').disabled=false;}};
+$('#refresh').onclick=async()=>{if(state.busy)return;if(state.mode==='firebase'&&!state.connected){location.hash='settings';return toast('Đăng nhập Google để làm mới dữ liệu.',true);}state.busy=true;$('#refresh').disabled=true;try{await load();state.connectionError='';if(state.mode==='firebase'){state.initialized=true;liveSync.start(state.repo);await updateLocalPending();}render();toast('Đã làm mới dữ liệu.');}catch(e){state.connectionError=e.message;render();toast(e.message,true);}finally{state.busy=false;$('#refresh').disabled=false;}};
 window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0});});
 window.addEventListener('storage',async e=>{if(state.mode!=='firebase'&&e.key===state.repo?.key){try{await load();render();}catch(e){toast(e.message,true);}}});
-const quick=createQuickUI({getState:()=>state,esc,fmt,icon,toast,writable,reload:load,render,openDetailed:openEditor});
+const liveSync=createLiveSync({isCurrent:repo=>state.mode==='firebase'&&state.connected&&state.repo===repo,onRows:(table,rows)=>{state.data[table]=rows;render();},onError:e=>{state.connectionError='Tự đồng bộ tạm dừng: '+e.message;render();}});
+const quick=createQuickUI({getState:()=>state,esc,fmt,icon,toast,writable,reload:load,render,openDetailed:openEditor,saveMessage:count=>saveMessage(state,count)});
 setRepo(state.mode);try{await load();}catch(e){localError=e.message;}render();restoreFirebase();
 
-let focusRefresh=0;document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&state.mode==='firebase'&&state.connected&&!state.busy&&!$('#editor').open&&!$('#confirm-dialog').open&&!$('#quick-dialog').open&&Date.now()-focusRefresh>30000){focusRefresh=Date.now();try{await load();state.connectionError='';state.initialized=true;render();}catch(e){state.connectionError=e.message;render();}}});
+let resumeInFlight=null;
+async function resumeFirebase(){
+  if(state.mode!=='firebase'||state.busy||resumeInFlight||document.visibilityState==='hidden')return;
+  if($('#editor').open||$('#confirm-dialog').open||$('#quick-dialog').open)return;
+  resumeInFlight=(async()=>{
+    try{
+      if(!state.connected||!state.repo){await restoreFirebase();return;}
+      if(!state.initialized){await activateFirebase(state.repo.s);return;}
+      const repo=state.repo,data=await repo.load();if(state.repo!==repo||state.mode!=='firebase')return;
+      state.data=data;state.connectionError='';liveSync.start(repo);await updateLocalPending();render();
+    }catch(e){state.connectionError=e.message;render();}
+  })();try{await resumeInFlight;}finally{resumeInFlight=null;}
+}
+window.addEventListener('online',resumeFirebase);
+window.addEventListener('offline',()=>{if(state.mode==='firebase'){state.connectionError='Mất mạng · Chưa thể gửi dữ liệu lên Firebase. Bật mạng rồi lưu lại nội dung đang nhập.';renderChrome();}});
+window.addEventListener('pageshow',e=>{if(e.persisted)resumeFirebase();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeFirebase();});
+window.addEventListener('pagehide',()=>liveSync.stop());
 
 function adminPage(){if(!isAdmin(state.repo?.s.auth.currentUser))return empty('Không có quyền','Chỉ quản trị viên được mở màn hình này.');return heading('QUẢN TRỊ DỮ LIỆU','Admin workspace.','Quản lý dữ liệu các tài khoản đã đăng nhập GymBro.',button('Làm mới danh sách','admin-refresh','','refresh'))+card('Tài khoản',`${adminUsers.length} tài khoản đã tải`,button('Mở dữ liệu của mình','admin-owner','primary','history',`data-uid="${esc(state.repo.uid)}"`)+adminUsers.map(u=>`<div class="log-row"><div class="log-info"><strong>${esc(u.email||u.display_name||u.uid)}</strong><small>UID: ${esc(u.uid)}</small></div>${button('Mở dữ liệu','admin-owner','','arrow',`data-uid="${esc(u.uid)}"`)}</div>`).join(''))+`<div class="help-box">Sau khi mở tài khoản, dùng Nhật ký để xem/sửa/xóa log, Tư liệu để sửa báo cáo và giáo án. Xóa là xóa mềm. Quyền admin được kiểm tra bằng email đã xác minh trong Firebase Auth và Firestore Rules; không có field role cho người dùng tự sửa.</div>`;}
 function openArchiveEditor(r){if(!writable()||!isAdmin(state.repo?.s.auth.currentUser))return;editorContext={table:'Archive',original:r,id:r.id,created_at:r.created_at};$('#editor').innerHTML=`<div class="dialog-inner"><div class="dialog-header"><h2 id="dialog-title">Admin · Sửa tư liệu</h2><button data-action="close-editor" class="close-button" aria-label="Đóng">${icon('close')}</button></div><form id="entry-form">${field('Ngày','date','date',r.date,'','required')}${field('Tiêu đề','archive_title','text',r.title,'','required')}<label class="field">Nội dung JSON<textarea name="archive_payload" rows="14" required>${esc(JSON.stringify(r.payload,null,2))}</textarea></label><div class="form-error" id="entry-error" role="alert"></div><div class="form-actions"><button class="button primary" type="submit">Lưu thay đổi</button></div></form></div>`;$('#editor').showModal();}

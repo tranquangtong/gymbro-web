@@ -3,7 +3,7 @@ import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,v
 import {compressPhoto,copyText,photoFile,downloadFile} from './media.js';
 
 export function createQuickUI(env){
-  const {getState,esc,fmt,icon,toast,writable,reload,render}=env,$=s=>document.querySelector(s);
+  const {getState,esc,fmt,icon,toast,writable,reload,render,saveMessage}=env,$=s=>document.querySelector(s);
   let ctx=null,estimate=null,library=[],drafts=new Map(),busy=false;
   const dialog=document.createElement('dialog');dialog.id='quick-dialog';dialog.setAttribute('aria-labelledby','quick-title');document.body.append(dialog);
   const scope=()=>{const s=getState();return s.mode+':'+(s.repo?.ownerUid||s.repo?.key||'none');};
@@ -42,13 +42,13 @@ export function createQuickUI(env){
   async function saveCompose(){
     if(!ctx.preview)return;rememberCompose();scopeGuard(ctx.scope);if(!writable())return;
     // Input changes remove preview, so these stable IDs also make retries safe.
-    const rows=ctx.preview,repo=getState().repo,savedScope=ctx.scope;busy=true;lock(true);
+    const rows=ctx.preview,repo=getState().repo,savedScope=ctx.scope;busy=true;lock(true);const saveButton=dialog.querySelector('[data-quick="save"]');if(saveButton)saveButton.textContent=getState().mode==='firebase'?'Đang lưu Firebase…':'Đang lưu trên thiết bị…';
     try{
       if(ctx.type==='workouts'){const fresh=await repo.load();ensureWorkoutDay(active(fresh.WebWorkouts),rows);}
       if(ctx.type==='meals'&&ctx.photos.length){const target=rows[ctx.photoTarget||0];if(!target||target.skipped)throw Error('Chọn món có tên để gắn ảnh.');for(const p of ctx.photos){if(p.meal_id!=='pending'&&p.meal_id!==target.id)p.id=uid();p.meal_id=target.id;await repo.savePhoto(p);}target.photo_ids=ctx.photos.map(p=>p.id);}
       scopeGuard(savedScope);await repo.saveMany(table(ctx.type),rows);drafts.delete(ctx.scope+ctx.type);try{sessionStorage.removeItem(draftKey(ctx.type));}catch{}
-      const type=ctx.type;ctx=null;dialog.close();await reload();render();if(!['eat','gym'].includes(location.hash.slice(1)))location.hash=type==='meals'?'eat':'gym';toast('Đã lưu '+rows.length+' mục.');
-    }finally{busy=false;lock(false);}
+      const type=ctx.type,message=saveMessage(rows.length);ctx=null;dialog.close();toast(message);try{await reload();render();}catch(e){toast(message+' · Chưa tải lại được: '+e.message,true);}if(!['eat','gym'].includes(location.hash.slice(1)))location.hash=type==='meals'?'eat':'gym';
+    }finally{busy=false;lock(false);if(ctx?.preview){const b=dialog.querySelector('[data-quick="save"]');if(b)b.textContent='Lưu '+ctx.preview.length+' mục';}}
   }
   function lock(locked){dialog.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=locked);}
   const requestKey=kind=>'gymbro.estimate.'+scope()+'.'+kind;
