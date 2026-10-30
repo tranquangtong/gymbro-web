@@ -1,4 +1,5 @@
-import {active,num,shiftDate,dateLabel,today,latestProfile,workoutSummary,norm,setsOf} from './core.js';
+import {currentNutritionTargets} from './access.js';
+import {active,num,shiftDate,dateLabel,today,workoutSummary,norm,setsOf} from './core.js';
 export const DASHBOARD_RANGES=[7,10,28];
 const skipped=r=>String(r.skipped).toLowerCase()==='true';
 const valid=v=>num(v)!==null&&num(v)>=0;
@@ -26,7 +27,7 @@ export function chooseDashboardDate(value,current=today()){
 }
 export function dashboardDay(data,date=today()){
   const meals=active(data.WebMeals||[]).filter(r=>r.date===date),workouts=active(data.WebWorkouts||[]).filter(r=>r.date===date);
-  return {date,meals,workouts,profile:latestProfile(data.WebProfile||[],date),summary:workoutSummary(workouts),week:workoutSummary(active(data.WebWorkouts||[]).filter(r=>r.date>=shiftDate(date,-6)&&r.date<=date))};
+  return {date,meals,workouts,profile:currentNutritionTargets(data.WebProfile||[]),summary:workoutSummary(workouts),week:workoutSummary(active(data.WebWorkouts||[]).filter(r=>r.date>=shiftDate(date,-6)&&r.date<=date))};
 }
 export function energyScales(days){
   const intakeMax=Math.max(500,Math.ceil(Math.max(0,...days.map(d=>d.intake??0))/500)*500),burnMax=Math.max(100,Math.ceil(Math.max(0,...days.map(d=>d.burned??0))/100)*100);

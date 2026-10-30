@@ -1,4 +1,4 @@
-import {num,norm} from './core.js';
+import {num,norm,active} from './core.js';
 export const SESSION_MS=14*24*60*60*1000;
 export function sessionExpiry(authTime){const started=Date.parse(authTime);if(!Number.isFinite(started))throw Error('Không xác minh được phiên đăng nhập. Hãy đăng nhập lại.');return started+SESSION_MS;}
 export function sessionValid(expiresAt,now=Date.now()){return typeof expiresAt==='number'&&Number.isFinite(expiresAt)&&now<expiresAt;}
@@ -44,4 +44,13 @@ export function estimateMacroTargets({weight_kg,tdee_kcal,bmr_kcal,age,macro_goa
  const kcal=Math.round(t*preset.factor),protein=Math.round(w*preset.protein*10)/10,fat=Math.round(kcal*.25/9*10)/10,carbs=Math.round((kcal-protein*4-fat*9)/4*10)/10;
  if(kcal<b||carbs<0)throw Error('Đầu vào tạo mức năng lượng quá thấp cho gợi ý tự động của app. Kiểm tra BMR/TDEE hoặc đặt mục tiêu thủ công.');
  return {kcal_target:kcal,protein_target:protein,carbs_target:carbs,fat_target:fat,note:`${preset.label}: TDEE × ${preset.factor}; protein ${preset.protein} g/kg cân nặng hiện tại; fat 25% kcal; carbs là kcal còn lại (4/4/9). Đây là mức khởi điểm cho người trưởng thành khỏe mạnh, không đảm bảo phù hợp cá nhân. Theo dõi cân nặng trung bình và sức tập 2–3 tuần để điều chỉnh. Không cộng thêm kcal tập luyện vì TDEE đã gồm vận động.`};
+}
+
+// One current set of nutrition targets per account, independent of diary dates.
+export function currentNutritionTargets(rows=[]){
+ const entries=active(rows),hasTargets=r=>[r.kcal_target,r.protein_target,r.goal?.carbs_target,r.goal?.fat_target].some(v=>v!==''&&v!=null);
+ const marked=entries.filter(r=>r.goal?.global_targets===true),candidates=marked.length?marked:entries.filter(hasTargets);
+ const stamp=r=>{const v=Date.parse(r.updated_at||r.created_at||'');return Number.isFinite(v)?v:Date.parse(r.date+'T12:00:00Z')||0;};
+ const r=[...candidates].sort((a,b)=>stamp(b)-stamp(a)||String(b.id||'').localeCompare(String(a.id||'')))[0]||{};
+ return {kcal_target:r.kcal_target??'',protein_target:r.protein_target??'',goal:{carbs_target:r.goal?.carbs_target??'',fat_target:r.goal?.fat_target??'',macro_goal:r.goal?.macro_goal??''}};
 }

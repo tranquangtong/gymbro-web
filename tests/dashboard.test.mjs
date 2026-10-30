@@ -11,11 +11,11 @@ test('Dashboard defaults to live Today and rejects impossible or future dates',(
  assert.equal(chooseDashboardDate('2026-10-29',day),'2026-10-29');
  for(const value of ['',null,'30/10/2026','2026-02-30','2026-13-01','2026-10-31'])assert.throws(()=>chooseDashboardDate(value,day));
 });
-test('Historical Dashboard selects meals, workouts, profile and week ending on the selected day',()=>{
+test('Historical Dashboard selects daily logs and week while sharing current nutrition targets',()=>{
  const data={WebMeals:[meal(),meal({id:'old',date:'2026-10-29',kcal:300}),meal({id:'deleted',date:'2026-10-29',deleted:true})],WebWorkouts:[workout(),workout({id:'old',date:'2026-10-29'}),workout({id:'week-start',date:'2026-10-23'}),workout({id:'outside',date:'2026-10-22'})],WebProfile:[{id:'p1',date:'2026-10-01',kcal_target:2000},{id:'p2',date:day,kcal_target:2200}]};
  const selected=dashboardDay(data,'2026-10-29');
- assert.deepEqual(selected.meals.map(r=>r.id),['old']);assert.deepEqual(selected.workouts.map(r=>r.id),['old']);assert.equal(selected.profile.id,'p1');assert.equal(selected.summary.sessions,1);assert.equal(selected.week.sessions,2);
- assert.equal(energyDays(data,selected.date).at(-1).intake,300);assert.equal(dashboardDay(data,day).profile.id,'p2');
+ assert.deepEqual(selected.meals.map(r=>r.id),['old']);assert.deepEqual(selected.workouts.map(r=>r.id),['old']);assert.equal(selected.profile.kcal_target,2200);assert.equal(selected.summary.sessions,1);assert.equal(selected.week.sessions,2);
+ assert.equal(energyDays(data,selected.date).at(-1).intake,300);assert.equal(dashboardDay(data,day).profile.kcal_target,2200);
 });
 test('Burn line uses independent right-axis coordinates and labels known, zero and partial totals',()=>{
  const days=[{date:'2026-10-28',intake:4000,burned:100,intakeIncomplete:true},{date:'2026-10-29',intake:0,burned:200,burnIncomplete:true},{date:day,intake:null,burned:null}];

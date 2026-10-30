@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {estimateMacroTargets,suggestMacroGoal,profileDetails} from '../access.js';
+import {estimateMacroTargets,suggestMacroGoal,profileDetails,currentNutritionTargets} from '../access.js';
 import {macroProgress,renderMacroDials,classifyExercise,workoutInsight,compactExercise,renderWorkoutInsight} from '../dashboard.js';
 import {cleanRecord} from '../migration.js';
 const row=(exercise,extra={})=>({exercise,kind:'strength',sets_json:JSON.stringify([{weight_kg:40,reps:12},{weight_kg:40,reps:12},{weight_kg:50,reps:10}]),...extra});
@@ -30,4 +30,16 @@ test('Unknown, deleted, rest and cardio entries do not invent a body split',()=>
 test('Compact exercises preserve changed loads/reps, assistance semantics and escaped names',()=>{
  assert.equal(compactExercise(row('Pulldown')),'2 set · 40 kg × 12 reps / 1 set · 50 kg × 10 reps');assert.match(compactExercise(row('Chin-up',{kind:'assisted'})),/kg trợ lực/);assert.match(compactExercise(row('Push-up',{kind:'bodyweight'})),/Bodyweight/);assert.doesNotMatch(compactExercise(row('Push-up',{kind:'bodyweight'})),/kg/);assert.equal(compactExercise(row('Walk',{kind:'cardio',duration_min:20})),'20 phút');
  const html=renderWorkoutInsight([row('<img src=x onerror=alert(1)>')]);assert.doesNotMatch(html,/<img/);assert.match(html,/&lt;img/);assert.match(html,/Chưa nhận diện nhóm cơ/);
+});
+
+test('Nutrition targets are shared across diary dates; newest explicit save wins even on an old profile date',()=>{
+ const rows=[{id:'new-date',date:'2026-10-30',updated_at:'2026-10-30T08:00:00Z',kcal_target:2000,protein_target:120,goal:{carbs_target:250,fat_target:60}},{id:'old-date',date:'2026-10-28',updated_at:'2026-10-30T09:00:00Z',kcal_target:2200,protein_target:150,goal:{carbs_target:260,fat_target:65}}];
+ assert.equal(currentNutritionTargets(rows).kcal_target,2200);
+ const saved={id:'global',date:'2026-10-30',updated_at:'2026-10-30T10:00:00Z',kcal_target:2300,protein_target:160,goal:{global_targets:true,carbs_target:270,fat_target:65}};
+ assert.equal(currentNutritionTargets([...rows,saved]).kcal_target,2300);
+ const cleared={...saved,id:'clear',updated_at:'2026-10-30T11:00:00Z',kcal_target:'',protein_target:'',goal:{global_targets:true,carbs_target:'',fat_target:''}};
+ assert.equal(currentNutritionTargets([...rows,saved,cleared]).kcal_target,'','cleared targets must not resurrect old targets');
+ assert.equal(currentNutritionTargets([...rows,{...saved,deleted:true}]).kcal_target,2200);
+ assert.equal(currentNutritionTargets([]).kcal_target,'');
+ const cleaned=cleanRecord('WebProfile',saved);assert.equal(cleaned.goal.global_targets,true);
 });

@@ -126,7 +126,7 @@ Test: refresh web → Dashboard, kiểm tra 4 vòng + hai nút giữa + chart m�
 
 ### Bổ sung theo ảnh mới (v2.2.1)
 
-Dashboard mặc định Today, có nút Chọn ngày và Today để quay về hiện tại. Khi chọn ngày cũ, dinh dưỡng, mục tiêu hồ sơ tại ngày đó, vận động, nhật ký và điểm kết thúc khoảng biểu đồ cùng đổi theo ngày được chọn. Thêm log từ Dashboard cũng mở đúng ngày đang xem. Không chọn ngày tương lai.
+Dashboard mặc định Today, có nút Chọn ngày và Today để quay về hiện tại. Khi chọn ngày cũ, dữ liệu dinh dưỡng, vận động, nhật ký và điểm kết thúc khoảng biểu đồ cùng đổi theo ngày được chọn; target dùng chung hiện tại cho mọi ngày. Thêm log từ Dashboard cũng mở đúng ngày đang xem. Không chọn ngày tương lai.
 
 Biểu đồ hiển thị số kcal trên từng cột/điểm đã biết, kể cả 0; tổng chưa đầy đủ có dấu *. Cột ăn vào dùng trục trái, đường kcal tập luyện dùng trục phải với thang đo riêng để nhìn rõ biến động. Biểu đồ dài có thể cuộn ngang trên điện thoại; bảng chi tiết vẫn có sẵn.
 
@@ -145,8 +145,10 @@ Test thủ công: tải lại web → Today được chọn mặc định → Ch
 Test thủ công: tải lại Dashboard → Mục tiêu → bổ sung tuổi ở mục BMR/TDEE nếu thiếu → Mục tiêu dinh dưỡng → chọn hướng mục tiêu → Ước tính → xem/sửa 4 target → Lưu. Đối chiếu vòng: ăn 50% target thì tô nửa vòng, vượt thì đỏ và chữ Vượt. Chọn ngày có chin-up/pulldown để xem Upper; face pull + crunch + cable rotation để xem Bổ trợ; có thêm squat/leg press cùng upper để xem Full body. Kiểm tra các mức tạ khác nhau vẫn giữ đúng reps, tạ máy chin-up hiện trợ lực. Chỉ kiểm thử code, không chạy Chrome.
 
 
-### Mục tiêu theo ngày Dashboard (v2.3.1)
+### Mục tiêu dùng chung (v2.3.2 — thay thế cách xử lý v2.3.1)
 
-Nút Mục tiêu trên Dashboard chuyển ngày đang xem vào form và mở sẵn phần dinh dưỡng. Form dùng hồ sơ có hiệu lực tại ngày đó, không tự lấy hồ sơ tương lai. Bản nháp của một ngày khác không được áp sang ngày được chọn. Mục tiêu lưu từ ngày ghi nhận đến khi có hồ sơ mới hơn; đổi ngày trong form trước khi lưu nếu muốn hiệu lực từ mốc khác. Không tự ghi ngược mục tiêu hiện tại vào lịch sử.
+Target kcal/protein/carbs/fat hiện tại dùng cho tất cả các ngày trên Dashboard. Ngày đang xem chỉ lọc actual ăn uống, tập luyện và khoảng chart; đổi target thì các vòng ở ngày cũ cũng tính theo target mới.
 
-Test: chọn 28/10 → Mục tiêu → kiểm tra ngày form là 28/10 và phần macro mở sẵn → ước tính/đặt target → Lưu → vòng ngày 28/10 có %. Nếu có hồ sơ ngày 30/10, target ngày 30/10 vẫn lấy hồ sơ ngày 30/10. Thiếu hồ sơ cá nhân tại mốc cũ thì cần bổ sung để lưu được hồ sơ hợp lệ.
+Nút Mục tiêu mở hồ sơ hiện tại, không lấy ngày Dashboard làm ngày hiệu lực target. Ngày trong hồ sơ chỉ là ngày ghi thông tin cá nhân. Lưu hồ sơ đánh dấu goal.global_targets=true; bộ target mới nhất theo updated_at được dùng chung. Khi chưa có marker, app đọc bộ target legacy được cập nhật gần nhất, kể cả bộ được lưu vào ngày hồ sơ cũ; không cần migration hay đổi Rules. Xóa trắng target có chủ đích không làm sống lại giá trị cũ. Hồ sơ đã xóa mềm bị bỏ qua. Mở sửa hồ sơ cũ vẫn điền target chung hiện tại.
+
+Test: đặt target một lần và Lưu → chọn 28/10, 29/10 và Today: mẫu số mục tiêu giống nhau, actual và phần trăm đổi theo dữ liệu từng ngày. Đổi target rồi quay lại ngày cũ: dùng target mới. Thử để trống một target và lưu: target đó hiển thị Chưa đặt mục tiêu ở mọi ngày. Realtime Firebase chuyển bộ target chung giữa các thiết bị như hồ sơ khác. Chỉ test code, không chạy Chrome.
