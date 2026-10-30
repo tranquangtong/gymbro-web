@@ -4,13 +4,14 @@ export function sessionExpiry(authTime){const started=Date.parse(authTime);if(!N
 export function sessionValid(expiresAt,now=Date.now()){return typeof expiresAt==='number'&&Number.isFinite(expiresAt)&&now<expiresAt;}
 export function assertSession(expiresAt,now=Date.now()){if(!sessionValid(expiresAt,now)){const e=Error('Phiên đăng nhập đã hết hạn 14 ngày. Hãy đăng nhập Google lại.');e.code='auth/session-expired';throw e;}}
 export async function verifySession(service){const user=service.auth.currentUser;if(!user)throw Error('Hãy đăng nhập Google.');const result=await service.authSDK.getIdTokenResult(user);if(service.auth.currentUser?.uid!==user.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại.');const expires=sessionExpiry(result.authTime);assertSession(expires);service.sessionExpiresAt=expires;return expires;}
-export function profileDetails(profile={}){const goal=profile.goal&&typeof profile.goal==='object'&&!Array.isArray(profile.goal)?profile.goal:{};return {weight_kg:profile.weight_kg,height_cm:profile.height_cm,bmr_kcal:goal.bmr_kcal,tdee_kcal:profile.TDEE,target_weight_kg:goal.target_weight_kg,training_goal:goal.training_goal|| (typeof profile.goal==='string'?profile.goal:''),age:profile.age,gender:profile.gender,activity_factor:goal.activity_factor};}
+export function profileDetails(profile={}){const goal=profile.goal&&typeof profile.goal==='object'&&!Array.isArray(profile.goal)?profile.goal:{};return {weight_kg:profile.weight_kg,height_cm:profile.height_cm,bmr_kcal:goal.bmr_kcal,tdee_kcal:profile.TDEE,target_weight_kg:goal.target_weight_kg,training_goal:goal.training_goal|| (typeof profile.goal==='string'?profile.goal:''),age:profile.age,gender:profile.gender,activity_factor:goal.activity_factor,carbs_target:goal.carbs_target,fat_target:goal.fat_target};}
 export function validatePersonalProfile(profile){
   const p=profileDetails(profile);
   const required=(value,label,min,max)=>{const n=num(value);if(n===null||n<min||n>max)throw Error(`Nhập ${label} hợp lệ (${min}–${max}).`);};
   required(p.weight_kg,'cân nặng hiện tại (kg)',.1,500);required(p.height_cm,'chiều cao (cm)',50,250);required(p.bmr_kcal,'BMR (kcal/ngày)',300,8000);required(p.tdee_kcal,'TDEE (kcal/ngày)',300,20000);required(p.target_weight_kg,'cân nặng mục tiêu (kg)',.1,500);
   if(Number(p.tdee_kcal)<Number(p.bmr_kcal))throw Error('TDEE cần lớn hơn hoặc bằng BMR.');
   if(typeof p.training_goal!=='string'||!p.training_goal.trim()||p.training_goal.length>500)throw Error('Nhập mục tiêu tập luyện (tối đa 500 ký tự).');
+  for(const key of ['carbs_target','fat_target']){const v=p[key];if(v!==undefined&&v!==null&&v!==''&&(num(v)===null||num(v)<0||num(v)>100000))throw Error('Mục tiêu macro phải là số không âm hoặc để trống.');}
   return profile;
 }
 export function profileComplete(profile){try{validatePersonalProfile(profile);return true;}catch{return false;}}

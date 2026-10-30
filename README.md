@@ -111,3 +111,15 @@ BMR/TDEE có thể nhập thủ công. Helper cho người từ 18–100 tuổi 
 4. Nhập đủ thông tin; có thể dùng mục ước tính với tuổi/giới tính/hệ số vận động rồi sửa số. Lưu thành công → mở được nhật ký, dữ liệu được lưu Firebase.
 5. Đóng/mở lại app trong 14 ngày: đăng nhập và hồ sơ được khôi phục. Vào Thêm kiểm tra hạn phiên và cập nhật hồ sơ. Không cần đăng nhập mỗi lần.
 6. Mốc hết hạn 14 ngày được kiểm thử bằng test tự động với đồng hồ giả định; không cần đổi giờ hệ thống của máy hoặc chờ 2 tuần để xác nhận biên chính sách.
+
+
+## Dashboard theo feedback (v2.2.0)
+
+- Đổi tiêu đề và menu Hôm nay thành Dashboard; ngày hiện tại vẫn hiển thị dưới tiêu đề.
+- Hai nút Ăn uống / Tập luyện lớn hơn, đặt giữa ngay dưới tiêu đề để dễ bấm trên điện thoại.
+- Năng lượng / protein / carbs / fat hiển thị thành 4 vòng tiến độ so với mục tiêu riêng. Khi vượt: vòng và số chuyển đỏ, có chữ Vượt và phần vượt cụ thể; vòng cap ở 100% nhưng phần trăm hiển thị có thể lớn hơn 100. Không chỉ dùng màu để thông báo.
+- Trong Mục tiêu → Mục tiêu dinh dưỡng, người dùng tự đặt kcal / protein / carbs / fat. Carbs và fat lưu trong `WebProfile.goal.carbs_target` / `fat_target`, tương thích Rules hiện hành. Không tự suy mục tiêu macro hoặc lấy TDEE làm mức ăn mục tiêu. Chưa đặt thì hiện Chưa đặt mục tiêu; chưa có số liệu thì hiện —. Tổng chưa đầy đủ có nhãn riêng.
+- Bỏ section Tiến bộ từng bài và chart số set khỏi Dashboard. Thay bằng chart kết hợp: cột xanh là kcal ăn vào, đường cam là kcal tập luyện ước tính (gross). Mặc định 10 ngày liên tiếp gồm hôm nay; filter 7 / 10 / 28 ngày. Thiếu số liệu để trống, đường không nối qua ngày thiếu; chỉ ghi nghỉ rõ ràng mới có thể hiện 0 kcal tập luyện. Không trừ kcal tập luyện khỏi kcal ăn và không coi đó là tổng TDEE.
+- Có bảng số liệu theo ngày cho người dùng điện thoại và screen reader. Dấu * là tổng chưa đủ; — là chưa biết. Dữ liệu bị xóa mềm/bỏ bữa không được cộng vào dinh dưỡng.
+
+Test: refresh web → Dashboard, kiểm tra 4 vòng + hai nút giữa + chart mặc định 10 ngày và không còn Tiến bộ từng bài. Đặt mục tiêu trong hồ sơ, nhập lượng vượt mục tiêu để kiểm tra màu đỏ/chữ Vượt; bấm 7/10/28 để đổi khoảng ngày. Ngày thiếu data phải hiện — ở bảng chi tiết. Bản cập nhật chỉ kiểm thử bằng code, không dùng Chrome.
