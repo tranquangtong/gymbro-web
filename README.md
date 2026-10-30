@@ -123,3 +123,11 @@ BMR/TDEE có thể nhập thủ công. Helper cho người từ 18–100 tuổi 
 - Có bảng số liệu theo ngày cho người dùng điện thoại và screen reader. Dấu * là tổng chưa đủ; — là chưa biết. Dữ liệu bị xóa mềm/bỏ bữa không được cộng vào dinh dưỡng.
 
 Test: refresh web → Dashboard, kiểm tra 4 vòng + hai nút giữa + chart mặc định 10 ngày và không còn Tiến bộ từng bài. Đặt mục tiêu trong hồ sơ, nhập lượng vượt mục tiêu để kiểm tra màu đỏ/chữ Vượt; bấm 7/10/28 để đổi khoảng ngày. Ngày thiếu data phải hiện — ở bảng chi tiết. Bản cập nhật chỉ kiểm thử bằng code, không dùng Chrome.
+
+### Bổ sung theo ảnh mới (v2.2.1)
+
+Dashboard mặc định Today, có nút Chọn ngày và Today để quay về hiện tại. Khi chọn ngày cũ, dinh dưỡng, mục tiêu hồ sơ tại ngày đó, vận động, nhật ký và điểm kết thúc khoảng biểu đồ cùng đổi theo ngày được chọn. Thêm log từ Dashboard cũng mở đúng ngày đang xem. Không chọn ngày tương lai.
+
+Biểu đồ hiển thị số kcal trên từng cột/điểm đã biết, kể cả 0; tổng chưa đầy đủ có dấu *. Cột ăn vào dùng trục trái, đường kcal tập luyện dùng trục phải với thang đo riêng để nhìn rõ biến động. Biểu đồ dài có thể cuộn ngang trên điện thoại; bảng chi tiết vẫn có sẵn.
+
+Test thủ công: tải lại web → Today được chọn mặc định → Chọn ngày có log cũ → đối chiếu các mục với Nhật ký → đổi 7/10/28 ngày → kiểm tra nhãn và hai trục → bấm Today quay lại hôm nay. Mở Thêm món/bài từ Dashboard ngày cũ để xác nhận ngày trong form. Kiểm thử tự động xác nhận chọn ngày, biên tuần, hồ sơ theo ngày, tọa độ trục phải và nhãn dữ liệu; không chạy trình duyệt.
