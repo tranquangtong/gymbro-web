@@ -58,3 +58,17 @@ test('Firebase batch reads all revisions before writing any record',async()=>{
  const repo=new FirebaseRepository(s);await repo.saveMany('WebMeals',rows.map(r=>({...r,kcal:222,nutrition_source:'estimate',_originalUpdatedAt:r.updated_at})));assert.deepEqual(events,['read','read','write','write']);
  events.length=0;await assert.rejects(()=>repo.saveMany('WebMeals',[{...rows[0],kcal:300,_originalUpdatedAt:'stale'},rows[1]]));assert.equal(events.includes('write'),false);
 });
+
+test('Surimi keeps thanh as part of the food name in text and compact form',()=>{
+ for(const [text,servings] of [['6 thanh cua',null],['6 thanh thanh cua',null],['thanh cua',6],['Thanh cua',6]]){
+  const r=parseMeals(text,{date,servings})[0];assert.equal(r.food_id,'surimi');assert.equal(r.kcal,114);assert.equal(r.protein,9);assert.equal(r.carbs,18);assert.equal(r.fat,.6);assert.equal(r.portion,'6 × thanh 20 g');
+ }
+ assert.equal(parseMeals('120 g thanh cua',{date})[0].kcal,114);assert.equal(parseMeals('thanh cua 120g',{date})[0].kcal,114);assert.equal(parseMeals('thanh cua',{date,servings:1.5})[0].kcal,28.5);
+ assert.equal(parseMeals('thanh cua chiên sốt',{date})[0].kcal,'','do not match an unlisted cooked variation');
+ for(const servings of ['',0,-1,'bad'])assert.throws(()=>parseMeals('thanh cua',{date,servings}));
+});
+test('Compact food names starting with numbers or unit text are matched literally and custom macros win',()=>{
+ const foods=[{...DEFAULT_FOODS.find(f=>f.id==='surimi'),kcal:20,protein:2,carbs:2.5,fat:.2},{...DEFAULT_FOODS[0],id:'custom',name:'1 yến mạch trộn sữa tươi',aliases:[],serving_label:'bát',kcal:324,protein:13,carbs:45,fat:10}];
+ const selected=parseMeals('1 yến mạch trộn sữa tươi',{date,foods,servings:2})[0];assert.equal(selected.food_id,'custom');assert.equal(selected.kcal,648);assert.equal(selected.portion,'2 × bát');
+ const surimi=parseMeals('thanh cua',{date,foods,servings:6})[0];assert.equal(surimi.kcal,120);assert.equal(surimi.protein,12);
+});

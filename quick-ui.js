@@ -37,6 +37,7 @@ export function createQuickUI(env){
   function parseCompose(){
     rememberCompose();scopeGuard(ctx.scope);let text=ctx.text;
     if(ctx.method==='form')text=ctx.type==='meals'?`${ctx.amount||1} ${ctx.food||''}`:ctx.kind==='rest'?'nghỉ':ctx.kind==='cardio'?`${ctx.exercise||'Cardio'} ${ctx.duration} phút`:`${ctx.exercise||''} ${ctx.kind==='assisted'?'trợ lực ':''}${ctx.kind==='bodyweight'?'bw':ctx.kg+'kg'} ${ctx.count}x${ctx.reps}`;
+    if(ctx.method==='form'&&ctx.type==='meals'){ctx.preview=parseMeals(ctx.food||'',{date:ctx.date,meal:ctx.meal,foods:library.length?library:DEFAULT_FOODS,servings:ctx.amount??1});return drawCompose();}
     if(ctx.method==='form'&&ctx.type==='workouts'){ctx.preview=estimateWorkoutBatch([compactWorkout(ctx,{date:ctx.date})],{weight:workoutWeight(getState().data.WebProfile,ctx.date)});return drawCompose();}
     ctx.preview=ctx.type==='meals'?parseMeals(text,{date:ctx.date,meal:ctx.meal,foods:library.length?library:DEFAULT_FOODS}):estimateWorkoutBatch(parseWorkouts(text,{date:ctx.date}),{weight:workoutWeight(getState().data.WebProfile,ctx.date)});drawCompose();
   }

@@ -23,20 +23,27 @@ export function validateFood(f){
 export function cleanFood(f){return Object.fromEntries(['id','name','aliases','serving_label','serving_g','kcal','protein','carbs','fat','source','source_note','source_url','updated_at'].map(k=>[k,f[k]??(['serving_g','kcal','protein','carbs','fat'].includes(k)?null:'')]));}
 const number=s=>Number(String(s).replace(',','.'));
 const base=date=>({id:uid(),date,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),deleted:false,notes:''});
-export function parseMeals(text,{date,meal='lunch',foods=DEFAULT_FOODS}={}){
+export function parseMeals(text,{date,meal='lunch',foods=DEFAULT_FOODS,servings=null}={}){
   const raw=String(text??'').trim();
   if(!raw||raw.length>10000)throw Error('Nhập món ăn, tối đa 10.000 ký tự.');
   // One submission is one diary entry. Punctuation and line breaks are food text,
   // never record delimiters; normalize decimal separators only while reading numbers.
-  let line=raw.replace(/^(?:foodlog|log ăn|log an)\s*/i,'');
+  const structured=servings!==null;
+  let line=structured?raw:raw.replace(/^(?:foodlog|log ăn|log an)\s*/i,'');
   const prefix=line.match(/^(?:bữa\s+|bua\s+)?(sáng|sang|trưa|trua|tối|toi|chiều|chieu|phụ|phu|snack|breakfast|lunch|dinner)(?:\s+nay)?\s*[:\-]?\s+/i);
-  if(prefix){meal=({sang:'breakfast',trua:'lunch',toi:'dinner',chieu:'snack',phu:'snack',snack:'snack',breakfast:'breakfast',lunch:'lunch',dinner:'dinner'})[norm(prefix[1])];line=line.slice(prefix[0].length).trim();}
+  if(prefix&&!structured){meal=({sang:'breakfast',trua:'lunch',toi:'dinner',chieu:'snack',phu:'snack',snack:'snack',breakfast:'breakfast',lunch:'lunch',dinner:'dinner'})[norm(prefix[1])];line=line.slice(prefix[0].length).trim();}
   const r={...base(date),meal,food:line,portion:'',kcal:'',protein:'',carbs:'',fat:'',nutrition_source:'',skipped:false,photo_ids:[]};
   if(['nhin','bo bua','khong an','skip','none'].includes(norm(line))){r.skipped=true;r.food='';return [validateRecord('WebMeals',r)];}
-  const amount=line.match(/^(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|khẩu phần|khau phan|phần|phan)?\s*/i);
-  let quantity=amount?number(amount[1]):1,unit=norm(amount?.[2]),name=amount?line.slice(amount[0].length).trim():line;
-  if(!amount){const suffix=line.match(/\s+(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|phần|phan)?$/i);if(suffix){quantity=number(suffix[1]);unit=norm(suffix[2]);name=line.slice(0,suffix.index).trim();}}
-  const match=foods.find(f=>[f.name,...f.aliases].some(alias=>norm(alias)===norm(name)));
+  const amount=structured?null:line.match(/^(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|khẩu phần|khau phan|phần|phan)?\s*/i);
+  let quantity=structured?num(servings):amount?number(amount[1]):1,unit=structured?'':norm(amount?.[2]),name=structured?line:amount?line.slice(amount[0].length).trim():line;
+  if(structured&&(quantity===null||quantity<=0||quantity>100000))throw Error('Số khẩu phần phải lớn hơn 0 và tối đa 100.000.');
+  if(!structured&&!amount){const suffix=line.match(/\s+(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|phần|phan)?$/i);if(suffix){quantity=number(suffix[1]);unit=norm(suffix[2]);name=line.slice(0,suffix.index).trim();}}
+  const findFood=n=>foods.find(f=>[f.name,...(f.aliases||[])].some(alias=>norm(alias)===norm(n)));
+  // Try the full food name after the numeric amount before consuming a unit:
+  // 'thanh' is part of 'thanh cua', 'g' can be the first letter of a food name.
+  const fullName=amount?line.slice(line.match(/^\d+(?:[.,]\d+)?\s*/)[0].length).trim():name;
+  const fullMatch=findFood(fullName),match=fullMatch||findFood(name);
+  if(fullMatch&&amount)unit='';
   if(match){
     if(quantity<=0||quantity>100000)throw Error('Khẩu phần phải lớn hơn 0.');
     let factor=quantity;

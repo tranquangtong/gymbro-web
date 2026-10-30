@@ -177,3 +177,10 @@ Parser tiếp tục nhận JSON wrapper cũ, array các object có ID thật ho�
 Ảnh prompt được tải/chia sẻ bằng tên ngắn monN_anhM.jpg; caption hiển thị số món để khớp. Copy vẫn chỉ có chữ. Kết quả đã dán giữ ở sessionStorage theo tài khoản/request, khôi phục khi đóng/mở lại hộp thoại trong cùng phiên; xóa bản nháp kết quả sau áp dụng thành công hoặc thay prompt. Có Nhập file JSON/TXT (tối đa 200 KB) để tránh clipboard khi cần. Không thể kết luận lỗi cũ do giới hạn/cache clipboard từ ảnh chụp; sửa nhằm giảm payload và phân biệt lỗi nhập liệu chính xác.
 
 Test thủ công trên điện thoại: tải lại → Ăn uống → Ước tính với ChatGPT → Tạo lại prompt → Copy prompt gọn → gửi kèm ảnh tương ứng → copy toàn bộ JSON gọn trả về → Đọc kết quả → đối chiếu tên món/macro → Áp dụng. Đóng/mở lại hộp thoại trước khi áp dụng phải giữ nội dung đã dán trong cùng tab/phiên. Thử copy cả code fence/chữ dẫn vẫn đọc được; nếu chỉ copy một phần thì báo bị cắt hoặc thiếu món và không lưu. Có thể chọn file .json/.txt thay cho dán. Code test bao gồm định dạng mới/cũ, lỗi clipboard điển hình, đối chiếu ID, scope, snapshot, nhãn, 0/null. Không chạy Chrome.
+
+
+### Nhận diện thanh cua / Điền gọn (v2.5.1)
+
+Parser trước đây ăn chữ thanh trong tên thanh cua như đơn vị, rồi tìm món cua nên mất macro. Viết nhanh giờ ưu tiên khớp toàn bộ tên sau số lượng trước khi bỏ đơn vị. Điền gọn truyền tên món và số khẩu phần riêng, không chuyển thành câu để parse lại; giữ được cả tên tùy chỉnh bắt đầu bằng số. Macro lấy từ thư viện người dùng và nhân số khẩu phần; không ghi đè bằng preset mẫu.
+
+Test: Điền gọn → thanh cua → 6 → Xem trước: 6 × thanh 20 g và preset 114 kcal, P9/C18/F0,6. Nếu đã sửa macro trong thư viện thì dùng giá trị đã sửa. Viết nhanh 6 thanh cua và 120 g thanh cua cũng ra macro; món thanh cua chiên sốt chưa có trong thư viện vẫn để trống. Không tự cập nhật các log đã lưu trước đây. Không chạy Chrome.
