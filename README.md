@@ -51,7 +51,7 @@ Mỗi tài khoản đăng nhập tạo một bản directory `users/{uid}` chỉ
 
 ## Ghi nhanh (v2)
 
-- Ăn uống → Thêm món → **Viết nhanh**: `2 chuối, 1 whey Nuta` hoặc `3 trứng luộc không lòng đỏ`. Có thể ghi `200g đậu hũ`. App tra thư viện theo tên khớp chính xác; món lạ giữ macro trống. **Điền gọn** chỉ cần tên món và số khẩu phần. Xem trước trước khi lưu.
+- Ăn uống → Thêm món → **Viết nhanh**: `2 chuối, 1 whey Nuta` hoặc `3 trứng luộc không lòng đỏ`. Có thể ghi `200g đậu hũ`. Mỗi lần nhập luôn tạo đúng **1 món**, giữ nguyên dấu phẩy, dấu chấm, chấm phẩy và xuống dòng trong mô tả. Ví dụ `2 chuối, 1 whey Nuta` được lưu chung một mục; app chỉ tự tính từ thư viện khi toàn bộ mô tả khớp một món quen, món phức tạp giữ macro trống để ước tính qua ChatGPT. **Điền gọn** chỉ cần tên món và số khẩu phần. Xem trước trước khi lưu.
 - Tập luyện → Thêm bài: `Chin-up trợ lực 27.2kg 3x12`, `Lat pulldown 40kg 3x12`, `Đi bộ 30 phút`, mỗi bài một dòng. Cú pháp GAS `Dumbbell curl, 10kg x2, 12` ghi một set, tổng 20kg; `10kg mỗi tay, 12` cũng dùng tổng hai tay. `10kg 3x12` là ba set, không nhân đôi kg. Điền gọn có loại bài, set/reps/kg hoặc phút.
 - Nhập là parser quy tắc chạy trong trình duyệt, **không có AI/API**. Nếu câu chưa được hỗ trợ, app báo lỗi; dùng mẫu hiển thị hoặc form gọn/chi tiết.
 - Thư viện riêng nằm ở `users/{uid}/FoodLibrary`. Lần đầu mở Thêm món/Thư viện sẽ khởi tạo 7 món mẫu nếu thư viện rỗng. Nút lưu mẫu bổ sung món còn thiếu, không ghi đè món đã chỉnh sửa. Có thể thêm/sửa theo nhãn sản phẩm; thay đổi chỉ áp dụng cho log mới.
@@ -59,7 +59,7 @@ Mỗi tài khoản đăng nhập tạo một bản directory `users/{uid}` chỉ
 
 ### Ảnh bữa ăn và ChatGPT
 
-1. Thêm ảnh/Chụp ảnh khi nhập món; hoặc bấm biểu tượng ảnh ở một món đã lưu. Tối đa 3 ảnh/món. Với nhiều món trong một lần nhập, chọn món nhận ảnh ở bản xem trước.
+1. Thêm ảnh/Chụp ảnh khi nhập món; hoặc bấm biểu tượng ảnh ở một món đã lưu. Tối đa 3 ảnh/món. Tất cả ảnh của lần nhập được gắn vào đúng một mục món ăn đó.
 2. Ảnh được decode và vẽ lại qua canvas (không giữ EXIF), chuyển JPEG tối đa 1280px, chuỗi base64 không quá 360.000 ký tự. Tệp được lưu riêng ở `users/{uid}/MealPhotos/{id}`, món chứa `photo_ids`. Chỉ tải ảnh khi mở ảnh/tạo prompt; không tải toàn bộ cùng lịch sử. Browser không decode được HEIC sẽ yêu cầu chọn JPG/PNG.
 3. Bấm **Ước tính với ChatGPT** → Tạo prompt → Copy prompt. Copy chỉ có chữ; dùng Chia sẻ prompt + ảnh trên browser hỗ trợ Web Share files, hoặc tải từng ảnh và đính kèm vào ChatGPT. Tên ảnh chứa ID món để đối chiếu.
 4. Dán JSON ChatGPT trả về → Đọc kết quả → Xem trước → Áp dụng. App kiểm tra request_id, ngày, loại, tài khoản, đủ ID duy nhất, số hợp lệ và phiên bản log. Log đã sửa sau khi tạo prompt sẽ bị từ chối, yêu cầu tạo lại. Prompt được giữ trong sessionStorage theo tài khoản và loại để tiếp tục sau khi tải lại; sau khi áp dụng phải tạo prompt mới.

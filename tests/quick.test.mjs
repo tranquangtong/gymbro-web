@@ -6,11 +6,20 @@ import {LocalRepository} from '../core.js';
 import {FirebaseRepository} from '../firebase.js';
 const date='2026-10-30';
 test('Food quantities scale portions and grams, handle decimal commas, and keep unknown complex foods unknown',()=>{
- const rows=parseMeals('sáng nay: 2 quả chuối, 1 whey Nuta\n3 trứng luộc không lòng đỏ\n200g đậu hũ\n1,5 hộp sữa chua không đường\nBún gạo lứt trứng xào rau',{date});
+ const rows=['sáng nay: 2 quả chuối','1 whey Nuta','3 trứng luộc không lòng đỏ','200g đậu hũ','1,5 hộp sữa chua không đường','Bún gạo lứt trứng xào rau'].flatMap(text=>parseMeals(text,{date}));
  assert.equal(rows.length,6);assert.equal(rows[0].kcal,210);assert.equal(rows[0].meal,'breakfast');assert.equal(rows[1].protein,27);assert.equal(rows[1].kcal,'');assert.equal(rows[1].portion,'1 × khẩu phần 43 g');assert.equal(rows[2].protein,10.8);assert.equal(rows[3].kcal,152);assert.equal(rows[4].kcal,91.5);assert.equal(rows[5].kcal,'');
  assert.equal(parseMeals('chuối 2 quả',{date})[0].kcal,210);assert.equal(parseMeals('0.1 kg chuối',{date})[0].kcal,89);assert.equal(parseMeals('Bún 400 kcal',{date})[0].kcal,400);
  assert.equal(parseMeals('trứng luộc chiên thêm dầu',{date})[0].kcal,'');assert.throws(()=>parseMeals('0 chuối',{date}));
  for(const f of DEFAULT_FOODS)assert.doesNotThrow(()=>validateFood(f));
+});
+test('Each submission stays one meal and preserves commas, periods, semicolons, newlines and decimal text',()=>{
+ for(const text of ['Bún gạo lứt, trứng xào, rau sống.','Cơm; đậu hũ; canh.','2 chuối, 1 whey Nuta\n3 trứng luộc','Bún. Rau. Trứng.','1,5 hộp sữa chua không đường','0.1 kg chuối']){
+  const rows=parseMeals(text,{date});assert.equal(rows.length,1);assert.equal(rows[0].food,text);assert.ok(rows[0].id);
+ }
+ assert.equal(parseMeals('1,5 hộp sữa chua không đường',{date})[0].kcal,91.5);
+ assert.equal(parseMeals('Bún 400 kcal, canh 100 kcal',{date})[0].kcal,'');
+ const [meal]=parseMeals('trưa nay: Bún, rau.\nTrứng xào.',{date});assert.equal(meal.food,'Bún, rau.\nTrứng xào.');assert.equal(meal.meal,'lunch');
+ assert.throws(()=>parseMeals(' \n ',{date}));
 });
 test('Workout text supports multiple sets, GAS single sets, assistance, bodyweight and cardio',()=>{
  const rows=parseWorkouts('Chin-up trợ lực 27,2kg 3x12\nLat pulldown 40kg 3 set 10 reps\nDumbbell curl, 20kg x 12\nPush-up bw 3x15\nĐi bộ 30 phút',{date});
@@ -21,7 +30,7 @@ test('Workout text supports multiple sets, GAS single sets, assistance, bodyweig
  assert.throws(()=>parseWorkouts('Squat 40kg',{date}));assert.throws(()=>parseWorkouts('Squat 40kg 60x12',{date}));
  assert.throws(()=>ensureWorkoutDay([],[parseWorkouts('nghỉ',{date})[0],rows[0]]));
 });
-const request=(type='meals')=>{const rows=type==='meals'?parseMeals('1 chuối\nBún trứng rau',{date}):parseWorkouts('Lat pulldown 40kg 3x12',{date});const q=makeRequest(type,date,rows,{scope:'firebase:owner',weight:85,sessionMinutes:40});const output={app:'GymBro',version:1,request_id:q.request_id,date,kind:type,items:rows.map(r=>type==='meals'?{id:r.id,kcal:400,protein_g:20,carbs_g:50,fat_g:12,notes:'ước tính'}:{id:r.id,kcal_burned:180,notes:'ước tính 40 phút, không tính EPOC'})};return {rows,q,output};};
+const request=(type='meals')=>{const rows=type==='meals'?['1 chuối','Bún trứng rau'].flatMap(text=>parseMeals(text,{date})):parseWorkouts('Lat pulldown 40kg 3x12',{date});const q=makeRequest(type,date,rows,{scope:'firebase:owner',weight:85,sessionMinutes:40});const output={app:'GymBro',version:1,request_id:q.request_id,date,kind:type,items:rows.map(r=>type==='meals'?{id:r.id,kcal:400,protein_g:20,carbs_g:50,fat_g:12,notes:'ước tính'}:{id:r.id,kcal_burned:180,notes:'ước tính 40 phút, không tính EPOC'})};return {rows,q,output};};
 test('Estimate exchange validates request, date, IDs, numbers and stale entries before applying',()=>{
  const {rows,q,output}=request();assert.match(requestPrompt(q),/request_id/);assert.equal(parseEstimate(JSON.stringify(output),q,rows,q.scope)[1].kcal,400);
  const bad=change=>JSON.stringify({...output,...change});
@@ -36,7 +45,7 @@ test('Known label amounts survive estimates; null stays unknown; workout estimat
  const {rows,q:wq,output}=request('workouts');assert.equal(parseEstimate(JSON.stringify(output),wq,rows,wq.scope)[0].kcal_burned_est,180);
 });
 test('Local batch is atomic, preserves media references, refuses stale revisions',async()=>{
- const m=new Map(),repo=new LocalRepository({getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)});const rows=parseMeals('1 chuối\n1 trứng luộc',{date});await repo.saveMany('WebMeals',rows);
+ const m=new Map(),repo=new LocalRepository({getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)});const rows=['1 chuối','1 trứng luộc'].flatMap(text=>parseMeals(text,{date}));await repo.saveMany('WebMeals',rows);
  await assert.rejects(()=>repo.saveMany('WebMeals',[{...rows[0],kcal:999},{...rows[1],date:'2026-02-31'}]));assert.equal((await repo.load()).WebMeals[0].kcal,105);
  await assert.rejects(()=>repo.saveMany('WebMeals',[{...rows[0],_originalUpdatedAt:'stale'}]));
 });

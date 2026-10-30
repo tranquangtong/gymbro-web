@@ -23,35 +23,33 @@ export function cleanFood(f){return Object.fromEntries(['id','name','aliases','s
 const number=s=>Number(String(s).replace(',','.'));
 const base=date=>({id:uid(),date,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),deleted:false,notes:''});
 export function parseMeals(text,{date,meal='lunch',foods=DEFAULT_FOODS}={}){
-  if(!String(text).trim()||text.length>10000)throw Error('Nhập món ăn, tối đa 10.000 ký tự.');
-  // Decimal commas belong to quantities; other commas separate foods.
-  const lines=text.replace(/(\d),(\d)/g,'$1.$2').split(/[\n;,]+/).map(s=>s.trim()).filter(Boolean);
-  let selectedMeal=meal;
-  const result=lines.map(raw=>{
-    let line=raw.replace(/^(?:foodlog|log ăn|log an)\s*/i,'');
-    const prefix=line.match(/^(?:bữa\s+|bua\s+)?(sáng|sang|trưa|trua|tối|toi|chiều|chieu|phụ|phu|snack|breakfast|lunch|dinner)(?:\s+nay)?\s*[:\-]?\s+/i);
-    if(prefix){selectedMeal=({sang:'breakfast',trua:'lunch',toi:'dinner',chieu:'snack',phu:'snack',snack:'snack',breakfast:'breakfast',lunch:'lunch',dinner:'dinner'})[norm(prefix[1])];line=line.slice(prefix[0].length).trim();}
-    const r={...base(date),meal:selectedMeal,food:line,portion:'',kcal:'',protein:'',carbs:'',fat:'',nutrition_source:'',skipped:false,photo_ids:[]};
-    if(['nhin','bo bua','khong an','skip','none'].includes(norm(line))){r.skipped=true;r.food='';return r;}
-    const amount=line.match(/^(\d+(?:\.\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|khẩu phần|khau phan|phần|phan)?\s*/i);
-    let quantity=amount?number(amount[1]):1,unit=norm(amount?.[2]),name=amount?line.slice(amount[0].length).trim():line;
-    // Also accept "chuối 2 quả" and "whey Nuta 1 scoop".
-    if(!amount){const suffix=line.match(/\s+(\d+(?:\.\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|phần|phan)?$/i);if(suffix){quantity=number(suffix[1]);unit=norm(suffix[2]);name=line.slice(0,suffix.index).trim();}}
-    const match=foods.find(f=>[f.name,...f.aliases].some(alias=>norm(alias)===norm(name)));
-    if(match){
-      if(quantity<=0||quantity>100000)throw Error('Khẩu phần phải lớn hơn 0.');
-      let factor=quantity;
-      if(['g','gam','gram','kg'].includes(unit)){if(!match.serving_g)throw Error(match.name+': chưa có gram/khẩu phần. Hãy dùng số khẩu phần hoặc sửa thư viện.');factor=quantity*(unit==='kg'?1000:1)/match.serving_g;r.portion=quantity+' '+(unit==='kg'?'kg':'g');}
-      else r.portion=quantity+' × '+match.serving_label;
-      Object.assign(r,{food:match.name,nutrition_source:match.source,food_id:match.id,nutrition_notes:match.source_note});
-      for(const k of ['kcal','protein','carbs','fat'])r[k]=match[k]===null?'':round(match[k]*factor);
-    }else{
-      const kcal=line.match(/(\d+(?:\.\d+)?)\s*(?:kcal|calo)\b/i);if(kcal){r.kcal=number(kcal[1]);r.nutrition_source='manual';}
-    }
-    validateRecord('WebMeals',r);return r;
-  });
-  if(!result.length||result.length>50)throw Error('Mỗi lần ghi từ 1 đến 50 món.');
-  return result;
+  const raw=String(text??'').trim();
+  if(!raw||raw.length>10000)throw Error('Nhập món ăn, tối đa 10.000 ký tự.');
+  // One submission is one diary entry. Punctuation and line breaks are food text,
+  // never record delimiters; normalize decimal separators only while reading numbers.
+  let line=raw.replace(/^(?:foodlog|log ăn|log an)\s*/i,'');
+  const prefix=line.match(/^(?:bữa\s+|bua\s+)?(sáng|sang|trưa|trua|tối|toi|chiều|chieu|phụ|phu|snack|breakfast|lunch|dinner)(?:\s+nay)?\s*[:\-]?\s+/i);
+  if(prefix){meal=({sang:'breakfast',trua:'lunch',toi:'dinner',chieu:'snack',phu:'snack',snack:'snack',breakfast:'breakfast',lunch:'lunch',dinner:'dinner'})[norm(prefix[1])];line=line.slice(prefix[0].length).trim();}
+  const r={...base(date),meal,food:line,portion:'',kcal:'',protein:'',carbs:'',fat:'',nutrition_source:'',skipped:false,photo_ids:[]};
+  if(['nhin','bo bua','khong an','skip','none'].includes(norm(line))){r.skipped=true;r.food='';return [validateRecord('WebMeals',r)];}
+  const amount=line.match(/^(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|khẩu phần|khau phan|phần|phan)?\s*/i);
+  let quantity=amount?number(amount[1]):1,unit=norm(amount?.[2]),name=amount?line.slice(amount[0].length).trim():line;
+  if(!amount){const suffix=line.match(/\s+(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|phần|phan)?$/i);if(suffix){quantity=number(suffix[1]);unit=norm(suffix[2]);name=line.slice(0,suffix.index).trim();}}
+  const match=foods.find(f=>[f.name,...f.aliases].some(alias=>norm(alias)===norm(name)));
+  if(match){
+    if(quantity<=0||quantity>100000)throw Error('Khẩu phần phải lớn hơn 0.');
+    let factor=quantity;
+    if(['g','gam','gram','kg'].includes(unit)){if(!match.serving_g)throw Error(match.name+': chưa có gram/khẩu phần. Hãy dùng số khẩu phần hoặc sửa thư viện.');factor=quantity*(unit==='kg'?1000:1)/match.serving_g;r.portion=quantity+' '+(unit==='kg'?'kg':'g');}
+    else r.portion=quantity+' × '+match.serving_label;
+    Object.assign(r,{nutrition_source:match.source,food_id:match.id,nutrition_notes:match.source_note});
+    for(const k of ['kcal','protein','carbs','fat'])r[k]=match[k]===null?'':round(match[k]*factor);
+  }else{
+    const calories=[...line.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:kcal|calo)\b/gi)];
+    // Multiple calorie annotations may describe components; don't mistake the first
+    // component for the total of the whole submitted meal.
+    if(calories.length===1){r.kcal=number(calories[0][1]);r.nutrition_source='manual';}
+  }
+  return [validateRecord('WebMeals',r)];
 }
 export function parseWorkouts(text,{date}={}){
   const lines=String(text).split(/[\n;]+/).map(s=>s.trim()).filter(Boolean);
