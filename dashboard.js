@@ -1,4 +1,4 @@
-import {active,num,shiftDate,dateLabel,today,latestProfile,workoutSummary} from './core.js';
+import {active,num,shiftDate,dateLabel,today,latestProfile,workoutSummary,norm,setsOf} from './core.js';
 export const DASHBOARD_RANGES=[7,10,28];
 const skipped=r=>String(r.skipped).toLowerCase()==='true';
 const valid=v=>num(v)!==null&&num(v)>=0;
@@ -38,7 +38,7 @@ export function renderMacroDials(items){
   return `<div class="macro-dials">${items.map(m=>{
     const status=m.target===null?'Chưa đặt mục tiêu':m.value===null?'Chưa có số liệu':m.over?`Vượt ${format(m.value-m.target,1)} ${m.unit}`:`Còn ${format(Math.max(0,m.target-m.value),1)} ${m.unit}`;
     const label=`${m.label}: ${m.value===null?'chưa có số liệu':format(m.value,1)+' '+m.unit}${m.target===null?', chưa đặt mục tiêu':', mục tiêu '+format(m.target,1)+' '+m.unit}. ${status}${m.incomplete?'. Tổng chưa đầy đủ.':''}`;
-    return `<article class="macro-dial ${m.key}${m.over?' over':''}${m.target===null?' no-target':''}" aria-label="${escape(label)}"><h3>${m.label}</h3><div class="dial-circle"><svg viewBox="0 0 120 120" role="img" aria-label="${escape(label)}"><circle class="dial-track" cx="60" cy="60" r="51"/><circle class="dial-fill" cx="60" cy="60" r="51" stroke-dasharray="${(m.fill/100*320.44).toFixed(2)} 320.44"/></svg><div class="dial-value"><strong>${format(m.value,m.key==='kcal'?0:1)}</strong><small>${m.unit}</small></div></div><div class="dial-target">${m.target!==null?'/ '+format(m.target,1)+' '+m.unit:'Chưa đặt mục tiêu'}</div><p class="dial-status">${m.target!==null?status:'—'}${m.percent!==null?' · '+format(m.percent)+'%':''}</p>${m.incomplete?'<small class="dial-incomplete">Chưa đủ số liệu</small>':''}</article>`;
+    return `<article class="macro-dial ${m.key}${m.over?' over':''}${m.target===null?' no-target':''}" aria-label="${escape(label)}"><h3>${m.label}</h3><div class="dial-circle"><svg viewBox="0 0 120 120" role="img" aria-label="${escape(label)}"><circle class="dial-track" cx="60" cy="60" r="51"/><circle class="dial-fill" cx="60" cy="60" r="51" pathLength="100" stroke-dasharray="${m.fill.toFixed(2)} 100" stroke-dashoffset="0"/></svg><div class="dial-value"><strong>${format(m.value,m.key==='kcal'?0:1)}</strong><small>${m.unit}</small></div></div><div class="dial-target">${m.target!==null?'/ '+format(m.target,1)+' '+m.unit:'Chưa đặt mục tiêu'}</div><p class="dial-status">${m.target!==null?status:'Đặt target để xem %'}${m.percent!==null?' · '+format(m.percent)+'%':''}</p>${m.incomplete?'<small class="dial-incomplete">Chưa đủ số liệu</small>':''}</article>`;
   }).join('')}</div>`;
 }
 export function renderEnergyChart(days){
@@ -54,4 +54,43 @@ export function renderEnergyChart(days){
     return `${d.burned!==null?`<circle class="burn-point${d.burnIncomplete?' partial':''}" cx="${x(i)}" cy="${yBurn(d.burned)}" r="5"><title>${escape(describe(d))}</title></circle>`:''}${d.intake!==null?`<text class="intake-data-label" x="${x(i)}" y="${intakeLabelY}" text-anchor="middle">${format(d.intake)}${d.intakeIncomplete?'*':''}</text>`:''}${d.burned!==null?`<text class="burn-data-label" x="${x(i)}" y="${burnLabelY}" text-anchor="middle">${format(d.burned)}${d.burnIncomplete?'*':''}</text>`:''}${days.length<=10||i%4===0||i===days.length-1?`<text x="${x(i)}" y="286" text-anchor="middle">${dateLabel(d.date)}</text>`:''}`;
   }).join('')}</svg>`;
   return `<div class="energy-chart-scroll">${svg}</div><div class="energy-legend"><span><i class="intake-key"></i>Kcal ăn vào · trục trái</span><span><i class="burn-key"></i>Kcal tập luyện (ước tính) · trục phải</span></div><p class="form-note">Hai trục có thang đo riêng. Nhãn là kcal đã ghi; * là tổng chưa đầy đủ. Ngày thiếu dữ liệu để trống. Kcal tập luyện không phải tổng tiêu hao cả ngày và chưa được trừ khỏi kcal ăn vào.</p><details class="chart-data"><summary>Xem số liệu từng ngày</summary><div class="chart-table-scroll"><table><caption>Kcal từ ${dateLabel(days[0].date)} đến ${dateLabel(days.at(-1).date)}</caption><thead><tr><th scope="col">Ngày</th><th scope="col">Ăn vào</th><th scope="col">Tập luyện</th></tr></thead><tbody>${days.map(d=>`<tr><th scope="row">${dateLabel(d.date)}</th><td>${format(d.intake)}${d.intakeIncomplete?' *':''}</td><td>${format(d.burned)}${d.burnIncomplete?' *':''}${d.rest?' · Nghỉ':''}</td></tr>`).join('')}</tbody></table></div><p class="form-note">Đơn vị kcal. — là chưa biết; * là tổng chưa đầy đủ.</p></details>`;
+}
+
+// Name-based hints only; unknown exercises remain explicit and do not imply a body split.
+export function classifyExercise(row){
+ const t=norm(row.exercise);
+ if(row.kind==='rest')return {area:'rest',muscles:[]};
+ if(row.kind==='cardio')return {area:'cardio',muscles:['Tim mạch']};
+ const rules=[
+  [/face pull|reverse fly|rear delt|vai sau/,'support',['Vai sau','Lưng trên']],
+  [/crunch|cable rotation|wood ?chop|russian twist|pallof|plank|sit up|leg raise|gap bung|xoay bung/,'support',['Core']],
+  [/lateral raise|nang vai ngang/,'support',['Vai giữa']],
+  [/bicep|hammer curl|cuon tay/,'support',['Tay trước']],
+  [/tricep|pushdown|skull crusher|duoi tay/,'support',['Tay sau']],
+  [/chin up|chinup|pull up|pullup|pulldown|pull down|row|keo xa|keo lung/,'upper',['Lưng','Tay trước']],
+  [/bench press|chest|push up|pushup|pec fly|chest fly|cable fly|dips|dip|hit dat|nguc/,'upper',['Ngực','Tay sau']],
+  [/shoulder press|overhead press|military press|day vai/,'upper',['Vai','Tay sau']],
+  [/squat|leg press|lunge|split squat|step up|leg extension|dui truoc/,'lower',['Đùi trước','Mông']],
+  [/deadlift|leg curl|hamstring|hip thrust|glute|dui sau/,'lower',['Đùi sau','Mông']],
+  [/calf|bap chan/,'lower',['Bắp chân']]
+ ];
+ for(const [pattern,area,muscles] of rules)if(pattern.test(t))return {area,muscles};
+ return {area:'unknown',muscles:[]};
+}
+export function workoutInsight(rows){
+ const all=active(rows),entries=all.filter(r=>r.kind!=='rest').map(row=>({row,...classifyExercise(row)}));
+ const areas=new Set(entries.map(e=>e.area)),upper=areas.has('upper'),lower=areas.has('lower');
+ const label=upper&&lower?'Full body':upper?'Upper body':lower?'Lower body':areas.has('support')?'Bổ trợ · Accessory':areas.has('cardio')?'Cardio':entries.length?'Chưa xác định nhóm cơ':all.length?'Ngày nghỉ':'Chưa có buổi tập';
+ const extras=[];if((upper||lower)&&areas.has('support'))extras.push('Bổ trợ');if((upper||lower||areas.has('support'))&&areas.has('cardio'))extras.push('Cardio');
+ return {label,extras,entries,muscles:[...new Set(entries.flatMap(e=>e.muscles))],unknown:entries.filter(e=>e.area==='unknown').length};
+}
+export function compactExercise(row){
+ if(row.kind==='cardio')return `${format(num(row.duration_min),1)} phút`;
+ const sets=setsOf(row);if(!sets.length)return 'Chưa ghi sets/reps';
+ const groups=[];for(const s of sets){const load=row.kind==='bodyweight'?'Bodyweight':num(s.weight_kg)===null?'? kg':`${format(num(s.weight_kg),1)} kg${row.kind==='assisted'?' trợ lực':''}`,key=load+' × '+format(num(s.reps));const last=groups.at(-1);if(last?.key===key)last.count++;else groups.push({key,count:1});}
+ return groups.map(g=>`${g.count} set · ${g.key} reps`).join(' / ');
+}
+export function renderWorkoutInsight(rows){
+ const insight=workoutInsight(rows);
+ return `<div class="workout-session-title">${escape(insight.label)}</div>${insight.extras.length?`<p class="card-sub">+ ${escape(insight.extras.join(' · '))}</p>`:''}${insight.muscles.length?`<p class="workout-muscles">${escape(insight.muscles.join(' · '))}</p>`:''}<ul class="workout-session-list">${insight.entries.map(e=>`<li><strong>${escape(e.row.exercise)}</strong><span>${escape(compactExercise(e.row))}</span>${e.area==='unknown'?'<small>Chưa nhận diện nhóm cơ</small>':''}</li>`).join('')}</ul>${insight.entries.length?'<p class="form-note">Nhóm cơ gợi ý theo tên bài đã ghi.</p>':''}`;
 }
