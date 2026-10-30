@@ -143,3 +143,10 @@ Test thủ công: tải lại web → Today được chọn mặc định → Ch
 - Thẻ Vận động nhận diện tên bài để gợi ý Upper body, Lower body, Full body khi có cả upper và lower, hoặc Bổ trợ / Accessory nếu chỉ có bài bổ trợ. Upper + core/face pull vẫn là Upper + Bổ trợ; thêm bài bổ trợ không tự biến thành Full body. Hiển thị nhóm cơ, tên bài, các nhóm set × kg × reps; tạ trợ lực được ghi rõ, bodyweight không hiện kg tạ ngoài. Cardio/nghỉ/unknown xử lý riêng. Đây là heuristic, chưa phải phân tích chính xác mọi tên bài tùy biến.
 
 Test thủ công: tải lại Dashboard → Mục tiêu → bổ sung tuổi ở mục BMR/TDEE nếu thiếu → Mục tiêu dinh dưỡng → chọn hướng mục tiêu → Ước tính → xem/sửa 4 target → Lưu. Đối chiếu vòng: ăn 50% target thì tô nửa vòng, vượt thì đỏ và chữ Vượt. Chọn ngày có chin-up/pulldown để xem Upper; face pull + crunch + cable rotation để xem Bổ trợ; có thêm squat/leg press cùng upper để xem Full body. Kiểm tra các mức tạ khác nhau vẫn giữ đúng reps, tạ máy chin-up hiện trợ lực. Chỉ kiểm thử code, không chạy Chrome.
+
+
+### Mục tiêu theo ngày Dashboard (v2.3.1)
+
+Nút Mục tiêu trên Dashboard chuyển ngày đang xem vào form và mở sẵn phần dinh dưỡng. Form dùng hồ sơ có hiệu lực tại ngày đó, không tự lấy hồ sơ tương lai. Bản nháp của một ngày khác không được áp sang ngày được chọn. Mục tiêu lưu từ ngày ghi nhận đến khi có hồ sơ mới hơn; đổi ngày trong form trước khi lưu nếu muốn hiệu lực từ mốc khác. Không tự ghi ngược mục tiêu hiện tại vào lịch sử.
+
+Test: chọn 28/10 → Mục tiêu → kiểm tra ngày form là 28/10 và phần macro mở sẵn → ước tính/đặt target → Lưu → vòng ngày 28/10 có %. Nếu có hồ sơ ngày 30/10, target ngày 30/10 vẫn lấy hồ sơ ngày 30/10. Thiếu hồ sơ cá nhân tại mốc cũ thì cần bổ sung để lưu được hồ sơ hợp lệ.
