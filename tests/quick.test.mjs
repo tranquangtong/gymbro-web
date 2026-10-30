@@ -54,7 +54,7 @@ test('Photos reject non-JPEG data, unbounded content and invalid meal IDs',()=>{
 });
 test('Firebase batch reads all revisions before writing any record',async()=>{
  const {rows}=request(),storage=new Map(rows.map(r=>['users/owner/WebMeals/'+r.id,r])),events=[];
- const s={auth:{currentUser:{uid:'owner'}},db:{},dbSDK:{doc:(_, ...p)=>p.join('/'),runTransaction:async(_,fn)=>fn({get:async ref=>{events.push('read');return {exists:()=>storage.has(ref),data:()=>storage.get(ref)};},set:(ref,r)=>{events.push('write');storage.set(ref,r);}})}};
+ const s={sessionExpiresAt:Number.MAX_SAFE_INTEGER,auth:{currentUser:{uid:'owner'}},db:{},dbSDK:{doc:(_, ...p)=>p.join('/'),runTransaction:async(_,fn)=>fn({get:async ref=>{events.push('read');return {exists:()=>storage.has(ref),data:()=>storage.get(ref)};},set:(ref,r)=>{events.push('write');storage.set(ref,r);}})}};
  const repo=new FirebaseRepository(s);await repo.saveMany('WebMeals',rows.map(r=>({...r,kcal:222,nutrition_source:'estimate',_originalUpdatedAt:r.updated_at})));assert.deepEqual(events,['read','read','write','write']);
  events.length=0;await assert.rejects(()=>repo.saveMany('WebMeals',[{...rows[0],kcal:300,_originalUpdatedAt:'stale'},rows[1]]));assert.equal(events.includes('write'),false);
 });

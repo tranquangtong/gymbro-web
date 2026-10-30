@@ -25,7 +25,7 @@ test('Import rejects sample data, duplicate IDs and malformed records before wri
   assert.throws(()=>validateBundle({app:'GymBro Web',version:2,mode:'demo',data:{}}));
   assert.throws(()=>validateBundle({app:'GymBro Web',version:2,data:{WebMeals:[meal,meal]}}),/trùng/);
 });
-function service(){const storage=new Map();const s={auth:{currentUser:{uid:'owner',email:'owner@example.test'}},db:{},dbSDK:{doc:(_, ...p)=>p.join('/'),collection:(_, ...p)=>p.join('/'),getDocsFromServer:async path=>({docs:[...storage].filter(([key])=>key.startsWith(path+'/')).map(([key,data])=>({id:key.split('/').at(-1),data:()=>data}))}),runTransaction:async(_,fn)=>fn({get:async ref=>({exists:()=>storage.has(ref),data:()=>storage.get(ref)}),set:(ref,r)=>storage.set(ref,r)})}};return {s,storage};}
+function service(){const storage=new Map();const s={sessionExpiresAt:Number.MAX_SAFE_INTEGER,auth:{currentUser:{uid:'owner',email:'owner@example.test'}},db:{},dbSDK:{doc:(_, ...p)=>p.join('/'),collection:(_, ...p)=>p.join('/'),getDocsFromServer:async path=>({docs:[...storage].filter(([key])=>key.startsWith(path+'/')).map(([key,data])=>({id:key.split('/').at(-1),data:()=>data}))}),runTransaction:async(_,fn)=>fn({get:async ref=>({exists:()=>storage.has(ref),data:()=>storage.get(ref)}),set:(ref,r)=>storage.set(ref,r)})}};return {s,storage};}
 test('Firebase uses the signed-in UID, rejects changed revisions and resumes import without duplicates',async()=>{
   const {s,storage}=service(),repo=new FirebaseRepository(s);
   await repo.save('WebMeals',meal);assert.ok(storage.has('users/owner/WebMeals/meal1'));

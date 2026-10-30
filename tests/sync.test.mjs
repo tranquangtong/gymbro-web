@@ -11,7 +11,7 @@ test('A persisted local/demo preference cannot silently disable Firebase after a
  assert.match(saveMessage({mode:'firebase',repo:{s:{auth:{currentUser:{email:'owner@example.test'}}}}},2),/2 mục vào Firebase · owner@example.test/);
 });
 function streamService(){
- const streams=new Map(),s={auth:{currentUser:{uid:'owner',email:'owner@example.test'}},db:{},dbSDK:{collection:(_, ...p)=>p.join('/'),onSnapshot:(path,options,next,error)=>{const stream={options,next,error,stopped:false};streams.set(path,stream);return ()=>{stream.stopped=true;};}}};return {s,streams};
+ const streams=new Map(),s={sessionExpiresAt:Number.MAX_SAFE_INTEGER,auth:{currentUser:{uid:'owner',email:'owner@example.test'}},db:{},dbSDK:{collection:(_, ...p)=>p.join('/'),onSnapshot:(path,options,next,error)=>{const stream={options,next,error,stopped:false};streams.set(path,stream);return ()=>{stream.stopped=true;};}}};return {s,streams};
 }
 const snap=(records,fromCache=false)=>({metadata:{fromCache},docs:records.map(r=>({id:r.id,data:()=>r}))});
 test('Firestore realtime listener delivers confirmed mobile writes to the same user on another device',()=>{

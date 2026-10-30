@@ -1,3 +1,4 @@
+import {assertSession,verifySession} from './access.js';
 import {DEFAULT_FOODS,cleanFood,validateFood} from './quick.js';
 import {validatePhoto} from './media.js';
 import {firebaseConfig} from './firebase-config.js';
@@ -22,14 +23,14 @@ export async function firebaseService() {
 }
 export async function loginGoogle() {
   const s=await firebaseService();const provider=new s.authSDK.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
-  await s.authSDK.signInWithPopup(s.auth,provider);return s;
+  await s.authSDK.signInWithPopup(s.auth,provider);await verifySession(s);return s;
 }
 export async function logoutFirebase(){const s=await firebaseService();await s.authSDK.signOut(s.auth);}
 export function firebaseError(e){return ({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':'Không kết nối được Firestore. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
 
 export class FirebaseRepository {
   constructor(s,targetUid=null){this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.ownerUid=targetUid||this.uid;this.check();this.title=this.ownerUid===this.uid?'Firebase · '+s.auth.currentUser.email:'ADMIN · dữ liệu UID '+this.ownerUid;}
-  check(){if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
+  check(){assertSession(this.s.sessionExpiresAt);if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
   ref(table,id){if(![...Object.keys(SCHEMAS),'Archive'].includes(table))throw Error('Loại dữ liệu không hợp lệ.');return this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,table,id);}
   async registerOwner(){this.check();const user=this.s.auth.currentUser;await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.uid),{uid:this.uid,email:user.email,display_name:user.displayName||'',updated_at:new Date().toISOString()});}
   async listUsers(){this.check();if(!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được xem danh sách tài khoản.');const snapshot=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users'));return snapshot.docs.map(d=>({...d.data(),uid:d.id}));}

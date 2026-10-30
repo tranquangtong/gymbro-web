@@ -89,3 +89,25 @@ Publish bản `firestore.rules` mới trước khi sử dụng FoodLibrary/MealP
 4. Sửa khẩu phần/macro hoặc xóa mềm mục đó trên điện thoại; máy tính phải tự cập nhật. Thử thêm một bài tập có định dạng được hỗ trợ rồi kiểm tra tương tự.
 5. Đóng/mở lại trang điện thoại: vẫn phải khôi phục Firebase và thấy log đã lưu. Khi app đang mở, tắt mạng, nhập rồi bấm lưu: phải báo chưa lưu và giữ nội dung; bật mạng và bấm Lưu lại, chỉ có một bản ghi.
 6. Có thể đối chiếu Firestore → users → UID của tài khoản → WebMeals / WebWorkouts. Xóa là deleted:true nên tài liệu vẫn còn trong Console nhưng không xuất hiện trong nhật ký.
+
+
+## Đăng nhập bắt buộc & hồ sơ (v2.1.0)
+
+Quy định ở mục này thay thế các hướng dẫn dùng local/demo ở phiên bản cũ. App không cho sử dụng khi chưa đăng nhập và đã bỏ nút dùng local/demo. Mã đọc dữ liệu local cũ chỉ được giữ cho thao tác chuyển dữ liệu có xác nhận sau khi đăng nhập và hoàn tất hồ sơ; không tạo thêm log local.
+
+Phiên ứng dụng tối đa 14 ngày tính từ `IdTokenResult.authTime` của lần đăng nhập Firebase. Làm mới ID token, tải lại trang hoặc mở lại app không kéo dài mốc này. App tự kiểm tra khi khôi phục, khi quay lại, trước thao tác ghi/đọc trong repository, và bằng timer khi trang đang mở. Hết hạn sẽ khóa app, ngừng listener, đóng form, xóa dữ liệu tài khoản khỏi màn hình và đăng xuất. Draft được tách theo UID; không dùng thời điểm trong localStorage để tự gia hạn. Đây là chính sách của ứng dụng/SDK repository, không thay đổi vòng đời refresh token trên máy chủ Firebase.
+
+Trước khi ghi nhật ký, tài khoản phải có cân nặng hiện tại, chiều cao, BMR, TDEE, cân nặng mục tiêu và mục tiêu tập luyện hợp lệ. Hồ sơ chỉ có cân nặng từ bản migration cũ chưa được coi là hoàn tất. Giao diện kiểm tra cả trước khi mở form và khi lưu để không bỏ qua bước này nếu hồ sơ thay đổi trên thiết bị khác. Admin giữ quyền quản lý người khác sau khi hoàn tất hồ sơ tài khoản mình.
+
+Các field giữ tương thích với Rules đã publish: `weight_kg`, `height_cm`, `TDEE`; map `goal` chứa `bmr_kcal`, `target_weight_kg`, `training_goal`, `activity_factor`. `age` và `gender` chỉ cần nếu sử dụng helper ước tính. Hồ sơ legacy có `goal` dạng string vẫn được đọc để gợi ý mục tiêu, nhưng cần bổ sung thông tin bắt buộc.
+
+BMR/TDEE có thể nhập thủ công. Helper cho người từ 18–100 tuổi dùng Mifflin–St Jeor (https://pubmed.ncbi.nlm.nih.gov/2305711/), ước tính REE/BMR rồi nhân hệ số vận động người dùng chọn để ước tính TDEE; không tự chọn giới tính/hệ số. Mọi kết quả đều sửa được và không tự biến thành mục tiêu ăn uống. Không cần đổi Firestore Rules cho bản cập nhật này.
+
+### Test thủ công v2.1
+
+1. Tải lại app, đăng xuất. Mở trực tiếp `#eat` / `#gym` / `#history`: chỉ thấy đăng nhập, không có nút dùng local/demo.
+2. Đăng nhập tài khoản có hồ sơ chưa đầy đủ: app hiển thị bước Hoàn tất hồ sơ. Thử điều hướng sang Ăn uống/Tập luyện, chưa được ghi log.
+3. Bấm Nhập thông tin cá nhân. Thử để trống từng field bắt buộc hoặc nhập TDEE nhỏ hơn BMR: không lưu được.
+4. Nhập đủ thông tin; có thể dùng mục ước tính với tuổi/giới tính/hệ số vận động rồi sửa số. Lưu thành công → mở được nhật ký, dữ liệu được lưu Firebase.
+5. Đóng/mở lại app trong 14 ngày: đăng nhập và hồ sơ được khôi phục. Vào Thêm kiểm tra hạn phiên và cập nhật hồ sơ. Không cần đăng nhập mỗi lần.
+6. Mốc hết hạn 14 ngày được kiểm thử bằng test tự động với đồng hồ giả định; không cần đổi giờ hệ thống của máy hoặc chờ 2 tuần để xác nhận biên chính sách.
