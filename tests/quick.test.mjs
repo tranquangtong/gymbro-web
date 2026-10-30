@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_FOODS,parseMeals,parseWorkouts,ensureWorkoutDay,makeRequest,parseEstimate,requestPrompt,validateFood} from '../quick.js';
+import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,makeRequest,parseEstimate,requestPrompt,validateFood} from '../quick.js';
 import {validatePhoto} from '../media.js';
 import {LocalRepository} from '../core.js';
 import {FirebaseRepository} from '../firebase.js';
@@ -14,6 +14,7 @@ test('Food quantities scale portions and grams, handle decimal commas, and keep 
 });
 test('Workout text supports multiple sets, GAS single sets, assistance, bodyweight and cardio',()=>{
  const rows=parseWorkouts('Chin-up trợ lực 27,2kg 3x12\nLat pulldown 40kg 3 set 10 reps\nDumbbell curl, 20kg x 12\nPush-up bw 3x15\nĐi bộ 30 phút',{date});
+ assert.equal(compactWorkout({exercise:'Nhảy dây',kind:'cardio',duration:10},{date}).duration_min,10);assert.equal(compactWorkout({exercise:'Push-up',kind:'strength',count:3,reps:10,kg:5},{date}).kind,'strength');
  assert.equal(rows.length,5);assert.equal(rows[0].kind,'assisted');assert.equal(JSON.parse(rows[0].sets_json).length,3);assert.equal(JSON.parse(rows[0].sets_json)[0].weight_kg,27.2);assert.equal(rows[2].exercise,'Dumbbell curl');assert.equal(JSON.parse(rows[2].sets_json).length,1);assert.equal(rows[3].kind,'bodyweight');assert.equal(rows[4].duration_min,30);
  assert.equal(JSON.parse(parseWorkouts('Dumbbell curl, 10kg x2, 12',{date})[0].sets_json)[0].weight_kg,20);
  assert.equal(JSON.parse(parseWorkouts('3 set bài kneeling easy chin up, counterweight 27.2kg mỗi set 12 rep',{date})[0].sets_json).length,3);

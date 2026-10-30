@@ -1,5 +1,5 @@
 import {today,dateLabel,uid,active,latestProfile,num,MEALS,KINDS,setsOf} from './core.js';
-import {DEFAULT_FOODS,parseMeals,parseWorkouts,ensureWorkoutDay,validateFood,makeRequest,requestPrompt,parseEstimate} from './quick.js';
+import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,validateFood,makeRequest,requestPrompt,parseEstimate} from './quick.js';
 import {compressPhoto,copyText,photoFile,downloadFile} from './media.js';
 
 export function createQuickUI(env){
@@ -36,6 +36,7 @@ export function createQuickUI(env){
   function parseCompose(){
     rememberCompose();scopeGuard(ctx.scope);let text=ctx.text;
     if(ctx.method==='form')text=ctx.type==='meals'?`${ctx.amount||1} ${ctx.food||''}`:ctx.kind==='rest'?'nghỉ':ctx.kind==='cardio'?`${ctx.exercise||'Cardio'} ${ctx.duration} phút`:`${ctx.exercise||''} ${ctx.kind==='assisted'?'trợ lực ':''}${ctx.kind==='bodyweight'?'bw':ctx.kg+'kg'} ${ctx.count}x${ctx.reps}`;
+    if(ctx.method==='form'&&ctx.type==='workouts'){ctx.preview=[compactWorkout(ctx,{date:ctx.date})];return drawCompose();}
     ctx.preview=ctx.type==='meals'?parseMeals(text,{date:ctx.date,meal:ctx.meal,foods:library.length?library:DEFAULT_FOODS}):parseWorkouts(text,{date:ctx.date});drawCompose();
   }
   async function saveCompose(){

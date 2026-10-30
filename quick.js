@@ -88,6 +88,15 @@ export function parseWorkouts(text,{date}={}){
     validateRecord('WebWorkouts',r);return r;
   });
 }
+export function compactWorkout(fields,{date}={}){
+  const kind=fields.kind||'strength',r={...base(date),exercise:kind==='rest'?'Ngày nghỉ':String(fields.exercise||'').trim(),kind,sets_json:'[]',duration_min:kind==='cardio'?Number(fields.duration):'',kcal_burned_est:''};
+  if(['strength','assisted','bodyweight'].includes(kind)){
+    const count=Number(fields.count);if(!Number.isInteger(count)||count<1||count>50)throw Error('Set phải là số nguyên từ 1 đến 50.');
+    if(kind!=='bodyweight'&&String(fields.kg??'').trim()==='')throw Error('Nhập kg cho bài tập.');
+    r.sets_json=JSON.stringify(Array.from({length:count},()=>({weight_kg:kind==='bodyweight'?'':Number(fields.kg),reps:Number(fields.reps)})));
+  }
+  return validateRecord('WebWorkouts',r);
+}
 export function ensureWorkoutDay(existing,planned){
   for(const day of new Set(planned.map(r=>r.date))){const same=[...existing.filter(r=>r.date===day&&!r.deleted),...planned.filter(r=>r.date===day)];if(same.some(r=>r.kind==='rest')&&same.length>1)throw Error('Ngày này có mục nghỉ. Xóa mục nghỉ trước khi thêm bài tập (hoặc chọn ngày khác).');}
 }
