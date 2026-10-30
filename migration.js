@@ -1,8 +1,8 @@
 import {SCHEMAS,emptyData,num,norm,validateRecord} from './core.js';
 
 export const EXTRAS={
-  WebMeals:['fiber','kcal_known','kcal_estimated','kcal_buffer','confidence','nutrition_notes'],
-  WebWorkouts:['kcal_burned_est','legacy_set_no','legacy_volume_kg','load_uncertain','legacy_activity'],
+  WebMeals:['photo_ids','food_id','fiber','kcal_known','kcal_estimated','kcal_buffer','confidence','nutrition_notes'],
+  WebWorkouts:['kcal_estimation_notes','kcal_burned_est','legacy_set_no','legacy_volume_kg','load_uncertain','legacy_activity'],
   WebProfile:['height_cm','age','gender','goal','BMI','TDEE']
 };
 const ARCHIVE_FIELDS={

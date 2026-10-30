@@ -23,15 +23,16 @@ service cloud.firestore {
     match /users/{uid}/WebMeals/{id} {
       allow read: if owner(uid);
       allow create, update: if owner(uid) && common(id)
-        && request.resource.data.keys().hasOnly(['id','date','meal','food','portion','kcal','protein','carbs','fat','nutrition_source','skipped','notes','created_at','updated_at','deleted','fiber','kcal_known','kcal_estimated','kcal_buffer','confidence','nutrition_notes'])
+        && request.resource.data.keys().hasOnly(['id','date','meal','food','portion','kcal','protein','carbs','fat','nutrition_source','skipped','notes','created_at','updated_at','deleted','photo_ids','food_id','fiber','kcal_known','kcal_estimated','kcal_buffer','confidence','nutrition_notes'])
         && request.resource.data.meal in ['breakfast','lunch','dinner','snack']
         && request.resource.data.food is string && request.resource.data.food.size() <= 10000
-        && request.resource.data.skipped is bool;
+        && request.resource.data.skipped is bool
+        && (!('photo_ids' in request.resource.data) || (request.resource.data.photo_ids is list && request.resource.data.photo_ids.size() <= 3));
     }
     match /users/{uid}/WebWorkouts/{id} {
       allow read: if owner(uid);
       allow create, update: if owner(uid) && common(id)
-        && request.resource.data.keys().hasOnly(['id','date','exercise','kind','sets_json','duration_min','notes','created_at','updated_at','deleted','kcal_burned_est','legacy_set_no','legacy_volume_kg','load_uncertain','legacy_activity'])
+        && request.resource.data.keys().hasOnly(['id','date','exercise','kind','sets_json','duration_min','notes','created_at','updated_at','deleted','kcal_estimation_notes','kcal_burned_est','legacy_set_no','legacy_volume_kg','load_uncertain','legacy_activity'])
         && request.resource.data.kind in ['strength','assisted','bodyweight','cardio','rest']
         && request.resource.data.exercise is string
         && request.resource.data.sets_json is string && request.resource.data.sets_json.size() <= 30000;
@@ -49,6 +50,35 @@ service cloud.firestore {
         && request.resource.data.type in ['report','workout_plan','diet_plan','review']
         && request.resource.data.title is string && request.resource.data.payload is map
         && request.resource.data.payload.keys().hasOnly(['weekday','kcal_intake','kcal_target','kcal_delta','protein_g','protein_target','carb_g','carb_target','fiber_g','fiber_target','fat_g','fat_target','macro_status','meals_logged','missing_meals','workout_sets','workout_volume_kg','kcal_burned','workout_summary','confidence','insight','action','generated_at','eatlog_rows','workoutlog_rows','report_version','muscle_group','exercise','target_sets','target_reps','target_weight','notes','status','meal','target_kcal','target_protein','target_carbs','target_fat','weight_kg','reps','set_no','volume_kg','kcal_burned_est','reason']);
+    }
+    function optionalNumber(d, key) { return d[key] == null || (d[key] is number && d[key] >= 0 && d[key] <= 100000); }
+    match /users/{uid}/FoodLibrary/{id} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['id','name','aliases','serving_label','serving_g','kcal','protein','carbs','fat','source','source_note','source_url','updated_at'])
+        && request.resource.data.id == id
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 150
+        && request.resource.data.aliases is list && request.resource.data.aliases.size() <= 25
+        && request.resource.data.serving_label is string && request.resource.data.serving_label.size() <= 100
+        && request.resource.data.source in ['estimate','label','manual']
+        && request.resource.data.source_note is string && request.resource.data.source_note.size() <= 1500
+        && request.resource.data.source_url is string && request.resource.data.source_url.size() <= 500
+        && request.resource.data.updated_at is string
+        && optionalNumber(request.resource.data,'serving_g')
+        && optionalNumber(request.resource.data,'kcal') && optionalNumber(request.resource.data,'protein')
+        && optionalNumber(request.resource.data,'carbs') && optionalNumber(request.resource.data,'fat');
+    }
+    match /users/{uid}/MealPhotos/{id} {
+      allow get: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly(['id','meal_id','data_url','created_at'])
+        && request.resource.data.id == id
+        && request.resource.data.meal_id is string && request.resource.data.meal_id.size() <= 200
+        && request.resource.data.created_at is string
+        && request.resource.data.data_url is string && request.resource.data.data_url.size() <= 360000
+        && request.resource.data.data_url.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+=*$');
+      allow update: if owner(uid) && request.resource.data == resource.data;
+      // Immutable image bytes; detaching only removes the meal's photo reference.
     }
     // Cross-user access is restricted to the verified administrator email. Hard deletes remain denied.
   }

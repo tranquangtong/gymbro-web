@@ -46,6 +46,8 @@ export function validateRecord(table,r) {
     if(r.kind==='cardio'&&(num(r.duration_min)===null||num(r.duration_min)<=0||num(r.duration_min)>1440)) throw Error('Thời lượng cardio phải lớn hơn 0 và tối đa 1440 phút.');
   }
   if(table==='WebProfile') { if(num(r.weight_kg)===null||num(r.weight_kg)<=0) throw Error('Cân nặng phải lớn hơn 0.'); nonneg(r.weight_kg,'Cân nặng',500); ['kcal_target','protein_target'].forEach(k=>nonneg(r[k],k)); }
+  if(table==='WebMeals'&&r.photo_ids!==undefined&&(!Array.isArray(r.photo_ids)||r.photo_ids.length>3||r.photo_ids.some(id=>typeof id!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(id))))throw Error('Tối đa 3 ảnh hợp lệ cho mỗi món.');
+  if(table==='WebWorkouts'){nonneg(r.kcal_burned_est,'Kcal tiêu hao',15000);nonneg(r.duration_min,'Thời lượng',1440);}
   return r;
 }
 export function serialize(table, record) { return SCHEMAS[table].map(k=>record[k]??''); }
@@ -68,5 +70,6 @@ export function demoData() {
 export class LocalRepository {
   constructor(storage,key='gymbro.v1.local') { this.storage=storage; this.key=key; }
   async load() { const raw=this.storage.getItem(this.key); if(!raw)return emptyData(); let d; try{ d=JSON.parse(raw); }catch{throw Error('Dữ liệu trên thiết bị bị lỗi. Hãy xuất bản sao trước khi xử lý.');} if(!d||Object.keys(SCHEMAS).some(t=>!Array.isArray(d[t])))throw Error('Cấu trúc dữ liệu lưu trên thiết bị không hợp lệ.'); return d; }
-  async save(table,record) { validateRecord(table,record); const d=await this.load();const i=d[table].findIndex(r=>r.id===record.id); if(i<0)d[table].push(record);else d[table][i]=record; try{this.storage.setItem(this.key,JSON.stringify(d));}catch{throw Error('Không lưu được trên thiết bị. Có thể bộ nhớ đã đầy hoặc bị chặn.');} }
+  async save(table,record){return this.saveMany(table,[record]);}
+  async saveMany(table,records){const d=await this.load();for(const r of records){validateRecord(table,r);const i=d[table].findIndex(x=>x.id===r.id),expected=r._originalUpdatedAt??r._revision;if(i>=0&&expected&&d[table][i].updated_at!==expected)throw Error('Mục này đã thay đổi. Làm mới trước khi sửa.');const clean={...r};delete clean._revision;delete clean._originalUpdatedAt;if(i<0)d[table].push(clean);else d[table][i]=clean;}try{this.storage.setItem(this.key,JSON.stringify(d));}catch{throw Error('Không lưu được trên thiết bị. Có thể bộ nhớ đã đầy hoặc bị chặn.');}}
 }

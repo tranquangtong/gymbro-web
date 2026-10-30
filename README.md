@@ -48,3 +48,25 @@ Rules giới hạn quyền theo Firebase UID và schema. Kiểm tra đồng th�
 `tongquangtran@gmail.com` có quyền admin khi email được Firebase Auth xác minh. Firestore Rules kiểm tra token, không đọc role tự khai từ client. Admin mở màn hình Admin, làm mới danh sách tài khoản và chọn tài khoản để xem/sửa/xóa mềm log; Tư liệu hỗ trợ sửa nội dung báo cáo/giáo án dạng JSON. Banner luôn hiện UID đang quản lý. Nút quay về dữ liệu của mình tránh nhập nhầm tài khoản. Migrate/chuyển local bị chặn khi đang quản lý tài khoản khác.
 
 Mỗi tài khoản đăng nhập tạo một bản directory `users/{uid}` chỉ chứa uid, email, display_name và updated_at. Người thường không list directory hoặc mở dữ liệu của người khác. Không cấp IAM Owner hoặc quyền Firebase Console bằng vai trò admin của ứng dụng.
+
+## Ghi nhanh (v2)
+
+- Ăn uống → Thêm món → **Viết nhanh**: `2 chuối, 1 whey Nuta` hoặc `3 trứng luộc không lòng đỏ`. Có thể ghi `200g đậu hũ`. App tra thư viện theo tên khớp chính xác; món lạ giữ macro trống. **Điền gọn** chỉ cần tên món và số khẩu phần. Xem trước trước khi lưu.
+- Tập luyện → Thêm bài: `Chin-up trợ lực 27.2kg 3x12`, `Lat pulldown 40kg 3x12`, `Đi bộ 30 phút`, mỗi bài một dòng. Cú pháp GAS `Dumbbell curl, 10kg x2, 12` ghi một set, tổng 20kg; `10kg mỗi tay, 12` cũng dùng tổng hai tay. `10kg 3x12` là ba set, không nhân đôi kg. Điền gọn có loại bài, set/reps/kg hoặc phút.
+- Nhập là parser quy tắc chạy trong trình duyệt, **không có AI/API**. Nếu câu chưa được hỗ trợ, app báo lỗi; dùng mẫu hiển thị hoặc form gọn/chi tiết.
+- Thư viện riêng nằm ở `users/{uid}/FoodLibrary`. Lần đầu mở Thêm món/Thư viện sẽ khởi tạo 7 món mẫu nếu thư viện rỗng. Nút lưu mẫu bổ sung món còn thiếu, không ghi đè món đã chỉnh sửa. Có thể thêm/sửa theo nhãn sản phẩm; thay đổi chỉ áp dụng cho log mới.
+- Nuta Ultimate Plant Protein: nhà sản xuất công bố **27g protein/43g** tại https://nutafood.vn/bot-protein-thuc-vat-ultilmate-plant-protein-2 (30/10/2026). Kcal/carbs/fat chưa được xác minh nên để trống; không tự lấy baseline GAS cũ hay sản phẩm Nuta khác. Alias `whey Nuta` được giữ cho tiện nhập, tên chính thức là protein thực vật.
+
+### Ảnh bữa ăn và ChatGPT
+
+1. Thêm ảnh/Chụp ảnh khi nhập món; hoặc bấm biểu tượng ảnh ở một món đã lưu. Tối đa 3 ảnh/món. Với nhiều món trong một lần nhập, chọn món nhận ảnh ở bản xem trước.
+2. Ảnh được decode và vẽ lại qua canvas (không giữ EXIF), chuyển JPEG tối đa 1280px, chuỗi base64 không quá 360.000 ký tự. Tệp được lưu riêng ở `users/{uid}/MealPhotos/{id}`, món chứa `photo_ids`. Chỉ tải ảnh khi mở ảnh/tạo prompt; không tải toàn bộ cùng lịch sử. Browser không decode được HEIC sẽ yêu cầu chọn JPG/PNG.
+3. Bấm **Ước tính với ChatGPT** → Tạo prompt → Copy prompt. Copy chỉ có chữ; dùng Chia sẻ prompt + ảnh trên browser hỗ trợ Web Share files, hoặc tải từng ảnh và đính kèm vào ChatGPT. Tên ảnh chứa ID món để đối chiếu.
+4. Dán JSON ChatGPT trả về → Đọc kết quả → Xem trước → Áp dụng. App kiểm tra request_id, ngày, loại, tài khoản, đủ ID duy nhất, số hợp lệ và phiên bản log. Log đã sửa sau khi tạo prompt sẽ bị từ chối, yêu cầu tạo lại. Prompt được giữ trong sessionStorage theo tài khoản và loại để tiếp tục sau khi tải lại; sau khi áp dụng phải tạo prompt mới.
+5. Tập luyện dùng cùng luồng qua **Ước tính kcal với ChatGPT**. Nhập tổng phút cả buổi nếu biết. Output `kcal_burned` lưu vào `kcal_burned_est`, là gross kcal và được gắn nhãn ước tính. Thiếu thời gian có thể trả null. Không suy thời gian từ số set, không cộng EPOC và không tính cả buổi lặp lại cho mỗi bài. Sửa bài/sets/phút hoặc lặp buổi tập sẽ xóa estimate cũ.
+
+Không gửi dữ liệu/ảnh tự động đến ChatGPT. File ảnh chỉ gửi khi người dùng chọn trong luồng chia sẻ/đính kèm. Với Spark, bản này dùng ảnh nén trong Firestore vì Cloud Storage for Firebase yêu cầu Blaze; phù hợp quy mô cá nhân, vẫn chịu hạn mức dung lượng/đọc/ghi Firestore. Có thể chuyển ảnh sang object storage khi tăng quy mô.
+
+Ảnh có nội dung bất biến; bỏ ảnh là gỡ tham chiếu, không hard delete tài liệu ảnh. Bản sao lưu JSON hiện chỉ gồm log và ID ảnh, **không gồm byte ảnh hoặc FoodLibrary**; tải ảnh riêng nếu cần. Chế độ local lưu ảnh trong IndexedDB và thư viện trong localStorage, tách khỏi chế độ mẫu. Không có hàng đợi ghi offline.
+
+Publish bản `firestore.rules` mới trước khi sử dụng FoodLibrary/MealPhotos. Giữ nguyên owner/admin, không mở public reads. Không đổi billing plan.

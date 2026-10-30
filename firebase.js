@@ -1,3 +1,5 @@
+import {DEFAULT_FOODS,cleanFood,validateFood} from './quick.js';
+import {validatePhoto} from './media.js';
 import {firebaseConfig} from './firebase-config.js';
 import {SCHEMAS,emptyData,validateRecord} from './core.js';
 import {cleanRecord,validateArchive} from './migration.js';
@@ -47,6 +49,21 @@ export class FirebaseRepository {
       tx.set(ref,clean);inserted=true;
     });this.check();return inserted;}catch(e){throw Error(firebaseError(e));}
   }
+  async saveMany(table,records){
+    this.check();if(!records.length||records.length>100)throw Error('Mỗi lần lưu từ 1 đến 100 mục.');
+    const cleans=records.map(r=>{const clean=cleanRecord(table,r);validateRecord(table,clean);return clean;});
+    if(new Set(cleans.map(r=>r.id)).size!==cleans.length)throw Error('Trùng ID trong lần lưu.');
+    try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{
+      this.check();const refs=cleans.map(r=>this.ref(table,r.id)),snaps=await Promise.all(refs.map(ref=>tx.get(ref)));
+      records.forEach((r,i)=>{const expected=r._originalUpdatedAt??r._revision;if(expected&&(!snaps[i].exists()||snaps[i].data().updated_at!==expected))throw Error('Nhật ký đã thay đổi trên thiết bị khác. Làm mới rồi tạo lại prompt.');});
+      cleans.forEach((r,i)=>tx.set(refs[i],r));
+    });this.check();}catch(e){throw Error(firebaseError(e));}
+  }
+  async loadFoods(){this.check();try{const snap=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,'FoodLibrary'));return snap.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}catch(e){throw Error(firebaseError(e));}}
+  async seedFoods(){this.check();for(const food of DEFAULT_FOODS){const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',food.id);await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const snap=await tx.get(ref);if(!snap.exists())tx.set(ref,cleanFood({...food,updated_at:new Date().toISOString()}));});}return this.loadFoods();}
+  async saveFood(food){this.check();const clean=cleanFood(food);validateFood(clean);const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',clean.id);try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const old=await tx.get(ref);if(food._revision&&(!old.exists()||old.data().updated_at!==food._revision))throw Error('Món đã thay đổi trên thiết bị khác. Mở lại thư viện.');tx.set(ref,clean);});}catch(e){throw Error(firebaseError(e));}}
+  async savePhoto(photo){this.check();validatePhoto(photo);try{await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',photo.id),photo);}catch(e){throw Error(firebaseError(e));}}
+  async getPhoto(id){this.check();const d=await this.s.dbSDK.getDocFromServer(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',id));this.check();if(!d.exists())throw Error('Không tìm thấy ảnh.');return validatePhoto({...d.data(),id:d.id});}
   async importBundle(bundle,onProgress=()=>{}){
     const entries=[...Object.keys(SCHEMAS),'Archive'].flatMap(table=>(bundle.data[table]||[]).map(record=>({table,record})));
     // Validate the entire payload before any writes. Deterministic IDs make interrupted imports resumable.
