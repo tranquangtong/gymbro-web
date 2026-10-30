@@ -193,3 +193,14 @@ Test: Điền gọn → thanh cua → 6 → Xem trước: 6 × thanh 20 g và pr
 Kiểm tra lại dữ liệu Firebase lúc tạo prompt để loại món vừa được bổ sung trên thiết bị khác. Nếu không còn món cần estimate thì thông báo, không tạo prompt. Prompt lưu từ bản cũ phải tạo lại để dùng phạm vi mới. Món đã đủ không nằm trong request, ảnh và kết quả áp dụng; không tốn lượt gửi cho chúng.
 
 Test: một ngày có thanh cua đủ macro + món trống + món có kcal nhưng thiếu P/C/F → Tạo prompt: chỉ hai món sau. Áp dụng kết quả: thanh cua không thay đổi, món có kcal giữ nguyên kcal. Thử tất cả món đều đủ hoặc toàn số 0: không tạo prompt. Không dùng Chrome.
+
+
+### Font và Dashboard dễ đọc hơn (v2.6.0)
+
+Toàn app dùng Inter (cả form/prompt/kết quả), Noto Sans cho tiêu đề/brand và loại buổi tập. Thay DM Sans/Manrope. Tăng thang cỡ chữ: nội dung hỗ trợ chủ yếu 14–16 px thay 10–13, input 18 px, body 17 px, tiêu đề trang khoảng 32 px; chữ nhỏ nhất 13 px. Font qua Google Fonts với display=swap và fallback system-ui. Điều chỉnh wrap cho nút món quen, preview, log, footer trên mobile.
+
+Nút Tập luyện nhanh dùng cam đất nền đặc, chữ trắng, có hover/active. Chart tô nền nhẹ cột hôm nay, cột xanh đậm hơn và có chữ Hôm nay. Không highlight nhầm ngày cuối của lịch sử thành hôm nay. SVG giữ kích thước tối thiểu theo viewBox để nhãn không co thành chữ quá nhỏ trên điện thoại.
+
+Mở chart hoặc đổi khoảng ngày sẽ cuộn ngang để hôm nay ở trong khung; nếu đang xem lịch sử không gồm hôm nay thì ưu tiên ngày cuối đang xem. Không tự cuộn dọc trang hay chiếm focus bàn phím. Đồng bộ realtime cùng khoảng ngày giữ scrollLeft người dùng đang xem; bấm Today chủ động đưa về ngày hiện tại.
+
+Test trên điện thoại: refresh → Dashboard → xác nhận Inter/Noto Sans, cỡ chữ và nút Tập luyện cam đất → kéo xuống chart: ngày hiện tại hiện ngay, có nền nhẹ và nhãn Hôm nay → đổi 7/10/28 ngày → kéo về ngày cũ rồi refresh data: giữ vị trí → Today: trở lại hôm nay. Chọn ngày lịch sử: không gắn nhãn Hôm nay sai ngày. Kiểm tra form Điền gọn, món quen dài, JSON và lịch sử không tràn ngang. Chỉ kiểm thử logic bằng Node; không dùng Chrome.

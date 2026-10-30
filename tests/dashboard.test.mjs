@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,chooseDashboardDate,dashboardDay,energyScales} from '../dashboard.js';
+import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart} from '../dashboard.js';
 import {validatePersonalProfile} from '../access.js';
 import {cleanRecord} from '../migration.js';
 const day='2026-10-30';
@@ -57,4 +57,21 @@ test('Optional carb/fat targets persist with profile goals and do not become onb
  const p={id:'p',weight_kg:85,height_cm:175,TDEE:2500,goal:{bmr_kcal:1800,target_weight_kg:78,training_goal:'Tăng sức mạnh'}};
  assert.doesNotThrow(()=>validatePersonalProfile(p));const updated={...p,goal:{...p.goal,carbs_target:220,fat_target:65}};assert.doesNotThrow(()=>validatePersonalProfile(updated));assert.equal(cleanRecord('WebProfile',updated).goal.carbs_target,220);
  assert.throws(()=>validatePersonalProfile({...p,goal:{...p.goal,fat_target:-1}}));
+});
+
+test('Chart marks exactly today and focuses today or the last date of a historical range',()=>{
+ const days=energyDays({WebMeals:[meal()]},day,28),html=renderEnergyChart(days,{currentDate:day});
+ assert.equal(energyFocusDate(days,day),day);assert.equal((html.match(/class="today-highlight"/g)||[]).length,1);assert.match(html,/class="intake-bar today"/);assert.match(html,/class="chart-today-label"/);assert.match(html,/data-focus-date="2026-10-30"/);assert.match(html,/min-width:1876px/);
+ const past=energyDays({WebMeals:[meal({date:'2026-10-29'})]},'2026-10-29',7),pastHtml=renderEnergyChart(past,{currentDate:day});
+ assert.equal(energyFocusDate(past,day),'2026-10-29');assert.doesNotMatch(pastHtml,/class="today-highlight"/);assert.doesNotMatch(pastHtml,/class="chart-today-label"/);assert.match(pastHtml,/data-focus-date="2026-10-29"/);
+ // Today can still be highlighted with missing actual values, without fabricating a bar.
+ const missing=renderEnergyChart(energyDays({WebMeals:[meal({date:'2026-10-29'})]},day),{currentDate:day});assert.match(missing,/class="today-highlight"/);assert.doesNotMatch(missing,/class="intake-bar today"/);
+});
+test('Narrow charts reveal the focus day, preserve manual scroll on refresh, and reset for changed ranges',()=>{
+ const element={dataset:{chartKey:'range-a',chartWidth:'900',focusX:'796'},scrollWidth:900,clientWidth:360,scrollLeft:0},root={querySelector:()=>element};
+ focusEnergyChart(root);assert.equal(element.scrollLeft,540,'today near right edge must be visible immediately');
+ focusEnergyChart(root,{key:'range-a',left:80});assert.equal(element.scrollLeft,80,'realtime update must not jump away from a user-selected scroll position');
+ focusEnergyChart(root,{key:'different-range',left:0});assert.equal(element.scrollLeft,540);
+ element.clientWidth=1200;focusEnergyChart(root);assert.equal(element.scrollLeft,0,'desktop chart that fits does not scroll');
+ assert.doesNotThrow(()=>focusEnergyChart({querySelector:()=>null}));
 });
