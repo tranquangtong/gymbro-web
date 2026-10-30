@@ -1,3 +1,4 @@
+import {estimateWorkoutBatch} from './workout-kcal.js';
 import {norm,num,uid,validateRecord,setsOf} from './core.js';
 
 // Generic foods are approximations per edible portion, not product-label claims.
@@ -100,16 +101,17 @@ export function ensureWorkoutDay(existing,planned){
 }
 // Non-secret fingerprint detects edits made after generating the prompt, including another device.
 export function fingerprint(r){const copy={...r};delete copy._revision;delete copy._originalUpdatedAt;const canonical=o=>Array.isArray(o)?o.map(canonical):o&&typeof o==='object'?Object.fromEntries(Object.keys(o).sort().map(k=>[k,canonical(o[k])])):o;return JSON.stringify(canonical(copy));}
-export function makeRequest(kind,date,rows,{scope,weight=null,sessionMinutes=null}={}){
+export function makeRequest(kind,date,rows,{scope,weight=null,sessionMinutes=null,method='chatgpt'}={}){
   if(!['meals','workouts'].includes(kind)||!rows.length)throw Error('Chưa có nhật ký để tạo prompt.');
   if(rows.length>100)throw Error('Tối đa 100 mục mỗi lần ước tính.');
-  return {app:'GymBro',version:1,request_id:uid(),kind,date,scope,weight,sessionMinutes,items:rows.map(r=>({id:r.id,snapshot:fingerprint(r),record:structuredClone(r)}))};
+  return {app:'GymBro',version:1,request_id:uid(),kind,date,scope,weight,sessionMinutes,method,items:rows.map(r=>({id:r.id,snapshot:fingerprint(r),record:structuredClone(r)}))};
 }
 export function requestPrompt(q){
   const meals=q.kind==='meals';
-  const items=q.items.map(({record:r})=>meals?{id:r.id,meal:r.meal,food:r.food,portion:r.portion,notes:r.notes,photos:r.photo_ids||[],known:{kcal:r.kcal,protein_g:r.protein,carbs_g:r.carbs,fat_g:r.fat},source:r.nutrition_source}:{id:r.id,exercise:r.exercise,kind:r.kind,sets:setsOf(r),duration_min:r.duration_min,notes:r.notes});
+  let baseline=[];if(!meals)try{baseline=estimateWorkoutBatch(q.items.map(x=>x.record),{weight:q.weight,sessionMinutes:q.sessionMinutes,overwrite:true});}catch{}
+  const items=q.items.map(({record:r})=>meals?{id:r.id,meal:r.meal,food:r.food,portion:r.portion,notes:r.notes,photos:r.photo_ids||[],known:{kcal:r.kcal,protein_g:r.protein,carbs_g:r.carbs,fat_g:r.fat},source:r.nutrition_source}:{id:r.id,exercise:r.exercise,kind:r.kind,sets:setsOf(r),duration_min:r.duration_min,notes:r.notes,baseline_kcal:baseline.find(x=>x.id===r.id)?.kcal_burned_est??null,baseline_assumptions:baseline.find(x=>x.id===r.id)?.kcal_estimation_notes||''});
   const shape=meals?{id:'GIỮ NGUYÊN ID',kcal:null,protein_g:null,carbs_g:null,fat_g:null,notes:'Giả định/độ không chắc chắn'}:{id:'GIỮ NGUYÊN ID',kcal_burned:null,notes:'Cách tính, thời lượng và độ không chắc chắn'};
-  return `Bạn hỗ trợ ước tính ${meals?'dinh dưỡng từ mô tả và ảnh bữa ăn đính kèm':'kcal tiêu hao cho từng bài tập'}. Đây là ước tính, không phải đo lường.\n${meals?'Ảnh được gắn tên bằng ID món. Không gộp các ID hoặc tính cùng một phần ăn hai lần. Giữ số liệu nhãn đã biết; chỉ ước tính phần chưa biết. Nếu có nhiều thành phần trong cùng ID, trả tổng đúng cho ID đó. Không tự suy ra món không thấy. Thiếu căn cứ thì dùng null, không dùng 0 để thay cho chưa biết.':'Dùng cân nặng và thời lượng nếu có. Không suy ra thời gian tập chỉ từ set/reps. Nếu thiếu thời gian, trả null và nêu cần bổ sung. Kcal là gross (bao gồm nền trong thời gian tập), không phải net; không cộng EPOC. Phân bổ thời gian nghỉ hợp lý, không gán toàn bộ buổi cho từng bài. Tổng các ID không được tính trùng. Bài trợ lực: kg máy là mức hỗ trợ, không phải tạ nâng.'}\nCân nặng: ${q.weight??'chưa biết'} kg. ${!meals?'Tổng thời lượng buổi tập (kể cả nghỉ): '+(q.sessionMinutes??'chưa biết')+' phút.':''}\nNgày cố định: ${q.date}. Dữ liệu:\n${JSON.stringify(items,null,2)}\n\nChỉ trả MỘT JSON hợp lệ, không markdown, không lời dẫn. Giữ nguyên request_id, date, kind và đủ các ID chính xác. Số là JSON number không âm hoặc null, đơn vị kcal và gram, làm tròn 1 chữ số. Không thêm tổng thành một item. Format:\n${JSON.stringify({app:'GymBro',version:1,request_id:q.request_id,date:q.date,kind:q.kind,items:[shape]},null,2)}`;
+  return `Bạn hỗ trợ ước tính ${meals?'dinh dưỡng từ mô tả và ảnh bữa ăn đính kèm':'kcal tiêu hao cho từng bài tập'}. Đây là ước tính, không phải đo lường.\n${meals?'Ảnh được gắn tên bằng ID món. Không gộp các ID hoặc tính cùng một phần ăn hai lần. Giữ số liệu nhãn đã biết; chỉ ước tính phần chưa biết. Nếu có nhiều thành phần trong cùng ID, trả tổng đúng cho ID đó. Không tự suy ra món không thấy. Thiếu căn cứ thì dùng null, không dùng 0 để thay cho chưa biết.':'Dùng cân nặng và thời lượng thực tế nếu có. Nếu thiếu thời gian bài tạ nhưng có sets/reps, dùng baseline_kcal và baseline_assumptions của app (cách GAS legacy), hoặc tinh chỉnh bằng giả định rõ ràng; không trả null chỉ vì thiếu thời gian. Baseline là ước tính theo preset, không phải số đo hoặc số MET riêng cho từng bài được xác nhận khoa học. Ước tính chỉ đúng số set của từng ID; một ID legacy có 1 set thì chỉ tính 1 set. Cardio dùng phút đã ghi; chỉ trả null khi thật sự thiếu cân nặng hoặc thiếu cả sets/reps và thời lượng. Nếu có tổng phút buổi, phân bổ một lần sau khi trừ cardio, không gán cả buổi cho từng ID. Kcal là gross (bao gồm nền trong thời gian tập), không phải net; không cộng EPOC. Phân bổ thời gian nghỉ hợp lý, không gán toàn bộ buổi cho từng bài. Tổng các ID không được tính trùng. Bài trợ lực: kg máy là mức hỗ trợ, không phải tạ nâng.'}\nCân nặng: ${q.weight??'chưa biết'} kg. ${!meals?'Tổng thời lượng buổi tập (kể cả nghỉ): '+(q.sessionMinutes??'chưa biết')+' phút.':''}\nNgày cố định: ${q.date}. Dữ liệu:\n${JSON.stringify(items,null,2)}\n\nChỉ trả MỘT JSON hợp lệ, không markdown, không lời dẫn. Giữ nguyên request_id, date, kind và đủ các ID chính xác. Số là JSON number không âm hoặc null, đơn vị kcal và gram, làm tròn 1 chữ số. Không thêm tổng thành một item. Format:\n${JSON.stringify({app:'GymBro',version:1,request_id:q.request_id,date:q.date,kind:q.kind,items:[shape]},null,2)}`;
 }
 export function parseEstimate(text,q,currentRows,scope){
   if(!q||q.scope!==scope)throw Error('Tạo prompt trong tài khoản hiện tại trước.');
@@ -128,7 +130,7 @@ export function parseEstimate(text,q,currentRows,scope){
     if(q.kind==='meals'){
       for(const [from,to] of [['kcal','kcal'],['protein_g','protein'],['carbs_g','carbs'],['fat_g','fat']]){const known=num(current[to]);if(current.nutrition_source!=='label'||known===null)r[to]=item[from]===null?(current[to]??''):round(item[from]);}
       r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='ChatGPT: '+item.notes;
-    }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes='ChatGPT · gross kcal: '+item.notes;}
+    }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'ChatGPT · gross kcal: ')+item.notes;}
     validateRecord(q.kind==='meals'?'WebMeals':'WebWorkouts',r);return r;
   });
 }

@@ -152,3 +152,18 @@ Target kcal/protein/carbs/fat hiện tại dùng cho tất cả các ngày trên
 Nút Mục tiêu mở hồ sơ hiện tại, không lấy ngày Dashboard làm ngày hiệu lực target. Ngày trong hồ sơ chỉ là ngày ghi thông tin cá nhân. Lưu hồ sơ đánh dấu goal.global_targets=true; bộ target mới nhất theo updated_at được dùng chung. Khi chưa có marker, app đọc bộ target legacy được cập nhật gần nhất, kể cả bộ được lưu vào ngày hồ sơ cũ; không cần migration hay đổi Rules. Xóa trắng target có chủ đích không làm sống lại giá trị cũ. Hồ sơ đã xóa mềm bị bỏ qua. Mở sửa hồ sơ cũ vẫn điền target chung hiện tại.
 
 Test: đặt target một lần và Lưu → chọn 28/10, 29/10 và Today: mẫu số mục tiêu giống nhau, actual và phần trăm đổi theo dữ liệu từng ngày. Đổi target rồi quay lại ngày cũ: dùng target mới. Thử để trống một target và lưu: target đó hiển thị Chưa đặt mục tiêu ở mọi ngày. Realtime Firebase chuyển bộ target chung giữa các thiết bị như hồ sơ khác. Chỉ test code, không chạy Chrome.
+
+
+### Kcal tập luyện trực tiếp (v2.4.0)
+
+Khôi phục cách fallback trong `Code stable 1.legacy.txt`: bài tạ tính từng set, lấy profile MET/phút và hệ số reps/tải/volume cũ, cộng các set đúng một lần. Một dòng migration có một set chỉ tính một set. Các MET riêng từng bài và phút/set là heuristic của app legacy, không phải giá trị đo riêng cho người tập hoặc bảng Compendium nguyên bản. Có nhãn giả định và độ tin cậy thấp khi thiếu thời gian. Chin-up nhận diện như bài kéo; trợ lực/bodyweight không dùng kg làm tạ ngoài. Không giữ cách nhầm trợ lực thành tải nâng từ code cũ.
+
+Log nhanh (text/form), log chi tiết và Lặp buổi trước tự tính kcal khi chưa có số. Không ghi phút giả định vào duration_min thực tế. Ước tính có sẵn được giữ khi tự lưu; sửa bài/sets làm mất hiệu lực estimate thì tính lại. Cân nặng ưu tiên hồ sơ tại ngày log, fallback hồ sơ hiện tại nếu ngày cũ chưa có hồ sơ; không âm thầm dùng 70 kg.
+
+Tập luyện → Tính / cập nhật kcal → Tính kcal ngay → xem trước → Áp dụng kết quả: lưu vào Firebase và đồng bộ Dashboard; không cần ChatGPT. Tính lại chủ động có thể thay estimate cũ. Dữ liệu phải còn đúng revision/ID trước khi áp dụng để không ghi đè log đã sửa trên thiết bị khác.
+
+Tổng phút buổi không bắt buộc. Nếu nhập, trừ phút cardio/bài có thời lượng rõ ràng rồi phân bổ phần còn lại cho các bài tạ theo tỷ trọng set. Không gán toàn bộ buổi vào mỗi ID. Cardio dùng thời lượng đã ghi: incline walking dùng công thức tốc độ/độ dốc GAS, bike dùng watts nếu có và các preset Compendium mới trong Code.gs, mặc định bike vừa 5.8 MET. Nguồn tham khảo: https://pacompendium.com/conditioning-exercise/ và https://pacompendium.com/bicycling/ . Không cộng EPOC; kcal là gross.
+
+ChatGPT nằm trong mục tùy chọn, prompt kèm baseline + giả định và cho phép estimate từ set/reps khi chưa biết phút, bỏ yêu cầu trả null chỉ vì thiếu thời gian. JSON/ID/ngày/scope vẫn giữ để import an toàn. null chỉ dùng khi thật sự thiếu cả căn cứ tập hoặc cân nặng.
+
+Test thủ công: tải lại → Tập luyện → chọn ngày có log cũ → Tính / cập nhật kcal → để trống tổng phút → Tính kcal ngay → xem số và mở Cách tính & giả định → Áp dụng → kiểm tra Dashboard. Thêm log mới `Lat pulldown 40kg 3x12` rồi Xem trước: có kcal ngay, lưu xong có trên Firebase. Thử một dòng một set, chin-up trợ lực, buổi có cardio + tổng phút; nếu dùng ChatGPT, tạo lại prompt để thay bản cũ có yêu cầu trả null. Không dùng Chrome để kiểm thử.
