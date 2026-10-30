@@ -108,17 +108,21 @@ export function ensureWorkoutDay(existing,planned){
 }
 // Non-secret fingerprint detects edits made after generating the prompt, including another device.
 export function fingerprint(r){const copy={...r};delete copy._revision;delete copy._originalUpdatedAt;const canonical=o=>Array.isArray(o)?o.map(canonical):o&&typeof o==='object'?Object.fromEntries(Object.keys(o).sort().map(k=>[k,canonical(o[k])])):o;return JSON.stringify(canonical(copy));}
-export function makeRequest(kind,date,rows,{scope,weight=null,sessionMinutes=null,method='chatgpt'}={}){
+export function needsMealEstimate(r){
+  return r.deleted!==true&&String(r.deleted).toLowerCase()!=='true'&&r.skipped!==true&&String(r.skipped).toLowerCase()!=='true'&&['kcal','protein','carbs','fat'].some(k=>num(r[k])===null);
+}
+export function makeRequest(kind,date,rows,{scope,weight=null,sessionMinutes=null,method='chatgpt',missingOnly=false}={}){
+  if(kind==='meals'&&missingOnly)rows=rows.filter(needsMealEstimate);
   if(!['meals','workouts'].includes(kind)||!rows.length)throw Error('Chưa có nhật ký để tạo prompt.');
   if(rows.length>100)throw Error('Tối đa 100 mục mỗi lần ước tính.');
-  return {app:'GymBro',version:1,request_id:uid(),kind,date,scope,weight,sessionMinutes,method,items:rows.map(r=>({id:r.id,snapshot:fingerprint(r),record:structuredClone(r)}))};
+  return {app:'GymBro',version:1,request_id:uid(),kind,date,scope,weight,sessionMinutes,method,missingOnly,items:rows.map(r=>({id:r.id,snapshot:fingerprint(r),record:structuredClone(r)}))};
 }
 export const estimateToken=q=>String(q.token||q.request_id.replace(/-/g,'').slice(0,12));
 export function requestPrompt(q){
   const meals=q.kind==='meals';
   if(meals){
-    const items=q.items.map(({record:r},i)=>({i:i+1,mon:r.food,...(r.portion?{luong:r.portion}:{}),...(r.notes?{ghi_chu:r.notes}:{}),...(r.photo_ids?.length?{anh:r.photo_ids.map((_,j)=>`mon${i+1}_anh${j+1}.jpg`)}:{}),...(r.nutrition_source==='label'?{nhan:[r.kcal,r.protein,r.carbs,r.fat].map(num)}:{})}));
-    return `Ước tính tổng kcal/protein/carbs/fat cho từng món từ mô tả và ảnh. Đây là ước tính. Đơn vị kcal,g; số hoặc null nếu chưa biết, không thay chưa biết bằng 0. Mỗi i là một món/khẩu phần, không tính trùng. Ảnh monN_anhM thuộc món N. Giữ giá trị nhãn đã biết (nhan theo thứ tự kcal,P,C,F); chỉ ước tính phần thiếu.\nNgày ${q.date}. Món:\n${JSON.stringify(items)}\nChỉ trả một JSON gọn, không markdown, không giải thích. Giữ r và đủ mỗi i đúng một lần. Mỗi dòng m=[i,kcal,protein_g,carbs_g,fat_g]. Ví dụ cấu trúc (thay null bằng kết quả):\n${JSON.stringify({r:estimateToken(q),m:q.items.map((_,i)=>[i+1,null,null,null,null])})}`;
+    const items=q.items.map(({record:r},i)=>({i:i+1,mon:r.food,...(r.portion?{luong:r.portion}:{}),...(r.notes?{ghi_chu:r.notes}:{}),...(r.photo_ids?.length?{anh:r.photo_ids.map((_,j)=>`mon${i+1}_anh${j+1}.jpg`)}:{}),...(q.missingOnly?{da_co:[r.kcal,r.protein,r.carbs,r.fat].map(num)}:r.nutrition_source==='label'?{nhan:[r.kcal,r.protein,r.carbs,r.fat].map(num)}:{})}));
+    return `Ước tính tổng kcal/protein/carbs/fat cho từng món từ mô tả và ảnh. Đây là ước tính. Đơn vị kcal,g; số hoặc null nếu chưa biết, không thay chưa biết bằng 0. Mỗi i là một món/khẩu phần, không tính trùng. Ảnh monN_anhM thuộc món N. da_co/nhan theo thứ tự kcal,P,C,F: giữ số đã có, chỉ ước tính ô null.\nNgày ${q.date}. Món:\n${JSON.stringify(items)}\nChỉ trả một JSON gọn, không markdown, không giải thích. Giữ r và đủ mỗi i đúng một lần. Mỗi dòng m=[i,kcal,protein_g,carbs_g,fat_g]. Ví dụ cấu trúc (thay null bằng kết quả):\n${JSON.stringify({r:estimateToken(q),m:q.items.map((_,i)=>[i+1,null,null,null,null])})}`;
   }
   let baseline=[];if(!meals)try{baseline=estimateWorkoutBatch(q.items.map(x=>x.record),{weight:q.weight,sessionMinutes:q.sessionMinutes,overwrite:true});}catch{}
   const items=q.items.map(({record:r})=>meals?{id:r.id,meal:r.meal,food:r.food,portion:r.portion,notes:r.notes,photos:r.photo_ids||[],known:{kcal:r.kcal,protein_g:r.protein,carbs_g:r.carbs,fat_g:r.fat},source:r.nutrition_source}:{id:r.id,exercise:r.exercise,kind:r.kind,sets:setsOf(r),duration_min:r.duration_min,notes:r.notes,baseline_kcal:baseline.find(x=>x.id===r.id)?.kcal_burned_est??null,baseline_assumptions:baseline.find(x=>x.id===r.id)?.kcal_estimation_notes||''});
@@ -179,7 +183,7 @@ export function parseEstimate(text,q,currentRows,scope){
     const notes=item.notes??'Ước tính từ mô tả/ảnh';
     const r={...current,updated_at:new Date().toISOString(),_originalUpdatedAt:current.updated_at};
     if(q.kind==='meals'){
-      for(const [from,to] of [['kcal','kcal'],['protein_g','protein'],['carbs_g','carbs'],['fat_g','fat']]){const known=num(current[to]);if(current.nutrition_source!=='label'||known===null)r[to]=item[from]===null?(current[to]??''):round(item[from]);}
+      for(const [from,to] of [['kcal','kcal'],['protein_g','protein'],['carbs_g','carbs'],['fat_g','fat']]){const known=num(current[to]);if((!q.missingOnly&&current.nutrition_source!=='label')||known===null)r[to]=item[from]===null?(current[to]??''):round(item[from]);}
       r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='ChatGPT: '+notes;
     }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'ChatGPT · gross kcal: ')+notes;}
     validateRecord(q.kind==='meals'?'WebMeals':'WebWorkouts',r);return r;

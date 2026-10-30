@@ -184,3 +184,12 @@ Test thủ công trên điện thoại: tải lại → Ăn uống → Ước t�
 Parser trước đây ăn chữ thanh trong tên thanh cua như đơn vị, rồi tìm món cua nên mất macro. Viết nhanh giờ ưu tiên khớp toàn bộ tên sau số lượng trước khi bỏ đơn vị. Điền gọn truyền tên món và số khẩu phần riêng, không chuyển thành câu để parse lại; giữ được cả tên tùy chỉnh bắt đầu bằng số. Macro lấy từ thư viện người dùng và nhân số khẩu phần; không ghi đè bằng preset mẫu.
 
 Test: Điền gọn → thanh cua → 6 → Xem trước: 6 × thanh 20 g và preset 114 kcal, P9/C18/F0,6. Nếu đã sửa macro trong thư viện thì dùng giá trị đã sửa. Viết nhanh 6 thanh cua và 120 g thanh cua cũng ra macro; món thanh cua chiên sốt chưa có trong thư viện vẫn để trống. Không tự cập nhật các log đã lưu trước đây. Không chạy Chrome.
+
+
+### Chỉ ước tính món thiếu số liệu (v2.5.2)
+
+Ước tính với ChatGPT bỏ qua món đã đủ kcal/protein/carbs/fat, bất kể nguồn là thư viện, nhập tay hay estimate trước đó. Giá trị 0 hợp lệ vẫn coi là đã biết; trống/null cần bổ sung. Bỏ bữa và xóa mềm không gửi. Món thiếu ít nhất một field được gửi kèm da_co=[kcal,P,C,F]; importer của request missingOnly giữ nguyên các số đã có và chỉ bổ sung phần thiếu, kể cả nguồn không phải nhãn.
+
+Kiểm tra lại dữ liệu Firebase lúc tạo prompt để loại món vừa được bổ sung trên thiết bị khác. Nếu không còn món cần estimate thì thông báo, không tạo prompt. Prompt lưu từ bản cũ phải tạo lại để dùng phạm vi mới. Món đã đủ không nằm trong request, ảnh và kết quả áp dụng; không tốn lượt gửi cho chúng.
+
+Test: một ngày có thanh cua đủ macro + món trống + món có kcal nhưng thiếu P/C/F → Tạo prompt: chỉ hai món sau. Áp dụng kết quả: thanh cua không thay đổi, món có kcal giữ nguyên kcal. Thử tất cả món đều đủ hoặc toàn số 0: không tạo prompt. Không dùng Chrome.

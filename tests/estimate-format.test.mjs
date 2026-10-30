@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseMeals,makeRequest,requestPrompt,parseEstimate,estimateToken,readEstimateJSON} from '../quick.js';
+import {parseMeals,makeRequest,requestPrompt,parseEstimate,estimateToken,readEstimateJSON,needsMealEstimate} from '../quick.js';
 const date='2026-10-30',scope='firebase:owner';
 function setup(n=2){const rows=['Bún trứng rau','Kem bơ','Cơm đậu hũ','Yến mạch sữa'].slice(0,n).flatMap(s=>parseMeals(s,{date}));const q=makeRequest('meals',date,rows,{scope});const out={r:estimateToken(q),m:rows.map((_,i)=>[i+1,510+i,24,45,26])};return {rows,q,out};}
 test('Compact results map reordered short meal numbers back to exact IDs, without exposing IDs in prompt',()=>{
@@ -46,4 +46,16 @@ test('Valid JSON string content is preserved; only syntax-level wrappers are nor
 test('Meal photo names are short, unique and match the numbered meal without long photo IDs',()=>{
  const {rows,q}=setup();q.items[0].record.photo_ids=['uuid-photo-a','uuid-photo-b'];q.items[1].record.photo_ids=['uuid-photo-c'];
  const p=requestPrompt(q);assert.match(p,/mon1_anh1.jpg/);assert.match(p,/mon1_anh2.jpg/);assert.match(p,/mon2_anh1.jpg/);assert.doesNotMatch(p,/uuid-photo/);
+});
+
+test('Missing-only meal requests skip complete meals, count zero as known, and exclude skipped/deleted rows',()=>{
+ const {rows}=setup(2),complete={...rows[0],kcal:114,protein:9,carbs:18,fat:.6},partial={...rows[1],kcal:200,protein:10,carbs:'',fat:null};
+ assert.equal(needsMealEstimate(complete),false);assert.equal(needsMealEstimate({...complete,kcal:0,protein:0,carbs:0,fat:0}),false);
+ for(const field of ['kcal','protein','carbs','fat'])assert.equal(needsMealEstimate({...complete,[field]:''}),true);
+ assert.equal(needsMealEstimate({...partial,skipped:'true'}),false);assert.equal(needsMealEstimate({...partial,deleted:true}),false);
+ const q=makeRequest('meals',date,[complete,partial],{scope,missingOnly:true});assert.equal(q.items.length,1);assert.equal(q.items[0].id,partial.id);assert.equal(q.missingOnly,true);
+ const prompt=requestPrompt(q);assert.doesNotMatch(prompt,new RegExp(complete.food));assert.match(prompt,/"da_co":\[200,10,null,null\]/);
+ const result=parseEstimate(JSON.stringify({r:estimateToken(q),m:[[1,999,99,30,5]]}),q,[complete,partial],scope);
+ assert.equal(result.length,1);assert.equal(result[0].id,partial.id);assert.equal(result[0].kcal,200);assert.equal(result[0].protein,10);assert.equal(result[0].carbs,30);assert.equal(result[0].fat,5);
+ assert.throws(()=>makeRequest('meals',date,[complete],{scope,missingOnly:true}));
 });
