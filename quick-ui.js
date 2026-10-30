@@ -54,11 +54,20 @@ export function createQuickUI(env){
   function lock(locked){dialog.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=locked);}
   const requestKey=kind=>'gymbro.estimate.'+scope()+'.'+kind;
   function storeRequest(q){try{sessionStorage.setItem(requestKey(q.kind),JSON.stringify(q));}catch{throw Error('Không giữ được prompt trong phiên này. Giải phóng bộ nhớ trình duyệt rồi thử lại.');}}
+  function rememberEstimate(){
+    if(!estimate?.q||estimate.scope!==scope())return;
+    try{sessionStorage.setItem(requestKey(estimate.type)+'.result',JSON.stringify({request_id:estimate.q.request_id,text:estimate.text}));}catch{}
+  }
+  function estimatePhotoFile(photo){
+    const i=estimate.q.items.findIndex(x=>x.id===photo.meal_id),j=estimate.q.items[i]?.record.photo_ids?.indexOf(photo.id)??-1;
+    return new File([photoFile(photo)],`mon${i+1}_anh${j+1}.jpg`,{type:'image/jpeg'});
+  }
   async function openEstimate(type,onlyId=null){
     if(!writable())return;rememberCompose();const s=getState(),rows=active(s.data[table(type)]).filter(r=>r.date===s.date&&(type==='meals'?!r.skipped:r.kind!=='rest')&&(!onlyId||r.id===onlyId));
     if(!rows.length)throw Error('Lưu nhật ký trước khi xuất prompt.');
     let old=null;try{old=JSON.parse(sessionStorage.getItem(requestKey(type))||'null');}catch{}
     estimate={type,scope:scope(),date:s.date,rows,photos:[],q:old?.date===s.date&&old?.scope===scope()&&old.items?.length===rows.length&&old.items.every(x=>rows.some(r=>r.id===x.id))?old:null,text:'',result:null,sessionMinutes:old?.sessionMinutes??'',photoError:''};
+    try{const saved=JSON.parse(sessionStorage.getItem(requestKey(type)+'.result')||'null');if(estimate.q&&saved?.request_id===estimate.q.request_id)estimate.text=String(saved.text||'');}catch{}
     ctx={view:'estimate'};drawEstimate();
     if(estimate.q&&type==='meals'){const e=estimate,repo=s.repo;const results=await Promise.allSettled(e.q.items.flatMap(x=>x.record.photo_ids||[]).map(id=>repo.getPhoto(id)));if(estimate!==e||ctx.view!=='estimate'||!dialog.open)return;for(const r of results)if(r.status==='fulfilled')e.photos.push(r.value);else e.photoError='Có ảnh chưa tải được; tạo lại prompt để thử lại.';drawEstimate();}
   }
@@ -68,7 +77,7 @@ export function createQuickUI(env){
       frame('Tính kcal tập luyện',`<p class="form-note">${dateLabel(estimate.date,true)} · ${estimate.rows.length} mục. Dùng cách tính GAS legacy ngay trong app, không cần ChatGPT.</p><p class="form-note">Thiếu thời gian bài tạ: dùng giả định tập + nghỉ theo từng set. Thời gian giả định chỉ phục vụ tính kcal, không ghi thành phút tập thực tế. Mức trợ lực không được xem là tạ nâng.</p>${field('Tổng phút buổi tập (không bắt buộc, gồm cả nghỉ)','session-minutes',estimate.sessionMinutes,'number','min="1" max="1440"')}${btn('Tính kcal ngay','calculate-workout','primary')}${estimate.result?preview(estimate.result,'workouts')+btn('Áp dụng kết quả','apply-estimate','primary'):''}<details class="exchange-steps"><summary>Tinh chỉnh với ChatGPT (tùy chọn)</summary><p class="form-note">Prompt có sẵn baseline và giả định. Không cần nhập phút để estimate bài tạ.</p>${prompt}<label class="field">Dán JSON ChatGPT trả về<textarea id="estimate-output" rows="6">${esc(estimate.text)}</textarea></label>${btn('Đọc kết quả','parse-estimate')}</details>`);
       return;
     }
-    frame(estimate.type==='meals'?'Ước tính bữa ăn':'Ước tính kcal tập luyện',`<p class="form-note">${dateLabel(estimate.date,true)} · ${estimate.rows.length} mục · Không gọi API, không tốn token trong app.</p>${estimate.type==='workouts'?`<p class="form-note">Tính trực tiếp như GAS: dùng cân nặng, bài tập, sets/reps và preset tập + nghỉ nếu thiếu thời gian. Có thể nhập tổng phút để phân bổ lại. Xem giả định rồi bấm Áp dụng để lưu Firebase.</p>${btn('Tính kcal ngay','calculate-workout','primary')}`:''}<div class="exchange-steps"><strong>${estimate.type==='workouts'?'Tinh chỉnh với ChatGPT (tùy chọn)':'1. Gửi sang ChatGPT'}</strong>${estimate.type==='workouts'?field('Tổng phút buổi tập (kể cả nghỉ, nếu biết)','session-minutes',estimate.sessionMinutes,'number','min="1" max="1440"'):''}<div class="page-tools">${btn(estimate.q?'Tạo lại prompt':'Tạo prompt','generate-prompt','primary')}${estimate.q?btn('Copy prompt','copy-prompt'):''}</div>${estimate.q?`<details class="prompt-details"><summary>Xem prompt · ${estimate.q.items.length} mục</summary><textarea id="prompt-text" readonly rows="8">${esc(requestPrompt(estimate.q))}</textarea></details><div class="photo-strip">${estimate.photos.map(p=>`<figure><img src="${p.data_url}" alt="Ảnh cho món ${esc(p.meal_id)}"><figcaption>${esc(estimate.rows.find(r=>r.id===p.meal_id)?.food||'')}</figcaption></figure>`).join('')}</div>${estimate.type==='meals'?`<div class="page-tools">${btn('Chia sẻ prompt + ảnh','share-estimate')}${estimate.photos.map((p,i)=>btn('Tải ảnh '+(i+1),'download-photo','',`data-index="${i}"`)).join('')}</div><p class="form-note">Copy chỉ sao chép chữ. Dùng Chia sẻ trên điện thoại để gửi kèm ảnh nếu được hỗ trợ; hoặc tải ảnh rồi đính kèm trong ChatGPT. ${esc(estimate.photoError)}</p>`:''}`:''}</div><div class="exchange-steps"><strong>2. Dán JSON ChatGPT trả về</strong><label class="field"><span class="sr-only">JSON kết quả</span><textarea id="estimate-output" rows="6" placeholder='{"app":"GymBro", ...}'>${esc(estimate.text)}</textarea></label>${btn('Đọc kết quả','parse-estimate')}${estimate.result?preview(estimate.result,estimate.type)+btn('Áp dụng kết quả','apply-estimate','primary'):''}</div>`);
+    frame('Ước tính bữa ăn',`<p class="form-note">${dateLabel(estimate.date,true)} · ${estimate.rows.length} món · Prompt và kết quả dùng dạng gọn.</p><div class="exchange-steps"><strong>1. Gửi sang ChatGPT</strong><div class="page-tools">${btn(estimate.q?'Tạo lại prompt':'Tạo prompt','generate-prompt','primary')}${estimate.q?btn('Copy prompt gọn','copy-prompt'):''}</div>${estimate.q?`<details class="prompt-details"><summary>Xem prompt · ${requestPrompt(estimate.q).length.toLocaleString('vi-VN')} ký tự</summary><textarea id="prompt-text" readonly rows="6">${esc(requestPrompt(estimate.q))}</textarea></details><div class="photo-strip">${estimate.photos.map(p=>`<figure><img src="${p.data_url}" alt="Ảnh món ${estimate.q.items.findIndex(x=>x.id===p.meal_id)+1}"><figcaption>#${estimate.q.items.findIndex(x=>x.id===p.meal_id)+1} · ${esc(estimate.rows.find(r=>r.id===p.meal_id)?.food||'')}</figcaption></figure>`).join('')}</div><div class="page-tools">${btn('Chia sẻ prompt + ảnh','share-estimate')}${estimate.photos.map((p,i)=>btn('Tải ảnh '+(i+1),'download-photo','',`data-index="${i}"`)).join('')}</div><p class="form-note">Copy chỉ có chữ. Chia sẻ hoặc tải ảnh để đính kèm; tên ảnh và số món đã khớp prompt. ${esc(estimate.photoError)}</p>`:''}</div><div class="exchange-steps"><strong>2. Dán kết quả</strong><p class="form-note">Nhận dạng gọn mới hoặc JSON cũ. Nội dung đã dán được giữ trong phiên này.</p><label class="field"><span class="sr-only">JSON kết quả</span><textarea id="estimate-output" rows="5" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder='{"r":"mã prompt","m":[[1,510,24,45,26]]}'>${esc(estimate.text)}</textarea></label><div class="page-tools">${btn('Đọc kết quả','parse-estimate')}<label class="button upload-label">Nhập file JSON<input class="sr-only" type="file" id="estimate-result-file" accept=".json,.txt,application/json,text/plain"></label></div>${estimate.result?preview(estimate.result,'meals')+btn('Áp dụng kết quả','apply-estimate','primary'):''}</div>`);
   }
   async function generatePrompt(){
     const e=estimate;scopeGuard(e.scope);e.sessionMinutes=$('#session-minutes')?.value||'';const minutes=e.sessionMinutes===''?null:Number(e.sessionMinutes);if(minutes!==null&&(!Number.isFinite(minutes)||minutes<=0||minutes>1440))throw Error('Thời lượng từ 1 đến 1440 phút.');
@@ -76,7 +85,7 @@ export function createQuickUI(env){
     if(rows.length!==e.rows.length)throw Error('Nhật ký đã thay đổi. Đóng và mở lại ước tính.');
     e.rows=rows;e.q=makeRequest(e.type,e.date,rows,{scope:e.scope,weight:workoutWeight(fresh.WebProfile,e.date),sessionMinutes:minutes});e.photos=[];e.result=null;e.text='';e.photoError='';
     if(e.type==='meals'){const ids=rows.flatMap(r=>r.photo_ids||[]);const results=await Promise.allSettled(ids.map(id=>getState().repo.getPhoto(id)));for(const r of results)if(r.status==='fulfilled')e.photos.push(r.value);else e.photoError='Có ảnh chưa tải được; tạo lại prompt để thử tải lại.';}
-    scopeGuard(e.scope);storeRequest(e.q);drawEstimate();
+    scopeGuard(e.scope);storeRequest(e.q);rememberEstimate();drawEstimate();
   }
   async function calculateWorkout(){
     const e=estimate;scopeGuard(e.scope);e.sessionMinutes=$('#session-minutes')?.value||'';
@@ -84,14 +93,14 @@ export function createQuickUI(env){
     e.q=makeRequest('workouts',e.date,rows,{scope:e.scope,weight:workoutWeight(fresh.WebProfile,e.date),sessionMinutes:e.sessionMinutes,method:'local'});
     const calculated=estimateWorkoutBatch(rows,{weight:e.q.weight,sessionMinutes:e.q.sessionMinutes,overwrite:true});
     e.text=JSON.stringify({app:'GymBro',version:1,request_id:e.q.request_id,date:e.date,kind:'workouts',items:calculated.map(r=>({id:r.id,kcal_burned:num(r.kcal_burned_est),notes:r.kcal_estimation_notes}))});
-    e.result=parseEstimate(e.text,e.q,rows,e.scope);storeRequest(e.q);drawEstimate();
+    e.result=parseEstimate(e.text,e.q,rows,e.scope);storeRequest(e.q);rememberEstimate();drawEstimate();
   }
   async function parseOutput(){
-    const e=estimate;e.text=$('#estimate-output').value;scopeGuard(e.scope);const data=await getState().repo.load();scopeGuard(e.scope);e.result=parseEstimate(e.text,e.q,data[table(e.type)],e.scope);drawEstimate();
+    const e=estimate;e.text=$('#estimate-output').value;rememberEstimate();scopeGuard(e.scope);const data=await getState().repo.load();scopeGuard(e.scope);e.result=parseEstimate(e.text,e.q,data[table(e.type)],e.scope);drawEstimate();
   }
   async function applyOutput(){
     const e=estimate;scopeGuard(e.scope);if(!writable()||!e.result)return;const repo=getState().repo;busy=true;lock(true);
-    try{const data=await repo.load();const records=parseEstimate(e.text,e.q,data[table(e.type)],scope());await repo.saveMany(table(e.type),records);sessionStorage.removeItem(requestKey(e.type));e.q=null;e.result=null;dialog.close();await reload();render();toast('Đã cập nhật '+records.length+' mục.');}finally{busy=false;lock(false);}
+    try{const data=await repo.load();const records=parseEstimate(e.text,e.q,data[table(e.type)],scope());await repo.saveMany(table(e.type),records);sessionStorage.removeItem(requestKey(e.type));sessionStorage.removeItem(requestKey(e.type)+'.result');e.q=null;e.result=null;dialog.close();await reload();render();toast('Đã cập nhật '+records.length+' mục.');}finally{busy=false;lock(false);}
   }
   async function showLibrary(){
     if(!writable())return;rememberCompose();await foods();ctx={view:'library',scope:scope()};
@@ -125,9 +134,9 @@ export function createQuickUI(env){
     if(a==='calculate-workout')return calculateWorkout();if(a==='generate-prompt')return generatePrompt();
     if(a==='copy-prompt'){if(!estimate.q)throw Error('Tạo prompt trước.');await copyText(requestPrompt(estimate.q));return toast('Đã copy prompt. Ảnh cần đính kèm riêng hoặc dùng Chia sẻ.');}
     if(a==='parse-estimate')return parseOutput();if(a==='apply-estimate')return applyOutput();
-    if(a==='download-photo')return downloadFile(photoFile(estimate.photos[Number(el.dataset.index)]));
+    if(a==='download-photo')return downloadFile(estimatePhotoFile(estimate.photos[Number(el.dataset.index)]));
     if(a==='share-estimate'){
-      if(!estimate.q)throw Error('Tạo prompt trước.');const text=requestPrompt(estimate.q),files=estimate.photos.map(photoFile);
+      if(!estimate.q)throw Error('Tạo prompt trước.');const text=requestPrompt(estimate.q),files=estimate.photos.map(estimatePhotoFile);
       if(navigator.share&&(!files.length||navigator.canShare?.({files}))){try{await navigator.share({title:'GymBro · '+estimate.date,text,...(files.length?{files}:{})});}catch(e){if(e.name!=='AbortError')throw Error('Không chia sẻ được. Dùng Copy prompt và tải ảnh để đính kèm.');}}
       else{await copyText(text);toast('Đã copy prompt. Trình duyệt chưa chia sẻ được ảnh; bấm Tải ảnh để đính kèm.');}return;
     }
@@ -142,9 +151,9 @@ export function createQuickUI(env){
   dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
   dialog.addEventListener('input',e=>{
     if(ctx?.view==='compose'){rememberCompose();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
-    if(e.target.id==='estimate-output'){estimate.text=e.target.value;estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
+    if(e.target.id==='estimate-output'){estimate.text=e.target.value;rememberEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
     if(e.target.id==='session-minutes'&&estimate?.q){estimate.sessionMinutes=e.target.value;estimate.q=null;estimate.result=null;drawEstimate();$('#session-minutes')?.focus();}
   });
-  dialog.addEventListener('change',e=>{if(['meal-photo','meal-camera','existing-photo','existing-camera'].includes(e.target.id))addPhotos(e.target.files).catch(error);if(e.target.id==='compact-kind'){rememberCompose();drawCompose();}});
+  dialog.addEventListener('change',e=>{if(e.target.id==='estimate-result-file'){const file=e.target.files?.[0];if(!file)return;if(file.size>200000)return error(Error('File kết quả tối đa 200 KB.'));const target=estimate;file.text().then(text=>{if(estimate!==target||ctx?.view!=='estimate')return;estimate.text=text;estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();$('#estimate-output').value=text;rememberEstimate();return parseOutput();}).catch(error);return;}if(['meal-photo','meal-camera','existing-photo','existing-camera'].includes(e.target.id))addPhotos(e.target.files).catch(error);if(e.target.id==='compact-kind'){rememberCompose();drawCompose();}});
   return {open,openEstimate,showLibrary,showPhotos};
 }

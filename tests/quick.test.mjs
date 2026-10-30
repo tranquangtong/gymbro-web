@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,makeRequest,parseEstimate,requestPrompt,validateFood} from '../quick.js';
+import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,makeRequest,parseEstimate,requestPrompt,validateFood,estimateToken} from '../quick.js';
 import {validatePhoto} from '../media.js';
 import {LocalRepository} from '../core.js';
 import {FirebaseRepository} from '../firebase.js';
@@ -32,7 +32,7 @@ test('Workout text supports multiple sets, GAS single sets, assistance, bodyweig
 });
 const request=(type='meals')=>{const rows=type==='meals'?['1 chuối','Bún trứng rau'].flatMap(text=>parseMeals(text,{date})):parseWorkouts('Lat pulldown 40kg 3x12',{date});const q=makeRequest(type,date,rows,{scope:'firebase:owner',weight:85,sessionMinutes:40});const output={app:'GymBro',version:1,request_id:q.request_id,date,kind:type,items:rows.map(r=>type==='meals'?{id:r.id,kcal:400,protein_g:20,carbs_g:50,fat_g:12,notes:'ước tính'}:{id:r.id,kcal_burned:180,notes:'ước tính 40 phút, không tính EPOC'})};return {rows,q,output};};
 test('Estimate exchange validates request, date, IDs, numbers and stale entries before applying',()=>{
- const {rows,q,output}=request();assert.match(requestPrompt(q),/request_id/);assert.equal(parseEstimate(JSON.stringify(output),q,rows,q.scope)[1].kcal,400);
+ const {rows,q,output}=request();assert.match(requestPrompt(q),new RegExp(estimateToken(q)));assert.equal(parseEstimate(JSON.stringify(output),q,rows,q.scope)[1].kcal,400);
  const bad=change=>JSON.stringify({...output,...change});
  assert.throws(()=>parseEstimate(bad({date:'2026-10-29'}),q,rows,q.scope));assert.throws(()=>parseEstimate(bad({request_id:'other'}),q,rows,q.scope));assert.throws(()=>parseEstimate(bad({items:[output.items[0],output.items[0]]}),q,rows,q.scope));
  assert.throws(()=>parseEstimate(JSON.stringify(output),q,rows,'firebase:other'));

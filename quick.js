@@ -106,31 +106,75 @@ export function makeRequest(kind,date,rows,{scope,weight=null,sessionMinutes=nul
   if(rows.length>100)throw Error('Tối đa 100 mục mỗi lần ước tính.');
   return {app:'GymBro',version:1,request_id:uid(),kind,date,scope,weight,sessionMinutes,method,items:rows.map(r=>({id:r.id,snapshot:fingerprint(r),record:structuredClone(r)}))};
 }
+export const estimateToken=q=>String(q.token||q.request_id.replace(/-/g,'').slice(0,12));
 export function requestPrompt(q){
   const meals=q.kind==='meals';
+  if(meals){
+    const items=q.items.map(({record:r},i)=>({i:i+1,mon:r.food,...(r.portion?{luong:r.portion}:{}),...(r.notes?{ghi_chu:r.notes}:{}),...(r.photo_ids?.length?{anh:r.photo_ids.map((_,j)=>`mon${i+1}_anh${j+1}.jpg`)}:{}),...(r.nutrition_source==='label'?{nhan:[r.kcal,r.protein,r.carbs,r.fat].map(num)}:{})}));
+    return `Ước tính tổng kcal/protein/carbs/fat cho từng món từ mô tả và ảnh. Đây là ước tính. Đơn vị kcal,g; số hoặc null nếu chưa biết, không thay chưa biết bằng 0. Mỗi i là một món/khẩu phần, không tính trùng. Ảnh monN_anhM thuộc món N. Giữ giá trị nhãn đã biết (nhan theo thứ tự kcal,P,C,F); chỉ ước tính phần thiếu.\nNgày ${q.date}. Món:\n${JSON.stringify(items)}\nChỉ trả một JSON gọn, không markdown, không giải thích. Giữ r và đủ mỗi i đúng một lần. Mỗi dòng m=[i,kcal,protein_g,carbs_g,fat_g]. Ví dụ cấu trúc (thay null bằng kết quả):\n${JSON.stringify({r:estimateToken(q),m:q.items.map((_,i)=>[i+1,null,null,null,null])})}`;
+  }
   let baseline=[];if(!meals)try{baseline=estimateWorkoutBatch(q.items.map(x=>x.record),{weight:q.weight,sessionMinutes:q.sessionMinutes,overwrite:true});}catch{}
   const items=q.items.map(({record:r})=>meals?{id:r.id,meal:r.meal,food:r.food,portion:r.portion,notes:r.notes,photos:r.photo_ids||[],known:{kcal:r.kcal,protein_g:r.protein,carbs_g:r.carbs,fat_g:r.fat},source:r.nutrition_source}:{id:r.id,exercise:r.exercise,kind:r.kind,sets:setsOf(r),duration_min:r.duration_min,notes:r.notes,baseline_kcal:baseline.find(x=>x.id===r.id)?.kcal_burned_est??null,baseline_assumptions:baseline.find(x=>x.id===r.id)?.kcal_estimation_notes||''});
   const shape=meals?{id:'GIỮ NGUYÊN ID',kcal:null,protein_g:null,carbs_g:null,fat_g:null,notes:'Giả định/độ không chắc chắn'}:{id:'GIỮ NGUYÊN ID',kcal_burned:null,notes:'Cách tính, thời lượng và độ không chắc chắn'};
   return `Bạn hỗ trợ ước tính ${meals?'dinh dưỡng từ mô tả và ảnh bữa ăn đính kèm':'kcal tiêu hao cho từng bài tập'}. Đây là ước tính, không phải đo lường.\n${meals?'Ảnh được gắn tên bằng ID món. Không gộp các ID hoặc tính cùng một phần ăn hai lần. Giữ số liệu nhãn đã biết; chỉ ước tính phần chưa biết. Nếu có nhiều thành phần trong cùng ID, trả tổng đúng cho ID đó. Không tự suy ra món không thấy. Thiếu căn cứ thì dùng null, không dùng 0 để thay cho chưa biết.':'Dùng cân nặng và thời lượng thực tế nếu có. Nếu thiếu thời gian bài tạ nhưng có sets/reps, dùng baseline_kcal và baseline_assumptions của app (cách GAS legacy), hoặc tinh chỉnh bằng giả định rõ ràng; không trả null chỉ vì thiếu thời gian. Baseline là ước tính theo preset, không phải số đo hoặc số MET riêng cho từng bài được xác nhận khoa học. Ước tính chỉ đúng số set của từng ID; một ID legacy có 1 set thì chỉ tính 1 set. Cardio dùng phút đã ghi; chỉ trả null khi thật sự thiếu cân nặng hoặc thiếu cả sets/reps và thời lượng. Nếu có tổng phút buổi, phân bổ một lần sau khi trừ cardio, không gán cả buổi cho từng ID. Kcal là gross (bao gồm nền trong thời gian tập), không phải net; không cộng EPOC. Phân bổ thời gian nghỉ hợp lý, không gán toàn bộ buổi cho từng bài. Tổng các ID không được tính trùng. Bài trợ lực: kg máy là mức hỗ trợ, không phải tạ nâng.'}\nCân nặng: ${q.weight??'chưa biết'} kg. ${!meals?'Tổng thời lượng buổi tập (kể cả nghỉ): '+(q.sessionMinutes??'chưa biết')+' phút.':''}\nNgày cố định: ${q.date}. Dữ liệu:\n${JSON.stringify(items,null,2)}\n\nChỉ trả MỘT JSON hợp lệ, không markdown, không lời dẫn. Giữ nguyên request_id, date, kind và đủ các ID chính xác. Số là JSON number không âm hoặc null, đơn vị kcal và gram, làm tròn 1 chữ số. Không thêm tổng thành một item. Format:\n${JSON.stringify({app:'GymBro',version:1,request_id:q.request_id,date:q.date,kind:q.kind,items:[shape]},null,2)}`;
 }
+// Tolerate clipboard wrappers without inventing missing values or completing cut JSON.
+export function readEstimateJSON(text){
+  const raw=String(text??'').replace(/[\uFEFF\u200B-\u200D\u2060]/g,'').trim();
+  if(!raw)throw Error('Chưa có kết quả. Dán JSON ChatGPT trả về.');
+  if(raw.length>200000)throw Error('Kết quả quá dài. Dùng prompt gọn mới.');
+  const unfenced=raw.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  const tidy=input=>{
+    const v=input.replace(/[“”]/g,'"').replace(/\u00a0/g,' ');let result='',quoted=false,escaped=false;
+    for(let i=0;i<v.length;i++){const c=v[i];if(quoted){result+=c;if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c==='"')quoted=false;}else{if(c==='"')quoted=true;if(c===','&&/^[\s]*[}\]]/.test(v.slice(i+1)))continue;result+=c;}}
+    return result;
+  };
+  for(const candidate of [raw,unfenced,tidy(unfenced)])try{return JSON.parse(candidate);}catch{}
+  // Extract complete top-level JSON blocks from prose/fences. Multiple blocks are ambiguous.
+  const input=tidy(raw),blocks=[];let begin=-1,stack=[],quoted=false,escaped=false,broken=false;
+  for(let i=0;i<input.length;i++){
+    const c=input[i];if(begin<0){if(c!=='{'&&c!=='[')continue;begin=i;stack=[c];quoted=false;escaped=false;continue;}
+    if(quoted){if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c==='"')quoted=false;continue;}
+    if(c==='"'){quoted=true;continue;}if(c==='{'||c==='[')stack.push(c);
+    else if(c==='}'||c===']'){if(stack.pop()!==(c==='}'?'{':'[')){broken=true;break;}if(!stack.length){blocks.push(input.slice(begin,i+1));begin=-1;}}
+  }
+  if(!broken&&begin<0&&blocks.length===1)try{return JSON.parse(blocks[0]);}catch{}
+  if(blocks.length>1)throw Error('Có nhiều khối JSON. Chỉ dán một kết quả đầy đủ.');
+  if(begin>=0&&!broken)throw Error('JSON có vẻ bị cắt: thiếu dấu đóng ngoặc hoặc chuỗi chưa kết thúc. Copy lại khối kết quả; prompt mới dùng dạng gọn.');
+  throw Error('JSON sai cú pháp. Dùng nút Copy của khối kết quả ChatGPT; không cần chọn kèm phần giải thích.');
+}
 export function parseEstimate(text,q,currentRows,scope){
   if(!q||q.scope!==scope)throw Error('Tạo prompt trong tài khoản hiện tại trước.');
-  if(String(text).length>200000)throw Error('Kết quả quá dài.');
-  let output;try{output=JSON.parse(String(text).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{throw Error('Không đọc được JSON. Copy toàn bộ JSON ChatGPT trả về.');}
-  if(output.app!=='GymBro'||output.version!==1||output.request_id!==q.request_id||output.date!==q.date||output.kind!==q.kind||!Array.isArray(output.items)||output.items.length!==q.items.length)throw Error('Kết quả không khớp prompt/ngày. Dùng đúng JSON của prompt vừa tạo.');
+  const output=readEstimateJSON(text);let items;
+  if(output&&typeof output==='object'&&!Array.isArray(output)&&('r' in output||'m' in output)){
+    if(q.kind!=='meals'||output.r!==estimateToken(q))throw Error('Mã kết quả không khớp prompt đang mở. Dùng kết quả của prompt này hoặc tạo lại prompt.');
+    if(!Array.isArray(output.m))throw Error('Thiếu danh sách macro m.');
+    items=output.m.map(row=>{
+      if(!Array.isArray(row)||row.length!==5||!Number.isInteger(row[0])||row[0]<1||row[0]>q.items.length)throw Error('Mỗi món cần đủ [số thứ tự,kcal,protein,carbs,fat].');
+      return {id:q.items[row[0]-1].id,kcal:row[1],protein_g:row[2],carbs_g:row[3],fat_g:row[4],notes:'Ước tính từ mô tả/ảnh · định dạng gọn'};
+    });
+  }else if(Array.isArray(output))items=output;
+  else if(output&&typeof output==='object'&&'id' in output&&!('items' in output))items=[output];
+  else{
+    if(!output||output.app!=='GymBro'||output.version!==1||output.request_id!==q.request_id||output.date!==q.date||output.kind!==q.kind||!Array.isArray(output.items))throw Error('Kết quả không khớp prompt/ngày. Dùng đúng JSON của prompt vừa tạo.');
+    items=output.items;
+  }
+  if(items.length!==q.items.length)throw Error(`Kết quả có ${items.length}/${q.items.length} món/bài. Cần đủ tất cả mục trong prompt; chưa áp dụng dữ liệu.`);
   const seen=new Set();
-  return output.items.map(item=>{
+  return items.map(item=>{
+    if(!item||typeof item!=='object'||Array.isArray(item))throw Error('Mỗi mục kết quả phải có ID và đủ số liệu.');
     const target=q.items.find(x=>x.id===item.id),current=currentRows.find(x=>x.id===item.id);
     if(!target||seen.has(item.id))throw Error('ID bị trùng hoặc không thuộc prompt.');seen.add(item.id);
     if(!current||current.deleted||fingerprint(current)!==target.snapshot)throw Error('Nhật ký đã thay đổi sau khi tạo prompt. Tạo prompt mới để tránh ghi đè.');
     const keys=q.kind==='meals'?['kcal','protein_g','carbs_g','fat_g']:['kcal_burned'];
     for(const k of keys)if(item[k]!==null&&(typeof item[k]!=='number'||!Number.isFinite(item[k])||item[k]<0||item[k]>(k==='kcal_burned'?15000:100000)))throw Error('Macro/kcal phải là số không âm hoặc null.');
-    if(typeof item.notes!=='string'||item.notes.length>2000)throw Error('Thiếu ghi chú hoặc ghi chú quá dài.');
+    if(item.notes!==undefined&&(typeof item.notes!=='string'||item.notes.length>2000))throw Error('Ghi chú không hợp lệ hoặc quá dài.');
+    const notes=item.notes??'Ước tính từ mô tả/ảnh';
     const r={...current,updated_at:new Date().toISOString(),_originalUpdatedAt:current.updated_at};
     if(q.kind==='meals'){
       for(const [from,to] of [['kcal','kcal'],['protein_g','protein'],['carbs_g','carbs'],['fat_g','fat']]){const known=num(current[to]);if(current.nutrition_source!=='label'||known===null)r[to]=item[from]===null?(current[to]??''):round(item[from]);}
-      r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='ChatGPT: '+item.notes;
-    }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'ChatGPT · gross kcal: ')+item.notes;}
+      r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='ChatGPT: '+notes;
+    }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'ChatGPT · gross kcal: ')+notes;}
     validateRecord(q.kind==='meals'?'WebMeals':'WebWorkouts',r);return r;
   });
 }
