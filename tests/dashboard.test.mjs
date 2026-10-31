@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart} from '../dashboard.js';
+import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../dashboard.js';
 import {validatePersonalProfile} from '../access.js';
 import {cleanRecord} from '../migration.js';
 const day='2026-10-30';
@@ -82,4 +82,23 @@ test('Energy chart hides the workout axis and legend when no burned estimate exi
  assert.match(html,/Chưa có ước tính kcal tập luyện trong khoảng này/);
  const withBurn=renderEnergyChart(energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day),{currentDate:day});
  assert.match(withBurn,/class="burn-axis-line"/);assert.match(withBurn,/burn-key/);
+});
+
+test('Energy hero groups known kcal into one plate per meal and reports remaining, over and unknown',()=>{
+ const rows=[meal({meal:'breakfast',kcal:420}),meal({id:'b2',meal:'breakfast',kcal:80}),meal({id:'l',meal:'lunch',kcal:560}),meal({id:'u',meal:'dinner',kcal:''}),meal({id:'s',meal:'snack',kcal:900,skipped:'true'}),meal({id:'d',meal:'dinner',kcal:300,deleted:true})];
+ const h=energyHero(rows,{kcal_target:2100});
+ assert.deepEqual(h.plates.map(p=>[p.label,p.kcal]),[['Sáng',500],['Trưa',560]]);assert.equal(h.total,1060);assert.equal(h.remaining,1040);assert.equal(h.over,false);assert.equal(h.unknown,1);
+ const html=renderEnergyHero(h);assert.match(html,/Còn lại hôm nay/);assert.match(html,/<strong>1\.040<\/strong>/);assert.match(html,/class="plate empty" style="--kcal:1040"/);assert.match(html,/--target:1\.0000/);assert.match(html,/1 món chưa có kcal/);
+ const over=energyHero([meal({kcal:2500})],{kcal_target:2000});assert.equal(over.over,true);const overHtml=renderEnergyHero(over,{isToday:false});
+ assert.match(overHtml,/Vượt mục tiêu trong ngày/);assert.match(overHtml,/energy-big over/);assert.match(overHtml,/--target:0\.8000/);assert.doesNotMatch(overHtml,/plate empty/);
+ const none=renderEnergyHero(energyHero([],{}));assert.match(none,/Chưa đặt mục tiêu kcal/);assert.match(none,/data-action="new-profile"/);assert.doesNotMatch(none,/class="barbell"/);
+ assert.doesNotMatch(renderEnergyHero(energyHero([meal({food:'<img src=x>'})],{kcal_target:2000})),/<img/);
+});
+
+test('Energy chart draws the kcal target line on the intake axis only when a target exists',()=>{
+ const days=energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day);
+ const html=renderEnergyChart(days,{currentDate:day,target:2100});
+ assert.match(html,/class="energy-target"/);assert.match(html,/Mục tiêu 2\.100/);assert.match(html,/target-key/);assert.match(html,/class="burn-point today"/);
+ assert.match(html,/>2\.500<\/text>/,'scale grows to fit the target');
+ assert.doesNotMatch(renderEnergyChart(days,{currentDate:day}),/energy-target/);
 });
