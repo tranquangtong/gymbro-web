@@ -29,7 +29,7 @@ test('Unknown, deleted, rest and cardio entries do not invent a body split',()=>
 });
 test('Compact exercises preserve changed loads/reps, assistance semantics and escaped names',()=>{
  assert.equal(compactExercise(row('Pulldown')),'2 set · 40 kg × 12 reps / 1 set · 50 kg × 10 reps');assert.match(compactExercise(row('Chin-up',{kind:'assisted'})),/kg trợ lực/);assert.match(compactExercise(row('Push-up',{kind:'bodyweight'})),/Bodyweight/);assert.doesNotMatch(compactExercise(row('Push-up',{kind:'bodyweight'})),/kg/);assert.equal(compactExercise(row('Walk',{kind:'cardio',duration_min:20})),'20 phút');
- const html=renderWorkoutInsight([row('<img src=x onerror=alert(1)>')]);assert.doesNotMatch(html,/<img/);assert.match(html,/&lt;img/);assert.match(html,/Chưa nhận diện nhóm cơ/);
+ const html=renderWorkoutInsight([row('<img src=x onerror=alert(1)>')]);assert.doesNotMatch(html,/<img/);assert.doesNotMatch(html,/onerror/);assert.match(html,/chưa nhận diện nhóm cơ/);
 });
 
 test('Nutrition targets are shared across diary dates; newest explicit save wins even on an old profile date',()=>{
@@ -42,4 +42,10 @@ test('Nutrition targets are shared across diary dates; newest explicit save wins
  assert.equal(currentNutritionTargets([...rows,{...saved,deleted:true}]).kcal_target,2200);
  assert.equal(currentNutritionTargets([]).kcal_target,'');
  const cleaned=cleanRecord('WebProfile',saved);assert.equal(cleaned.goal.global_targets,true);
+});
+
+test('Dashboard workout summary counts distinct exercises and total sets without expanding legacy rows',()=>{
+ const rows=[...Array.from({length:4},()=>row('incline chest press machine',{sets_json:'[{"weight_kg":50,"reps":13}]'})),...Array.from({length:4},()=>row('shoulder press machine',{sets_json:'[{"weight_kg":36,"reps":12}]'})),row('Đi bộ',{kind:'cardio',duration_min:18,sets_json:'[]'})];
+ const html=renderWorkoutInsight(rows);assert.match(html,/Upper body/);assert.match(html,/Cardio/);assert.match(html,/3 bài · 8 set · 18 phút đã ghi/);assert.doesNotMatch(html,/<li>|workout-session-list|incline chest press machine|50 kg/);
+ assert.doesNotMatch(renderWorkoutInsight([row('Nghỉ',{kind:'rest'})]),/0 bài|0 set/);
 });

@@ -204,3 +204,10 @@ Nút Tập luyện nhanh dùng cam đất nền đặc, chữ trắng, có hover
 Mở chart hoặc đổi khoảng ngày sẽ cuộn ngang để hôm nay ở trong khung; nếu đang xem lịch sử không gồm hôm nay thì ưu tiên ngày cuối đang xem. Không tự cuộn dọc trang hay chiếm focus bàn phím. Đồng bộ realtime cùng khoảng ngày giữ scrollLeft người dùng đang xem; bấm Today chủ động đưa về ngày hiện tại.
 
 Test trên điện thoại: refresh → Dashboard → xác nhận Inter/Noto Sans, cỡ chữ và nút Tập luyện cam đất → kéo xuống chart: ngày hiện tại hiện ngay, có nền nhẹ và nhãn Hôm nay → đổi 7/10/28 ngày → kéo về ngày cũ rồi refresh data: giữ vị trí → Today: trở lại hôm nay. Chọn ngày lịch sử: không gắn nhãn Hôm nay sai ngày. Kiểm tra form Điền gọn, món quen dài, JSON và lịch sử không tràn ngang. Chỉ kiểm thử logic bằng Node; không dùng Chrome.
+
+
+### Thẻ Vận động chỉ tóm tắt (v2.6.1)
+
+Dashboard bỏ danh sách tên bài/tạ/reps theo từng record khỏi thẻ Vận động. Chỉ giữ loại buổi tập (Upper/Lower/Full body/Bổ trợ/Cardio/nghỉ), nhóm cơ, số bài khác nhau, tổng set, phút đã ghi nếu có và kcal ước tính. Nhiều dòng legacy cùng tên và loại bài chỉ đếm một bài, vẫn cộng đủ set. Bỏ thông tin số buổi 7 ngày khỏi thẻ để tập trung vào ngày đang xem. Nút Chi tiết mở trang Tập luyện đúng ngày Dashboard. Không sửa/xóa các record tập luyện.
+
+Test: chọn ngày có nhiều set legacy trùng tên (vd 29/10) → thẻ Vận động ngắn, không có hàng set lặp lại → Chi tiết: trang Tập luyện đúng ngày, đầy đủ record/tạ/reps. Kiểm tra số bài khác nhau và tổng set; ngày nghỉ/không log không hiển thị 0 bài/0 set vô ích. Không dùng Chrome.

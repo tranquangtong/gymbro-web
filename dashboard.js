@@ -104,6 +104,7 @@ export function compactExercise(row){
  return groups.map(g=>`${g.count} set · ${g.key} reps`).join(' / ');
 }
 export function renderWorkoutInsight(rows){
- const insight=workoutInsight(rows);
- return `<div class="workout-session-title">${escape(insight.label)}</div>${insight.extras.length?`<p class="card-sub">+ ${escape(insight.extras.join(' · '))}</p>`:''}${insight.muscles.length?`<p class="workout-muscles">${escape(insight.muscles.join(' · '))}</p>`:''}<ul class="workout-session-list">${insight.entries.map(e=>`<li><strong>${escape(e.row.exercise)}</strong><span>${escape(compactExercise(e.row))}</span>${e.area==='unknown'?'<small>Chưa nhận diện nhóm cơ</small>':''}</li>`).join('')}</ul>${insight.entries.length?'<p class="form-note">Nhóm cơ gợi ý theo tên bài đã ghi.</p>':''}`;
+ const insight=workoutInsight(rows),summary=workoutSummary(rows);
+ const exerciseCount=new Set(insight.entries.map(e=>e.row.kind+':'+norm(e.row.exercise))).size;
+ return `<div class="workout-session-title">${escape(insight.label)}</div>${insight.extras.length?`<p class="card-sub">+ ${escape(insight.extras.join(' · '))}</p>`:''}${insight.muscles.length?`<p class="workout-muscles">${escape(insight.muscles.join(' · '))}</p>`:''}${exerciseCount?`<p class="workout-day-totals">${exerciseCount} bài · ${summary.sets} set${summary.minutes>0?' · '+format(summary.minutes,1)+' phút đã ghi':''}</p>`:''}${insight.unknown?'<p class="form-note">Có bài chưa nhận diện nhóm cơ.</p>':''}`;
 }
