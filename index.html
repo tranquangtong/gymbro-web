@@ -3,22 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#264d3c">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f2f3f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141b21" media="(prefers-color-scheme: dark)">
   <meta name="description" content="GymBro — nhật ký ăn uống, tập luyện và tiến bộ của bạn.">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>GymBro · Nhật ký mỗi ngày</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Đến nội dung chính</a>
   <aside class="sidebar">
-    <a class="brand" href="#dashboard" aria-label="GymBro, Dashboard"><span class="brand-mark">g<span>●</span></span><span>gymbro<span class="brand-dot">.</span></span></a>
+    <a class="brand" href="#dashboard" aria-label="GymBro, Hôm nay"><span class="brand-mark">g<span>●</span></span><span>gymbro<span class="brand-dot">.</span></span></a>
     <nav id="navigation" aria-label="Điều hướng chính"></nav>
   </aside>
   <div class="shell">
-    <header class="topbar"><div class="breadcrumb">GYMBRO <span>/</span> <strong id="page-label">Dashboard</strong></div><div class="topbar-actions"><button id="mode-button" class="mode-badge" title="Mở cài đặt lưu trữ"></button><button id="refresh" class="icon-button" aria-label="Làm mới dữ liệu" title="Làm mới dữ liệu"></button></div></header>
+    <header class="topbar"><div class="breadcrumb">GYMBRO <span>/</span> <strong id="page-label">Hôm nay</strong></div><div class="topbar-actions"><button id="mode-button" class="mode-badge" title="Mở cài đặt lưu trữ"></button><button id="refresh" class="icon-button" aria-label="Làm mới dữ liệu" title="Làm mới dữ liệu"></button></div></header>
     <div id="storage-banner" class="storage-banner" role="status"></div>
     <main id="main" tabindex="-1"></main>
     
