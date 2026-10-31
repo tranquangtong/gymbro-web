@@ -507,3 +507,9 @@ dialog::backdrop{background:var(--scrim)}
 .migration-table th:first-child{text-align:left}
 .migration-report .ok{color:var(--accent);font-weight:600}
 .migration-report .bad{color:var(--danger);font-weight:600}
+
+/* ChatGPT estimate steps */
+.estimate-steps{margin:12px 0;padding-left:22px;display:flex;flex-direction:column;gap:12px}
+.estimate-steps li>span{display:block;margin-bottom:6px}
+.estimate-steps .page-tools{margin-top:4px}
+.estimate-warning{color:var(--warn-text);background:var(--warn-bg);padding:8px 10px;border-radius:8px}

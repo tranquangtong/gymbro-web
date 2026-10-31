@@ -13,3 +13,17 @@ export async function compressPhoto(file,mealId){
 export function photoFile(photo){const raw=atob(photo.data_url.split(',')[1]),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));return new File([bytes],photo.meal_id+'_'+photo.id+'.jpg',{type:'image/jpeg'});}
 export function downloadFile(file){const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
 export async function copyText(text){try{await navigator.clipboard.writeText(text);}catch{const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';const root=[...document.querySelectorAll('dialog[open]')].at(-1)||document.body;root.append(area);area.select();const ok=document.execCommand('copy');area.remove();if(!ok)throw Error('Không copy được. Chọn nội dung prompt và copy thủ công.');}}
+// ChatGPT does not reliably see attachment file names, so the meal number is printed on the image.
+export async function labeledPhotoBlob(photo,label,type='image/jpeg'){
+  const img=new Image();img.src=photo.data_url;await img.decode();
+  const w=img.naturalWidth,h=img.naturalHeight,band=Math.max(40,Math.round(Math.min(w,h)*.1));
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h+band;const g=canvas.getContext('2d');
+  g.fillStyle='#1d2730';g.fillRect(0,0,w,band);g.drawImage(img,0,band,w,h);
+  g.fillStyle='#ffffff';g.font=`600 ${Math.round(band*.52)}px system-ui,-apple-system,"Segoe UI",sans-serif`;g.textBaseline='middle';
+  let text=label;while(text.length>6&&g.measureText(text).width>w-band*.6)text=text.slice(0,-2);if(text!==label)text=text.trimEnd()+'…';
+  g.fillText(text,Math.round(band*.3),Math.round(band/2));
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,type,.88));if(!blob)throw Error('Không tạo được ảnh có nhãn.');return blob;
+}
+export async function labeledPhotoFile(photo,label,name){return new File([await labeledPhotoBlob(photo,label)],name,{type:'image/jpeg'});}
+export const canCopyImages=()=>typeof ClipboardItem!=='undefined'&&!!navigator.clipboard?.write;
+export function canShareFiles(){try{return !!navigator.canShare?.({files:[new File([new Uint8Array(1)],'x.jpg',{type:'image/jpeg'})]});}catch{return false;}}
