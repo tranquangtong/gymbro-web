@@ -88,9 +88,10 @@ test('Energy hero groups known kcal into one plate per meal and reports remainin
  const rows=[meal({meal:'breakfast',kcal:420}),meal({id:'b2',meal:'breakfast',kcal:80}),meal({id:'l',meal:'lunch',kcal:560}),meal({id:'u',meal:'dinner',kcal:''}),meal({id:'s',meal:'snack',kcal:900,skipped:'true'}),meal({id:'d',meal:'dinner',kcal:300,deleted:true})];
  const h=energyHero(rows,{kcal_target:2100});
  assert.deepEqual(h.plates.map(p=>[p.label,p.kcal]),[['Sáng',500],['Trưa',560]]);assert.equal(h.total,1060);assert.equal(h.remaining,1040);assert.equal(h.over,false);assert.equal(h.unknown,1);
- const html=renderEnergyHero(h);assert.match(html,/Còn lại hôm nay/);assert.match(html,/<strong>1\.040<\/strong>/);assert.match(html,/class="plate empty" style="--kcal:1040"/);assert.match(html,/--target:1\.0000/);assert.match(html,/1 món chưa có kcal/);
+ const html=renderEnergyHero(h);assert.match(html,/Đã ăn hôm nay/);assert.match(html,/<strong>1\.060<\/strong>/);assert.match(html,/energy-sub under">Còn 1\.040 kcal nữa là chạm mục tiêu 2\.100/);assert.match(html,/class="plate empty" style="--kcal:1040"/);assert.match(html,/--target:1\.0000/);assert.match(html,/1 món chưa có kcal/);
  const over=energyHero([meal({kcal:2500})],{kcal_target:2000});assert.equal(over.over,true);const overHtml=renderEnergyHero(over,{isToday:false});
- assert.match(overHtml,/Vượt mục tiêu trong ngày/);assert.match(overHtml,/energy-big over/);assert.match(overHtml,/--target:0\.8000/);assert.doesNotMatch(overHtml,/plate empty/);
+ assert.match(overHtml,/Đã ăn trong ngày/);assert.match(overHtml,/<strong>2\.500<\/strong>/);assert.match(overHtml,/energy-sub over">Đã vượt mục tiêu 2\.000 thêm 500 kcal/);
+ assert.match(renderEnergyHero(energyHero([meal({kcal:2000})],{kcal_target:2000})),/energy-sub reached">Vừa chạm mục tiêu 2\.000 kcal/);assert.match(overHtml,/--target:0\.8000/);assert.doesNotMatch(overHtml,/plate empty/);
  const none=renderEnergyHero(energyHero([],{}));assert.match(none,/Chưa đặt mục tiêu kcal/);assert.match(none,/data-action="new-profile"/);assert.doesNotMatch(none,/class="barbell"/);
  assert.doesNotMatch(renderEnergyHero(energyHero([meal({food:'<img src=x>'})],{kcal_target:2000})),/<img/);
 });

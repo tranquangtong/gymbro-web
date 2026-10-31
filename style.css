@@ -491,3 +491,7 @@ dialog::backdrop{background:var(--scrim)}
   .macro-dial{position:static}
   .dial-pop,.macro-dial:first-child .dial-pop,.macro-dial:last-child .dial-pop{left:0;right:0;width:auto;max-width:none;transform:none;top:calc(100% + 4px)}
 }
+.energy-sub.under{color:var(--muted)}
+.energy-sub.reached{color:var(--ink);font-weight:600}
+.energy-sub.over{color:var(--danger);font-weight:600}
+.dashboard-date-controls .icon-button:disabled{opacity:.4;cursor:default}
