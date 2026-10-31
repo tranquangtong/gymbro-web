@@ -3,6 +3,6 @@
 //       'cloudflare' → Workers + D1 at apiBase (switch only after the migration reconciles).
 // apiBase is public: the Worker checks every request's Firebase ID token.
 export const BACKEND = Object.freeze({
-  kind: 'firebase',
+  kind: 'cloudflare',
   apiBase: 'https://gymbro-api.tongquangtran.workers.dev'
 });
