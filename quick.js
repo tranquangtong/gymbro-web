@@ -118,12 +118,39 @@ export function makeRequest(kind,date,rows,{scope,weight=null,sessionMinutes=nul
   return {app:'GymBro',version:1,request_id:uid(),kind,date,scope,weight,sessionMinutes,method,missingOnly,items:rows.map(r=>({id:r.id,snapshot:fingerprint(r),record:structuredClone(r)}))};
 }
 export const estimateToken=q=>String(q.token||q.request_id.replace(/-/g,'').slice(0,12));
+const promptNum=v=>num(v)===null?'chưa biết':String(num(v));
+// Photos carry a printed "Món N" label (see labeledPhotoFile) because ChatGPT does not reliably see file names.
+function mealPrompt(q){
+  const lines=q.items.map(({record:r},i)=>{
+    const known=q.missingOnly||r.nutrition_source==='label'?[['kcal',r.kcal],['protein',r.protein],['carbs',r.carbs],['fat',r.fat]].filter(([,v])=>num(v)!==null):[];
+    return [`Món ${i+1}: ${r.food||'(không tên)'}`,r.portion?`lượng: ${r.portion}`:'lượng: chưa ghi',r.notes?`ghi chú: ${r.notes}`:'',r.photo_ids?.length?`có ${r.photo_ids.length} ảnh nhãn "Món ${i+1}"`:'không có ảnh',known.length?`đã biết (giữ nguyên): ${known.map(([k,v])=>k+' '+promptNum(v)).join(', ')}`:''].filter(Boolean).join(' — ');
+  });
+  return `Bạn là chuyên gia dinh dưỡng. Hãy ước tính kcal, protein, carbs và fat cho từng món ăn tôi đã ăn ngày ${q.date}. Đây là ước tính, không phải đo lường.
+
+Cách làm cho từng món:
+1. Đọc tên món, lượng và ghi chú. Ảnh (nếu có) được in nhãn "Món N" ở góc trên; chỉ dùng ảnh có đúng số của món đó.
+2. Ước lượng khối lượng từng thành phần chính theo gam, kể cả dầu mỡ, nước sốt, đường. Nếu lượng chưa ghi, giả định một khẩu phần phổ biến ở Việt Nam và nói rõ.
+3. Tính kcal, protein, carbs, fat (gam). Kiểm tra kcal ≈ 4×protein + 4×carbs + 9×fat, lệch không quá 10%.
+4. Giá trị "đã biết" phải giữ nguyên; chỉ ước tính phần còn thiếu sao cho tổng vẫn hợp lý.
+5. Mỗi món là một phần ăn riêng: không gộp, không tính trùng giữa các món, không thêm món không có trong danh sách.
+Thật sự không đủ căn cứ thì để null; không dùng 0 thay cho "không biết".
+
+Danh sách món:
+${lines.join('\n')}
+
+Trả lời: mỗi món viết 1–2 dòng ngắn về khối lượng giả định và cách tính, rồi kết thúc bằng ĐÚNG MỘT khối JSON theo mẫu dưới. Thay null bằng số (số thường, không kèm đơn vị, làm tròn 1 chữ số thập phân); cột cuối là giả định ngắn gọn bằng tiếng Việt. Giữ nguyên "r" và đủ ${q.items.length} dòng, mỗi món đúng một lần:
+${JSON.stringify({r:estimateToken(q),m:q.items.map((_,i)=>[i+1,null,null,null,null,'giả định'])})}`;
+}
+// kcal from macros (4/4/9). Returns a warning when the stated kcal disagrees by more than 15%.
+export function macroWarnings(r){
+  const k=num(r.kcal),p=num(r.protein),c=num(r.carbs),f=num(r.fat),out=[];
+  if(k!==null&&p!==null&&c!==null&&f!==null){const calc=4*p+4*c+9*f;if(Math.max(k,calc)>50&&Math.abs(k-calc)>0.15*Math.max(k,calc))out.push(`Kcal ${round(k)} lệch với macro (≈${Math.round(calc)} kcal theo 4/4/9).`);}
+  if(k!==null&&k>2500)out.push('Một món trên 2.500 kcal: kiểm tra lại lượng.');
+  return out;
+}
 export function requestPrompt(q){
   const meals=q.kind==='meals';
-  if(meals){
-    const items=q.items.map(({record:r},i)=>({i:i+1,mon:r.food,...(r.portion?{luong:r.portion}:{}),...(r.notes?{ghi_chu:r.notes}:{}),...(r.photo_ids?.length?{anh:r.photo_ids.map((_,j)=>`mon${i+1}_anh${j+1}.jpg`)}:{}),...(q.missingOnly?{da_co:[r.kcal,r.protein,r.carbs,r.fat].map(num)}:r.nutrition_source==='label'?{nhan:[r.kcal,r.protein,r.carbs,r.fat].map(num)}:{})}));
-    return `Ước tính tổng kcal/protein/carbs/fat cho từng món từ mô tả và ảnh. Đây là ước tính. Đơn vị kcal,g; số hoặc null nếu chưa biết, không thay chưa biết bằng 0. Mỗi i là một món/khẩu phần, không tính trùng. Ảnh monN_anhM thuộc món N. da_co/nhan theo thứ tự kcal,P,C,F: giữ số đã có, chỉ ước tính ô null.\nNgày ${q.date}. Món:\n${JSON.stringify(items)}\nChỉ trả một JSON gọn, không markdown, không giải thích. Giữ r và đủ mỗi i đúng một lần. Mỗi dòng m=[i,kcal,protein_g,carbs_g,fat_g]. Ví dụ cấu trúc (thay null bằng kết quả):\n${JSON.stringify({r:estimateToken(q),m:q.items.map((_,i)=>[i+1,null,null,null,null])})}`;
-  }
+  if(meals)return mealPrompt(q);
   let baseline=[];if(!meals)try{baseline=estimateWorkoutBatch(q.items.map(x=>x.record),{weight:q.weight,sessionMinutes:q.sessionMinutes,overwrite:true});}catch{}
   const items=q.items.map(({record:r})=>meals?{id:r.id,meal:r.meal,food:r.food,portion:r.portion,notes:r.notes,photos:r.photo_ids||[],known:{kcal:r.kcal,protein_g:r.protein,carbs_g:r.carbs,fat_g:r.fat},source:r.nutrition_source}:{id:r.id,exercise:r.exercise,kind:r.kind,sets:setsOf(r),duration_min:r.duration_min,notes:r.notes,baseline_kcal:baseline.find(x=>x.id===r.id)?.kcal_burned_est??null,baseline_assumptions:baseline.find(x=>x.id===r.id)?.kcal_estimation_notes||''});
   const shape=meals?{id:'GIỮ NGUYÊN ID',kcal:null,protein_g:null,carbs_g:null,fat_g:null,notes:'Giả định/độ không chắc chắn'}:{id:'GIỮ NGUYÊN ID',kcal_burned:null,notes:'Cách tính, thời lượng và độ không chắc chắn'};
@@ -150,6 +177,8 @@ export function readEstimateJSON(text){
     else if(c==='}'||c===']'){if(stack.pop()!==(c==='}'?'{':'[')){broken=true;break;}if(!stack.length){blocks.push(input.slice(begin,i+1));begin=-1;}}
   }
   if(!broken&&begin<0&&blocks.length===1)try{return JSON.parse(blocks[0]);}catch{}
+  // Prose before the answer may contain brackets; accept it when exactly one block is shaped like a GymBro result.
+  if(!broken&&blocks.length>1){const hits=blocks.map(b=>{try{return JSON.parse(b);}catch{return null;}}).filter(o=>o&&typeof o==='object'&&!Array.isArray(o)&&(('r' in o&&'m' in o)||o.app==='GymBro'));if(hits.length===1)return hits[0];}
   if(blocks.length>1)throw Error('Có nhiều khối JSON. Chỉ dán một kết quả đầy đủ.');
   if(begin>=0&&!broken)throw Error('JSON có vẻ bị cắt: thiếu dấu đóng ngoặc hoặc chuỗi chưa kết thúc. Copy lại khối kết quả; prompt mới dùng dạng gọn.');
   throw Error('JSON sai cú pháp. Dùng nút Copy của khối kết quả ChatGPT; không cần chọn kèm phần giải thích.');
@@ -161,8 +190,9 @@ export function parseEstimate(text,q,currentRows,scope){
     if(q.kind!=='meals'||output.r!==estimateToken(q))throw Error('Mã kết quả không khớp prompt đang mở. Dùng kết quả của prompt này hoặc tạo lại prompt.');
     if(!Array.isArray(output.m))throw Error('Thiếu danh sách macro m.');
     items=output.m.map(row=>{
-      if(!Array.isArray(row)||row.length!==5||!Number.isInteger(row[0])||row[0]<1||row[0]>q.items.length)throw Error('Mỗi món cần đủ [số thứ tự,kcal,protein,carbs,fat].');
-      return {id:q.items[row[0]-1].id,kcal:row[1],protein_g:row[2],carbs_g:row[3],fat_g:row[4],notes:'Ước tính từ mô tả/ảnh · định dạng gọn'};
+      if(!Array.isArray(row)||![5,6].includes(row.length)||!Number.isInteger(row[0])||row[0]<1||row[0]>q.items.length)throw Error('Mỗi món cần đủ [số thứ tự,kcal,protein,carbs,fat,giả định].');
+      const note=row.length===6&&typeof row[5]==='string'&&row[5].trim()&&row[5].trim()!=='giả định'?row[5].trim().slice(0,500):'Ước tính từ mô tả/ảnh';
+      return {id:q.items[row[0]-1].id,kcal:row[1],protein_g:row[2],carbs_g:row[3],fat_g:row[4],notes:note};
     });
   }else if(Array.isArray(output))items=output;
   else if(output&&typeof output==='object'&&'id' in output&&!('items' in output))items=[output];
@@ -186,6 +216,6 @@ export function parseEstimate(text,q,currentRows,scope){
       for(const [from,to] of [['kcal','kcal'],['protein_g','protein'],['carbs_g','carbs'],['fat_g','fat']]){const known=num(current[to]);if((!q.missingOnly&&current.nutrition_source!=='label')||known===null)r[to]=item[from]===null?(current[to]??''):round(item[from]);}
       r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='ChatGPT: '+notes;
     }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'ChatGPT · gross kcal: ')+notes;}
-    validateRecord(q.kind==='meals'?'WebMeals':'WebWorkouts',r);return r;
+    validateRecord(q.kind==='meals'?'WebMeals':'WebWorkouts',r);if(q.kind==='meals'){const w=macroWarnings(r);if(w.length)r._warnings=w;}return r;
   });
 }
