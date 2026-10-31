@@ -9,9 +9,9 @@ export function saveMessage(state,count){return state.mode==='firebase'?`Đã l�
 export const recordCount=data=>[...Object.keys(SCHEMAS),'Archive'].reduce((n,t)=>n+(data[t]||[]).length,0);
 export function localMissingCount(local,remote){return [...Object.keys(SCHEMAS),'Archive'].reduce((n,t)=>{const ids=new Set((remote[t]||[]).map(r=>r.id));return n+(local[t]||[]).filter(r=>!ids.has(r.id)).length;},0);}
 
-export async function loadCurrentData(state){
+export async function loadCurrentData(state,options={}){
   const repo=state.repo,mode=state.mode;if(!repo)return false;
-  const data=await repo.load();
+  const data=await repo.load(options);
   if(state.repo!==repo||state.mode!==mode)return false;
   state.data=data;return true;
 }
@@ -19,9 +19,14 @@ export async function loadCurrentData(state){
 // The UI owns this single listener lease. Replacing/logging out a repository
 // invalidates callbacks before unsubscribe, including already queued callbacks.
 export function createLiveSync({isCurrent,onRows,onError}){
-  let dispose=null,generation=0;
-  function stop(){generation++;const previous=dispose;dispose=null;previous?.();}
-  function start(repo){stop();const version=generation;dispose=repo.subscribe((table,rows)=>{if(version===generation&&isCurrent(repo))onRows(table,rows);},e=>{if(version===generation&&isCurrent(repo))onError(e);});}
+  let dispose=null,generation=0,currentRepo=null;
+  function stop(){generation++;const previous=dispose;dispose=null;currentRepo=null;previous?.();}
+  function start(repo){
+    if(dispose&&currentRepo===repo&&isCurrent(repo))return;
+    stop();const version=generation;currentRepo=repo;
+    const cleanup=repo.subscribe((table,rows)=>{if(version===generation&&isCurrent(repo))onRows(table,rows);},e=>{if(version===generation&&isCurrent(repo)){stop();onError(e);}});
+    if(version===generation)dispose=cleanup;else cleanup?.();
+  }
   return {start,stop};
 }
 

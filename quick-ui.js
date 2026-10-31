@@ -1,3 +1,4 @@
+import {quotaMessage} from './errors.js';
 import {forgetExpiredPhotos} from './photo-retention.js';
 import {purgeLocalPhotoCache} from './local-extras.js';
 import {estimateWorkoutBatch,workoutWeight} from './workout-kcal.js';
@@ -10,7 +11,7 @@ export function createQuickUI(env){
   let ctx=null,estimate=null,library=[],drafts=new Map(),busy=false;
   const dialog=document.createElement('dialog');dialog.id='quick-dialog';dialog.setAttribute('aria-labelledby','quick-title');document.body.append(dialog);
   const scope=()=>{const s=getState();return s.mode+':'+(s.repo?.ownerUid||s.repo?.key||'none');};
-  const error=e=>{const target=$('#quick-error');if(target)target.textContent=e.message||String(e);else toast(e.message,true);};
+  const error=e=>{const message=quotaMessage(e)||e.message||String(e),target=$('#quick-error');if(target)target.textContent=(e.operation==='photo'?'Tải ảnh: ':'')+message;else toast(message,true);};
   const btn=(text,action,cls='',extra='')=>`<button type="button" class="button ${cls}" data-quick="${action}" ${extra}>${text}</button>`;
   const field=(label,id,value='',type='text',extra='')=>`<label class="field">${label}<input id="${id}" type="${type}" value="${esc(value)}" ${extra}></label>`;
   const select=(label,id,values,value)=>`<label class="field">${label}<select id="${id}">${Object.entries(values).map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`;
@@ -46,13 +47,13 @@ export function createQuickUI(env){
   async function saveCompose(){
     if(!ctx.preview)return;rememberCompose();scopeGuard(ctx.scope);if(!writable())return;
     // Input changes remove preview, so these stable IDs also make retries safe.
-    const rows=ctx.preview,repo=getState().repo,savedScope=ctx.scope;busy=true;lock(true);const saveButton=dialog.querySelector('[data-quick="save"]');if(saveButton)saveButton.textContent=getState().mode==='firebase'?'Đang lưu Firebase…':'Đang lưu trên thiết bị…';
+    const rows=ctx.preview,repo=getState().repo,savedScope=ctx.scope;let phase='journal';busy=true;lock(true);const saveButton=dialog.querySelector('[data-quick="save"]');if(saveButton)saveButton.textContent=getState().mode==='firebase'?'Đang lưu Firebase…':'Đang lưu trên thiết bị…';
     try{
       if(ctx.type==='workouts'){const fresh=await repo.load();ensureWorkoutDay(active(fresh.WebWorkouts),rows);const calculated=estimateWorkoutBatch(rows,{weight:workoutWeight(fresh.WebProfile,ctx.date)});rows.splice(0,rows.length,...calculated);}
-      if(ctx.type==='meals'&&ctx.photos.length){const target=rows[ctx.photoTarget||0];if(!target||target.skipped)throw Error('Chọn món có tên để gắn ảnh.');for(const p of ctx.photos){if(p.meal_id!=='pending'&&p.meal_id!==target.id)p.id=uid();p.meal_id=target.id;await repo.savePhoto(p);}target.photo_ids=ctx.photos.map(p=>p.id);}
-      scopeGuard(savedScope);await repo.saveMany(table(ctx.type),rows);drafts.delete(ctx.scope+ctx.type);try{sessionStorage.removeItem(draftKey(ctx.type));}catch{}
+      if(ctx.type==='meals'&&ctx.photos.length){phase='photo';const target=rows[ctx.photoTarget||0];if(!target||target.skipped)throw Error('Chọn món có tên để gắn ảnh.');for(const p of ctx.photos){if(p.meal_id!=='pending'&&p.meal_id!==target.id)p.id=uid();p.meal_id=target.id;await repo.savePhoto(p);}target.photo_ids=ctx.photos.map(p=>p.id);}
+      phase='journal';scopeGuard(savedScope);await repo.saveMany(table(ctx.type),rows);drafts.delete(ctx.scope+ctx.type);try{sessionStorage.removeItem(draftKey(ctx.type));}catch{}
       const type=ctx.type,message=saveMessage(rows.length);ctx=null;dialog.close();toast(message);try{await reload();render();}catch(e){toast(message+' · Chưa tải lại được: '+e.message,true);}if(!['eat','gym'].includes(location.hash.slice(1)))location.hash=type==='meals'?'eat':'gym';
-    }finally{busy=false;lock(false);if(ctx?.preview){const b=dialog.querySelector('[data-quick="save"]');if(b)b.textContent='Lưu '+ctx.preview.length+' mục';}}
+    }catch(e){e.operation=phase;throw e;}finally{busy=false;lock(false);if(ctx?.preview){const b=dialog.querySelector('[data-quick="save"]');if(b)b.textContent='Lưu '+ctx.preview.length+' mục';}}
   }
   function lock(locked){dialog.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=locked);}
   const requestKey=kind=>'gymbro.estimate.'+scope()+'.'+kind;

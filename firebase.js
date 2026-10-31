@@ -1,3 +1,4 @@
+import {quotaMessage} from './errors.js';
 import {photoExpired,photoExpiryError} from './photo-retention.js';
 import {assertSession,verifySession} from './access.js';
 import {DEFAULT_FOODS,cleanFood,validateFood} from './quick.js';
@@ -27,30 +28,50 @@ export async function loginGoogle() {
   await s.authSDK.signInWithPopup(s.auth,provider);await verifySession(s);return s;
 }
 export async function logoutFirebase(){const s=await firebaseService();await s.authSDK.signOut(s.auth);}
-export function firebaseError(e){return ({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':'Không kết nối được Firestore. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
+export function firebaseError(e){return quotaMessage(e)||({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':'Không kết nối được Firestore. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
+
+function firebaseFailure(e){const error=Error(firebaseError(e));if(e.code!==undefined)error.code=e.code;error.name=e.name||'Error';return error;}
 
 export class FirebaseRepository {
-  constructor(s,targetUid=null){this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.ownerUid=targetUid||this.uid;this.check();this.title=this.ownerUid===this.uid?'Firebase · '+s.auth.currentUser.email:'ADMIN · dữ liệu UID '+this.ownerUid;}
+  constructor(s,targetUid=null){this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.ownerUid=targetUid||this.uid;this._cache=null;this._loadTask=null;this._cacheVersions={};this.check();this.title=this.ownerUid===this.uid?'Firebase · '+s.auth.currentUser.email:'ADMIN · dữ liệu UID '+this.ownerUid;}
   check(){assertSession(this.s.sessionExpiresAt);if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
   ref(table,id){if(![...Object.keys(SCHEMAS),'Archive'].includes(table))throw Error('Loại dữ liệu không hợp lệ.');return this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,table,id);}
   async registerOwner(){this.check();const user=this.s.auth.currentUser;await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.uid),{uid:this.uid,email:user.email,display_name:user.displayName||'',updated_at:new Date().toISOString()});}
   async listUsers(){this.check();if(!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được xem danh sách tài khoản.');const snapshot=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users'));return snapshot.docs.map(d=>({...d.data(),uid:d.id}));}
-  async load(){this.check();const data=emptyData();try{await Promise.all([...Object.keys(SCHEMAS),'Archive'].map(async table=>{const q=this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,table);const snapshot=await this.s.dbSDK.getDocsFromServer(q);data[table]=snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}));this.check();return data;}catch(e){throw Error(firebaseError(e));}}
+  rememberSaved(table,records,version){
+    if(!this._cache||version!==(this._cacheVersions[table]||0))return;
+    const map=new Map((this._cache[table]||[]).map(r=>[r.id,r]));
+    for(const record of records)map.set(record.id,{...structuredClone(record),_revision:record.updated_at});
+    this._cache[table]=[...map.values()];
+  }
+  async load({force=false}={}){
+    this.check();if(this._cache&&!force)return structuredClone(this._cache);
+    if(this._loadTask)return structuredClone(await this._loadTask);
+    this._loadTask=(async()=>{const data=emptyData(),versions={...this._cacheVersions};try{
+      await Promise.all([...Object.keys(SCHEMAS),'Archive'].map(async table=>{
+        const q=this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,table),snapshot=await this.s.dbSDK.getDocsFromServer(q);
+        data[table]=snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));
+      }));this.check();
+      for(const table of Object.keys(data))if(this._cache&&(versions[table]||0)!==(this._cacheVersions[table]||0))data[table]=structuredClone(this._cache[table]);
+      this._cache=data;return data;
+    }catch(e){throw firebaseFailure(e);}finally{this._loadTask=null;}})();
+    return structuredClone(await this._loadTask);
+  }
   subscribe(onRows,onError){
     this.check();let stopped=false;const stops=[];
     const stop=()=>{stopped=true;stops.splice(0).forEach(fn=>fn());};
     try{for(const table of [...Object.keys(SCHEMAS),'Archive']){
       const q=this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,table);
       stops.push(this.s.dbSDK.onSnapshot(q,{includeMetadataChanges:true},snapshot=>{
-        if(stopped||snapshot.metadata?.fromCache)return;
-        try{this.check();onRows(table,snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at})));}catch(e){stop();onError(e);}
-      },e=>{if(!stopped){stop();onError(Error(firebaseError(e)));}}));
+        if(stopped||snapshot.metadata?.fromCache||snapshot.metadata?.hasPendingWrites)return;
+        try{this.check();const rows=snapshot.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));this._cacheVersions[table]=(this._cacheVersions[table]||0)+1;if(this._cache)this._cache[table]=structuredClone(rows);onRows(table,rows);}catch(e){stop();onError(e);}
+      },e=>{if(!stopped){stop();onError(firebaseFailure(e));}}));
     }}catch(e){stop();throw e;}
     return stop;
   }
   async save(table,record,{insertOnly=false}={}){
     this.check();const clean=cleanRecord(table,record);if(table==='Archive')validateArchive(clean);else validateRecord(table,clean);
-    let inserted=false;
+    const version=this._cacheVersions[table]||0;let inserted=false;
     try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{
       inserted=false;this.check();const ref=this.ref(table,clean.id),snap=await tx.get(ref);
       if(snap.exists()){
@@ -61,22 +82,23 @@ export class FirebaseRepository {
         if(expected&&old.updated_at!==expected)throw Error('Mục này đã được sửa trên thiết bị khác. Hãy làm mới rồi mở lại.');
       }else if(record._revision)throw Error('Bản ghi không còn tồn tại. Hãy làm mới dữ liệu.');
       tx.set(ref,clean);inserted=true;
-    });this.check();return inserted;}catch(e){throw Error(firebaseError(e));}
+    });this.check();if(inserted)this.rememberSaved(table,[clean],version);return inserted;}catch(e){throw firebaseFailure(e);}
   }
   async saveMany(table,records){
     this.check();if(!records.length||records.length>100)throw Error('Mỗi lần lưu từ 1 đến 100 mục.');
+    const version=this._cacheVersions[table]||0;
     const cleans=records.map(r=>{const clean=cleanRecord(table,r);validateRecord(table,clean);return clean;});
     if(new Set(cleans.map(r=>r.id)).size!==cleans.length)throw Error('Trùng ID trong lần lưu.');
     try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{
       this.check();const refs=cleans.map(r=>this.ref(table,r.id)),snaps=await Promise.all(refs.map(ref=>tx.get(ref)));
       records.forEach((r,i)=>{const expected=r._originalUpdatedAt??r._revision;if(expected&&(!snaps[i].exists()||snaps[i].data().updated_at!==expected))throw Error('Nhật ký đã thay đổi trên thiết bị khác. Làm mới rồi tạo lại prompt.');});
       cleans.forEach((r,i)=>tx.set(refs[i],r));
-    });this.check();}catch(e){throw Error(firebaseError(e));}
+    });this.check();this.rememberSaved(table,cleans,version);}catch(e){throw firebaseFailure(e);}
   }
-  async loadFoods(){this.check();try{const snap=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,'FoodLibrary'));return snap.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}catch(e){throw Error(firebaseError(e));}}
+  async loadFoods(){this.check();try{const snap=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,'FoodLibrary'));return snap.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}catch(e){throw firebaseFailure(e);}}
   async seedFoods(){this.check();for(const food of DEFAULT_FOODS){const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',food.id);await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const snap=await tx.get(ref);if(!snap.exists())tx.set(ref,cleanFood({...food,updated_at:new Date().toISOString()}));});}return this.loadFoods();}
-  async saveFood(food,{insertOnly=false}={}){this.check();const clean=cleanFood(food);validateFood(clean);const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',clean.id);try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const old=await tx.get(ref);if(insertOnly&&old.exists())return;if(food._revision&&(!old.exists()||old.data().updated_at!==food._revision))throw Error('Món đã thay đổi trên thiết bị khác. Mở lại thư viện.');tx.set(ref,clean);});}catch(e){throw Error(firebaseError(e));}}
-  async savePhoto(photo){this.check();validatePhoto(photo);if(photoExpired(photo))throw photoExpiryError();try{await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',photo.id),photo);}catch(e){throw Error(firebaseError(e));}}
+  async saveFood(food,{insertOnly=false}={}){this.check();const clean=cleanFood(food);validateFood(clean);const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',clean.id);try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const old=await tx.get(ref);if(insertOnly&&old.exists())return;if(food._revision&&(!old.exists()||old.data().updated_at!==food._revision))throw Error('Món đã thay đổi trên thiết bị khác. Mở lại thư viện.');tx.set(ref,clean);});}catch(e){throw firebaseFailure(e);}}
+  async savePhoto(photo){this.check();validatePhoto(photo);if(photoExpired(photo))throw photoExpiryError();try{await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',photo.id),photo);}catch(e){throw firebaseFailure(e);}}
   async getPhoto(id){this.check();const d=await this.s.dbSDK.getDocFromServer(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',id));this.check();if(!d.exists()){const e=Error('Ảnh không còn được lưu (ảnh chỉ giữ 5 ngày).');e.code='photo/not-found';throw e;}const photo=validatePhoto({...d.data(),id:d.id});if(photoExpired(photo))throw photoExpiryError();return photo;}
   async importBundle(bundle,onProgress=()=>{}){
     const entries=[...Object.keys(SCHEMAS),'Archive'].flatMap(table=>(bundle.data[table]||[]).map(record=>({table,record})));

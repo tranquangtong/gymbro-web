@@ -215,3 +215,16 @@ Test: chọn ngày có nhiều set legacy trùng tên (vd 29/10) → thẻ Vận
 ### Tự dọn ảnh sau 5 ngày (v2.7.0)
 
 Ảnh hết hạn sau 120 giờ từ created_at; cache ảnh GymBro trên thiết bị được dọn khi app hoạt động. Upload/read ảnh quá hạn bị chặn; macro và nhật ký giữ nguyên. Có lịch GitHub Actions mỗi giờ để xóa thật document ảnh hết hạn và gỡ đúng photo_ids khỏi món ăn, không cần mở app. **Phần cloud cần thêm secret FIREBASE_SERVICE_ACCOUNT một lần mới hoạt động.** Hướng dẫn cụ thể: [docs/photo-retention.md](docs/photo-retention.md). Không dùng TTL vì TTL deletes yêu cầu billing. Không cần đổi Firestore Rules. Script và lịch đã chuẩn bị; chưa xác nhận xóa production nếu chưa có credential.
+
+
+### Giảm lượt đọc và phân loại lỗi quota (v2.7.1)
+
+Lỗi Quota exceeded không đủ để kết luận đã dùng hết 1 GiB. Firestore có quota read/write/delete/bandwidth riêng; browser storage cũng có QuotaExceededError. Xem Firebase → Firestore Database → Usage để xác định. Tài liệu chính hãng: https://firebase.google.com/docs/firestore/quotas và https://firebase.google.com/docs/firestore/pricing . Quota ngày reset theo Pacific time, không theo 0h Việt Nam. Xóa ảnh không trả lại các lượt đọc/ghi đã tiêu thụ.
+
+Repository giờ giữ snapshot đã xác nhận trong memory theo từng instance/UID. load thường tái dùng cache, không getDocsFromServer toàn bộ lịch sử sau mỗi lần lưu/tạo prompt/đọc JSON/quay lại tab. Lần đầu đồng thời share một request; save transaction xác nhận thì cập nhật memory; snapshot realtime xác nhận cập nhật cache. Không dùng snapshot fromCache/hasPendingWrites làm xác nhận thành công. Ràng buộc revision transaction vẫn giữ để tránh ghi đè giữa thiết bị. Đây là cache đọc trong RAM, không phải chế độ lưu local/offline; write vẫn phải nhận xác nhận từ Firebase.
+
+Nút refresh chủ động dùng load({force:true}); listener đang khỏe không cần hủy/tạo lại khi quay về tab. Listener lỗi/pagehide vẫn có thể kết nối lại. Cache không dùng chung giữa các tài khoản, không lưu thêm lịch sử/ảnh xuống localStorage. Dữ liệu trả ra được clone để UI không sửa nhầm cache.
+
+Lỗi Firebase giữ code resource-exhausted qua các lớp; lỗi QuotaExceededError của trình duyệt được phân biệt. Lỗi trong bước tải ảnh có tiền tố Tải ảnh; form và ID đang nhập được giữ để thử lại. Không xác định quota nào đã hết khi chưa có Usage; không hứa bản code mở lại được quota đã bị chặn.
+
+Test: refresh web một lần để nhận bản mới; thử save một món không ảnh, sau đó một món có ảnh. Nếu vẫn lỗi, xem thông báo mới và Usage. Khi quota chưa reset thì không bấm refresh/lưu lặp lại. Kiểm thử code gồm số lần query không tăng sau load/save thường, refresh có query mới, realtime cập nhật cache, isolation UID, listener idempotent và phân loại error. Không dùng Chrome, chưa truy cập Usage production.
