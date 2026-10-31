@@ -71,14 +71,14 @@ export function energyHero(rows,profile={}){
 }
 export function renderEnergyHero(h,{isToday=true}={}){
   const day=isToday?'hôm nay':'trong ngày',max=Math.max(h.total,h.target??0);
-  const caption=h.target===null?'Đã ăn '+day:h.over?'Vượt mục tiêu '+day:'Còn lại '+day;
-  const big=h.target===null?h.total:Math.abs(h.remaining);
-  const sub=h.target===null?'Chưa đặt mục tiêu kcal.':`Đã ăn ${format(h.total)} trên mục tiêu ${format(h.target)}`;
+  const caption='Đã ăn '+day,big=h.total;
+  const status=h.target===null?'none':h.over?'over':h.remaining===0?'reached':'under';
+  const sub={none:'Chưa đặt mục tiêu kcal.',under:`Còn ${format(h.remaining)} kcal nữa là chạm mục tiêu ${format(h.target)}.`,reached:`Vừa chạm mục tiêu ${format(h.target)} kcal.`,over:`Đã vượt mục tiêu ${format(h.target)} thêm ${format(-h.remaining)} kcal.`}[status];
   const empty=h.target!==null&&h.remaining>0?h.remaining:0;
   const describe=`${caption}: ${format(big)} kcal. `+(h.plates.length?h.plates.map(p=>`${p.label} ${format(p.kcal)}`).join(', ')+' kcal.':'Chưa có món nào có kcal.')+(h.target!==null?` Mục tiêu ${format(h.target)} kcal.`:'');
   const bar=max>0?`<div class="barbell" role="img" aria-label="${escape(describe)}"><span class="barbell-bar"></span><span class="barbell-collar start"></span><div class="barbell-plates">${h.plates.map(p=>`<div class="plate" style="--kcal:${p.kcal}"></div>`).join('')}${empty?`<div class="plate empty" style="--kcal:${empty}"></div>`:''}</div>${h.target!==null?`<span class="barbell-collar target" style="--target:${(h.target/max).toFixed(4)}"></span>`:''}</div><div class="plate-labels" aria-hidden="true">${h.plates.map(p=>`<div style="--kcal:${p.kcal}"><strong>${format(p.kcal)}</strong>${p.label}</div>`).join('')}${empty?`<div style="--kcal:${empty}"><strong>${format(empty)}</strong>còn trống</div>`:''}</div>`:'';
   const note=h.unknown?`<p class="form-note">${h.unknown} món chưa có kcal, chưa tính vào thanh.</p>`:!h.count?`<p class="form-note">Chưa ghi món nào ${day}.</p>`:'';
-  return `<section class="energy-hero" aria-label="Năng lượng ${day}"><p class="energy-caption">${caption}</p><p class="energy-big${h.over?' over':''}"><strong>${format(big)}</strong><span>kcal</span></p><p class="energy-sub">${sub}${h.target===null?' <button class="text-button" data-action="new-profile" data-targets="true">Đặt mục tiêu</button>':''}</p>${bar}${note}</section>`;
+  return `<section class="energy-hero" aria-label="Năng lượng ${day}"><p class="energy-caption">${caption}</p><p class="energy-big"><strong>${format(big)}</strong><span>kcal</span></p><p class="energy-sub ${status}">${sub}${h.target===null?' <button class="text-button" data-action="new-profile" data-targets="true">Đặt mục tiêu</button>':''}</p>${bar}${note}</section>`;
 }
 export function energyFocusDate(days,current=today()){
   return days.some(d=>d.date===current)?current:days.at(-1)?.date||'';
