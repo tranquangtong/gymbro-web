@@ -211,3 +211,7 @@ Test trên điện thoại: refresh → Dashboard → xác nhận Inter/Noto San
 Dashboard bỏ danh sách tên bài/tạ/reps theo từng record khỏi thẻ Vận động. Chỉ giữ loại buổi tập (Upper/Lower/Full body/Bổ trợ/Cardio/nghỉ), nhóm cơ, số bài khác nhau, tổng set, phút đã ghi nếu có và kcal ước tính. Nhiều dòng legacy cùng tên và loại bài chỉ đếm một bài, vẫn cộng đủ set. Bỏ thông tin số buổi 7 ngày khỏi thẻ để tập trung vào ngày đang xem. Nút Chi tiết mở trang Tập luyện đúng ngày Dashboard. Không sửa/xóa các record tập luyện.
 
 Test: chọn ngày có nhiều set legacy trùng tên (vd 29/10) → thẻ Vận động ngắn, không có hàng set lặp lại → Chi tiết: trang Tập luyện đúng ngày, đầy đủ record/tạ/reps. Kiểm tra số bài khác nhau và tổng set; ngày nghỉ/không log không hiển thị 0 bài/0 set vô ích. Không dùng Chrome.
+
+### Tự dọn ảnh sau 5 ngày (v2.7.0)
+
+Ảnh hết hạn sau 120 giờ từ created_at; cache ảnh GymBro trên thiết bị được dọn khi app hoạt động. Upload/read ảnh quá hạn bị chặn; macro và nhật ký giữ nguyên. Có lịch GitHub Actions mỗi giờ để xóa thật document ảnh hết hạn và gỡ đúng photo_ids khỏi món ăn, không cần mở app. **Phần cloud cần thêm secret FIREBASE_SERVICE_ACCOUNT một lần mới hoạt động.** Hướng dẫn cụ thể: [docs/photo-retention.md](docs/photo-retention.md). Không dùng TTL vì TTL deletes yêu cầu billing. Không cần đổi Firestore Rules. Script và lịch đã chuẩn bị; chưa xác nhận xóa production nếu chưa có credential.

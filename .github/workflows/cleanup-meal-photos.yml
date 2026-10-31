@@ -1,0 +1,42 @@
+name: Clean expired meal photos
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview only (no deletes)'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: clean-expired-meal-photos
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check cleanup credentials
+        id: credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cloud cleanup is NOT ACTIVE. Add FIREBASE_SERVICE_ACCOUNT in repository Actions secrets."
+            echo "Cloud photo cleanup is NOT ACTIVE: missing FIREBASE_SERVICE_ACCOUNT secret." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Delete photos older than five days
+        if: steps.credentials.outputs.ready == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PHOTO_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: node scripts/photo-cleanup.mjs

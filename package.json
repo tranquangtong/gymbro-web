@@ -1,11 +1,11 @@
 {
   "name": "gymbro-web",
-  "version": "2.6.1",
+  "version": "2.7.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 4173 --bind 127.0.0.1",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check app.js && node --check core.js && node --check firebase.js && node --check firebase-ui.js && node --check migration.js && node --check quick.js && node --check quick-ui.js && node --check media.js && node --check local-extras.js && node --check sync.js && node --check access.js && node --check dashboard.js && node --check workout-kcal.js"
+    "check": "node --check app.js && node --check core.js && node --check firebase.js && node --check firebase-ui.js && node --check migration.js && node --check quick.js && node --check quick-ui.js && node --check media.js && node --check local-extras.js && node --check sync.js && node --check access.js && node --check dashboard.js && node --check workout-kcal.js && node --check photo-retention.js && node --check scripts/photo-cleanup.mjs"
   }
 }

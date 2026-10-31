@@ -32,7 +32,7 @@ export async function transferLocalData(localRepo,cloudRepo,onProgress=()=>{}){
   const bundle=validateBundle({app:'GymBro Web',version:2,data:await localRepo.load()});
   const remote=await cloudRepo.load();
   const freshMeals=bundle.data.WebMeals.filter(r=>!(remote.WebMeals||[]).some(x=>x.id===r.id));
-  for(const meal of freshMeals){for(const id of meal.photo_ids||[]){const photo=await localRepo.getPhoto(id);if(photo.meal_id!==meal.id)throw Error('Ảnh không thuộc món ăn cần chuyển.');await cloudRepo.savePhoto(photo);}}
+  for(const meal of freshMeals){const keep=[];for(const id of meal.photo_ids||[]){try{const photo=await localRepo.getPhoto(id);if(photo.meal_id!==meal.id)throw Error('Ảnh không thuộc món ăn cần chuyển.');await cloudRepo.savePhoto(photo);keep.push(id);}catch(e){if(e.code!=='photo/expired'&&e.code!=='photo/not-found')throw e;}}if(meal.photo_ids)meal.photo_ids=keep;}
   const [localFoods,cloudFoods]=await Promise.all([localRepo.loadFoods(),cloudRepo.loadFoods()]);
   for(const food of localFoods)if(!cloudFoods.some(f=>f.id===food.id)){const clean={...food};delete clean._revision;await cloudRepo.saveFood(clean,{insertOnly:true});}
   return cloudRepo.importBundle(bundle,onProgress);

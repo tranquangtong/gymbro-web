@@ -1,3 +1,4 @@
+import {photoExpired,photoExpiryError} from './photo-retention.js';
 import {assertSession,verifySession} from './access.js';
 import {DEFAULT_FOODS,cleanFood,validateFood} from './quick.js';
 import {validatePhoto} from './media.js';
@@ -75,8 +76,8 @@ export class FirebaseRepository {
   async loadFoods(){this.check();try{const snap=await this.s.dbSDK.getDocsFromServer(this.s.dbSDK.collection(this.s.db,'users',this.ownerUid,'FoodLibrary'));return snap.docs.map(d=>({...d.data(),id:d.id,_revision:d.data().updated_at}));}catch(e){throw Error(firebaseError(e));}}
   async seedFoods(){this.check();for(const food of DEFAULT_FOODS){const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',food.id);await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const snap=await tx.get(ref);if(!snap.exists())tx.set(ref,cleanFood({...food,updated_at:new Date().toISOString()}));});}return this.loadFoods();}
   async saveFood(food,{insertOnly=false}={}){this.check();const clean=cleanFood(food);validateFood(clean);const ref=this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'FoodLibrary',clean.id);try{await this.s.dbSDK.runTransaction(this.s.db,async tx=>{this.check();const old=await tx.get(ref);if(insertOnly&&old.exists())return;if(food._revision&&(!old.exists()||old.data().updated_at!==food._revision))throw Error('Món đã thay đổi trên thiết bị khác. Mở lại thư viện.');tx.set(ref,clean);});}catch(e){throw Error(firebaseError(e));}}
-  async savePhoto(photo){this.check();validatePhoto(photo);try{await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',photo.id),photo);}catch(e){throw Error(firebaseError(e));}}
-  async getPhoto(id){this.check();const d=await this.s.dbSDK.getDocFromServer(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',id));this.check();if(!d.exists())throw Error('Không tìm thấy ảnh.');return validatePhoto({...d.data(),id:d.id});}
+  async savePhoto(photo){this.check();validatePhoto(photo);if(photoExpired(photo))throw photoExpiryError();try{await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',photo.id),photo);}catch(e){throw Error(firebaseError(e));}}
+  async getPhoto(id){this.check();const d=await this.s.dbSDK.getDocFromServer(this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,'MealPhotos',id));this.check();if(!d.exists()){const e=Error('Ảnh không còn được lưu (ảnh chỉ giữ 5 ngày).');e.code='photo/not-found';throw e;}const photo=validatePhoto({...d.data(),id:d.id});if(photoExpired(photo))throw photoExpiryError();return photo;}
   async importBundle(bundle,onProgress=()=>{}){
     const entries=[...Object.keys(SCHEMAS),'Archive'].flatMap(table=>(bundle.data[table]||[]).map(record=>({table,record})));
     // Validate the entire payload before any writes. Deterministic IDs make interrupted imports resumable.
