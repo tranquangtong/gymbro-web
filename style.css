@@ -6,6 +6,7 @@
   --accent:#2f5fa7;--accent-2:#6c8fca;--accent-ink:#ffffff;--accent-soft:#b9c7dd;--accent-tint:#e3e9f2;
   --gym:#e3a82b;--gym-ink:#1d2730;--gym-text:#8a5a00;--gym-tint:#f7e7c2;
   --danger:#b3261e;--danger-soft:#fbe9e7;--warn-bg:#fbf1dc;--warn-text:#7a5a00;
+  --logo-bar:#1d2730;--logo-gym-stroke:#1d2730;
   --scrim:#1d273080;--shadow:0 18px 60px #1d27302e;
   --font-body:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
   --font-display:'Barlow Condensed','Be Vietnam Pro',system-ui,sans-serif;
@@ -20,6 +21,7 @@
     --accent:#8fb3ec;--accent-2:#5577ae;--accent-ink:#0f1a2a;--accent-soft:#3a4f6e;--accent-tint:#22303f;
     --gym:#e3a82b;--gym-ink:#1d2730;--gym-text:#e8b64a;--gym-tint:#3d3218;
     --danger:#f08a80;--danger-soft:#3a2222;--warn-bg:#3a2f17;--warn-text:#f1cf88;
+    --logo-bar:#a9b0b5;--logo-gym-stroke:transparent;
     --scrim:#000000a6;--shadow:0 18px 60px #00000066;
   }
 }
@@ -45,9 +47,10 @@ h1,h2,h3{line-height:1.2}
 /* Shell: side rail on wide screens, bottom bar on phones */
 .sidebar{position:fixed;inset:0 auto 0 0;width:220px;background:var(--surface);border-right:1px solid var(--line);padding:28px 14px;display:flex;flex-direction:column;z-index:5}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-family:var(--font-display);font-size:30px;font-weight:700;padding:0 10px}
-.brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:22px;line-height:1;position:relative}
-.brand-mark span{display:none}
-.brand-dot{color:var(--gym-text)}
+.brand-mark{width:36px;height:36px;flex-shrink:0}
+.logo-bar{fill:var(--logo-bar)}
+.logo-food{fill:var(--accent)}
+.logo-gym{fill:var(--gym);stroke:var(--logo-gym-stroke);stroke-width:2}
 .sidebar nav{display:flex;flex-direction:column;gap:2px;margin-top:30px}
 .nav-link{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:500;min-height:44px}
 .nav-link svg{width:20px;height:20px}
