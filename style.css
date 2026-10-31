@@ -498,3 +498,12 @@ dialog::backdrop{background:var(--scrim)}
 .energy-sub.reached{color:var(--ink);font-weight:600}
 .energy-sub.over{color:var(--danger);font-weight:600}
 .dashboard-date-controls .icon-button:disabled{opacity:.4;cursor:default}
+
+/* Cloudflare migration report */
+.migration-report{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.migration-title{margin:0 0 8px}
+.migration-table{border-collapse:collapse;width:100%;font-size:14px}
+.migration-table th,.migration-table td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
+.migration-table th:first-child{text-align:left}
+.migration-report .ok{color:var(--accent);font-weight:600}
+.migration-report .bad{color:var(--danger);font-weight:600}

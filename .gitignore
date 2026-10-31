@@ -5,3 +5,5 @@ node_modules/
 *.log
 
 .migration/
+worker/node_modules/
+worker/.wrangler/

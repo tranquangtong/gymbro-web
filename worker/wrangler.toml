@@ -1,0 +1,17 @@
+# GymBro API. Free plan only: Workers Free + D1 Free, no R2, no paid add-ons.
+name = "gymbro-api"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[vars]
+FIREBASE_PROJECT_ID = "gymbro-web"
+ADMIN_EMAIL = "tongquangtran@gmail.com"
+ALLOWED_ORIGINS = "https://tranquangtong.github.io,http://127.0.0.1:4173,http://localhost:4173"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gymbro"
+# Filled in by .github/workflows/deploy-worker.yml after it creates or finds the database.
+database_id = "REPLACED_BY_DEPLOY_WORKFLOW"
+migrations_dir = "migrations"

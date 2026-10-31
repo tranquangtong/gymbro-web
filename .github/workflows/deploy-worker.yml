@@ -1,0 +1,84 @@
+name: Deploy Cloudflare API
+# Creates the D1 database if it does not exist, applies migrations and deploys the Worker.
+# Needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (see docs/cloudflare.md).
+# Free plan only: Workers Free + D1 Free; nothing here enables a paid product.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - 'core.js'
+      - 'migration.js'
+      - 'quick.js'
+      - 'workout-kcal.js'
+      - 'reconcile.js'
+      - '.github/workflows/deploy-worker.yml'
+permissions:
+  contents: read
+concurrency:
+  group: deploy-cloudflare-api
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: 'false'
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check secrets
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - name: Run API tests
+        working-directory: .
+        run: node --test tests/worker.test.mjs tests/cloudflare.test.mjs
+      - name: Install Wrangler
+        run: npm install --no-save --no-audit --no-fund wrangler@4
+      - name: Find or create D1 database "gymbro"
+        run: |
+          find_id() { npx wrangler d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const db=(Array.isArray(j)?j:j.result||[]).find(d=>d.name==="gymbro");process.stdout.write(db?(db.uuid||db.id||""):"")})'; }
+          DB_ID="$(find_id)"
+          if [ -z "$DB_ID" ]; then
+            echo "Creating D1 database gymbro"
+            npx wrangler d1 create gymbro
+            DB_ID="$(find_id)"
+          fi
+          if [ -z "$DB_ID" ]; then echo "::error::Could not find or create the D1 database."; exit 1; fi
+          echo "D1 database id: $DB_ID"
+          sed -i "s/REPLACED_BY_DEPLOY_WORKFLOW/$DB_ID/" wrangler.toml
+      - name: Apply D1 migrations
+        run: npx wrangler d1 migrations apply gymbro --remote
+      - name: Deploy Worker
+        id: deploy
+        run: |
+          npx wrangler deploy 2>&1 | tee deploy.log
+          URL="$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)"
+          if [ -z "$URL" ]; then echo "::error::No workers.dev URL in the deploy output. Open Workers & Pages once in the Cloudflare dashboard to create your workers.dev subdomain, then re-run."; exit 1; fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "### GymBro API deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "API_URL=$URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "API_URL=$URL"
+      - name: Health check
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "${{ steps.deploy.outputs.url }}/v1/health"; then echo; exit 0; fi
+            sleep 5
+          done
+          echo "::error::Health check failed"; exit 1
+      - name: Check auth is enforced
+        run: |
+          code="$(curl -s -o /dev/null -w '%{http_code}' "${{ steps.deploy.outputs.url }}/v1/records?kind=WebMeals")"
+          echo "Unauthenticated request → $code"
+          test "$code" = "401"
