@@ -4,6 +4,7 @@ import {assertSession,verifySession} from './access.js';
 import {DEFAULT_FOODS,cleanFood,validateFood} from './quick.js';
 import {validatePhoto} from './media.js';
 import {firebaseConfig} from './firebase-config.js';
+import {BACKEND} from './backend-config.js';
 import {SCHEMAS,emptyData,validateRecord} from './core.js';
 import {cleanRecord,validateArchive} from './migration.js';
 
@@ -12,16 +13,22 @@ export const isAdmin = user => user?.emailVerified === true && user.email === AD
 let service;
 export async function firebaseService() {
   if(!service) service=(async()=>{
-    const [appSDK,authSDK,dbSDK]=await Promise.all([
+    const [appSDK,authSDK]=await Promise.all([
       import('https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js'),
-      import('https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js'),
-      import('https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js')
+      import('https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js')
     ]);
-    const app=appSDK.initializeApp(firebaseConfig),auth=authSDK.getAuth(app),db=dbSDK.getFirestore(app);
+    const app=appSDK.initializeApp(firebaseConfig),auth=authSDK.getAuth(app);
     await auth.authStateReady();
-    return {auth,db,authSDK,dbSDK};
+    const s={app,auth,authSDK,db:null,dbSDK:null};
+    // On the Cloudflare backend Firestore is only loaded for the migration tool.
+    if(BACKEND.kind!=='cloudflare')await withFirestore(s);
+    return s;
   })().catch(e=>{service=null;throw e;});
   return service;
+}
+export async function withFirestore(s){
+  if(!s.db){const dbSDK=await import('https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js');s.dbSDK=dbSDK;s.db=dbSDK.getFirestore(s.app);}
+  return s;
 }
 export async function loginGoogle() {
   const s=await firebaseService();const provider=new s.authSDK.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
@@ -33,7 +40,7 @@ export function firebaseError(e){return quotaMessage(e)||({'auth/unauthorized-do
 function firebaseFailure(e){const error=Error(firebaseError(e));if(e.code!==undefined)error.code=e.code;error.name=e.name||'Error';return error;}
 
 export class FirebaseRepository {
-  constructor(s,targetUid=null){this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.ownerUid=targetUid||this.uid;this._cache=null;this._loadTask=null;this._cacheVersions={};this.check();this.title=this.ownerUid===this.uid?'Firebase · '+s.auth.currentUser.email:'ADMIN · dữ liệu UID '+this.ownerUid;}
+  constructor(s,targetUid=null){if(!s.db)throw Error('Firestore chưa được tải.');this.backendName='Firebase';this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');this.ownerUid=targetUid||this.uid;this._cache=null;this._loadTask=null;this._cacheVersions={};this.check();this.title=this.ownerUid===this.uid?'Firebase · '+s.auth.currentUser.email:'ADMIN · dữ liệu UID '+this.ownerUid;}
   check(){assertSession(this.s.sessionExpiresAt);if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
   ref(table,id){if(![...Object.keys(SCHEMAS),'Archive'].includes(table))throw Error('Loại dữ liệu không hợp lệ.');return this.s.dbSDK.doc(this.s.db,'users',this.ownerUid,table,id);}
   async registerOwner(){this.check();const user=this.s.auth.currentUser;await this.s.dbSDK.setDoc(this.s.dbSDK.doc(this.s.db,'users',this.uid),{uid:this.uid,email:user.email,display_name:user.displayName||'',updated_at:new Date().toISOString()});}

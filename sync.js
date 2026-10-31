@@ -5,7 +5,7 @@ import {validateBundle} from './migration.js';
 // Device-only/demo are now explicit choices for this page session, never a boot default.
 export const startupMode=()=> 'firebase';
 export const localOnlyMessage=mode=>mode==='demo'?'Đã lưu vào dữ liệu mẫu · Không đồng bộ Firebase.':'Đã lưu riêng trên thiết bị · Chưa đồng bộ Firebase.';
-export function saveMessage(state,count){return state.mode==='firebase'?`Đã lưu ${count??''} ${count?'mục ':''}vào Firebase · ${state.repo?.s.auth.currentUser?.email||''}`.replace('  ',' '):localOnlyMessage(state.mode);}
+export function saveMessage(state,count){return state.mode==='firebase'?`Đã lưu ${count??''} ${count?'mục ':''}vào ${state.repo?.backendName||'Firebase'} · ${state.repo?.s.auth.currentUser?.email||''}`.replace('  ',' '):localOnlyMessage(state.mode);}
 export const recordCount=data=>[...Object.keys(SCHEMAS),'Archive'].reduce((n,t)=>n+(data[t]||[]).length,0);
 export function localMissingCount(local,remote){return [...Object.keys(SCHEMAS),'Archive'].reduce((n,t)=>{const ids=new Set((remote[t]||[]).map(r=>r.id));return n+(local[t]||[]).filter(r=>!ids.has(r.id)).length;},0);}
 

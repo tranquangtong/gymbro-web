@@ -14,6 +14,8 @@ Mở http://127.0.0.1:4173. Không có npm dependencies; Firebase SDK được n
 
 ## Thiết lập
 
+Đang chuyển backend sang Cloudflare Workers + D1 (gói Free), vẫn dùng Firebase Authentication để đăng nhập: xem [docs/cloudflare.md](docs/cloudflare.md). Công tắc nằm ở `backend-config.js`.
+
 Xem [hướng dẫn Firebase](docs/setup.md). Cần bật Google provider, thêm domain GitHub Pages và publish [firestore.rules](firestore.rules). Trước khi publish, database Production mode vẫn từ chối đọc/ghi. App không tự mở quyền.
 
 ## Các chế độ
