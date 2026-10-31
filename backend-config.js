@@ -4,5 +4,5 @@
 // apiBase is public: the Worker checks every request's Firebase ID token.
 export const BACKEND = Object.freeze({
   kind: 'firebase',
-  apiBase: ''
+  apiBase: 'https://gymbro-api.tongquangtran.workers.dev'
 });
