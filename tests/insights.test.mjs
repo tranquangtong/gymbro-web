@@ -17,7 +17,7 @@ test('Free-text goals only suggest a selectable preset and selected preset survi
 });
 test('Ring geometry expresses real target ratio, caps above target and keeps unset target empty',()=>{
  const html=renderMacroDials(macroProgress([{kcal:1000,protein:150,carbs:0,fat:20}],{kcal_target:2000,protein_target:100,goal:{carbs_target:200}}));
- assert.match(html,/pathLength="100" stroke-dasharray="50.00 100"/);assert.match(html,/stroke-dasharray="100.00 100"/);assert.match(html,/stroke-dasharray="0.00 100"/);assert.match(html,/50%/);assert.match(html,/150%/);assert.match(html,/Đặt target để xem %/);
+ assert.match(html,/pathLength="100" stroke-dasharray="50.00 100"/);assert.match(html,/stroke-dasharray="100.00 100"/);assert.match(html,/stroke-dasharray="0.00 100"/);assert.match(html,/50%/);assert.match(html,/150%/);assert.match(html,/Đặt mục tiêu để xem %/);
 });
 test('Session split identifies upper, lower, full body and accessory-only workouts',()=>{
  const upper=[row('Kneeling easy chin-up'),row('Reverse grip lat pulldown'),row('Incline bench press')],lower=[row('Leg press'),row('Leg curl')],support=[row('Shoulder cable face pull'),row('Ab crunch'),row('Cable rotation')];

@@ -75,3 +75,11 @@ test('Narrow charts reveal the focus day, preserve manual scroll on refresh, and
  element.clientWidth=1200;focusEnergyChart(root);assert.equal(element.scrollLeft,0,'desktop chart that fits does not scroll');
  assert.doesNotThrow(()=>focusEnergyChart({querySelector:()=>null}));
 });
+
+test('Energy chart hides the workout axis and legend when no burned estimate exists in range',()=>{
+ const html=renderEnergyChart(energyDays({WebMeals:[meal()],WebWorkouts:[]},day),{currentDate:day});
+ assert.doesNotMatch(html,/class="burn-axis/);assert.doesNotMatch(html,/class="chart-axis-unit burn-axis"/);assert.doesNotMatch(html,/burn-key/);
+ assert.match(html,/Chưa có ước tính kcal tập luyện trong khoảng này/);
+ const withBurn=renderEnergyChart(energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day),{currentDate:day});
+ assert.match(withBurn,/class="burn-axis-line"/);assert.match(withBurn,/burn-key/);
+});
