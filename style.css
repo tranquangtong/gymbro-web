@@ -461,3 +461,33 @@ dialog::backdrop{background:var(--scrim)}
   button,a,.button{transition:background-color .15s,filter .15s}
 }
 .button[aria-pressed="true"]{background:var(--surface-2);border-color:var(--ink)}
+
+/* Macro ring details: hover on pointer devices, tap to pin on any device */
+.macro-dials{position:relative}
+.macro-dial{position:relative}
+.dial-trigger{display:block;width:100%;padding:0;border:0;background:none;color:inherit;cursor:pointer;border-radius:50%}
+.dial-trigger:hover .dial-track,.macro-dial.open .dial-track{stroke:var(--line)}
+.dial-pop{display:none;position:absolute;z-index:9;top:calc(100% - 2px);left:50%;transform:translateX(-50%);width:300px;max-width:calc(100vw - 32px);padding:14px 16px;text-align:left;font-size:14px;line-height:1.5;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.macro-dial:first-child .dial-pop{left:0;transform:none}
+.macro-dial:last-child .dial-pop{left:auto;right:0;transform:none}
+.macro-dial.open .dial-pop,.dial-trigger:focus-visible~.dial-pop{display:block}
+@media (hover:hover){.macro-dial:hover .dial-pop{display:block}}
+.dial-pop p{margin:0}
+.dial-pop-title{font-weight:600;margin-bottom:4px!important}
+.dial-pop-share{color:var(--muted);margin-bottom:12px!important}
+.dial-pop-share strong{color:var(--ink);font-weight:600}
+.dial-pop-label{font-size:13px;color:var(--muted);margin-bottom:6px!important}
+.dial-pop-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.dial-pop-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px}
+.dial-pop-food{overflow-wrap:anywhere}
+.dial-pop-food small,.dial-pop-value small{display:block;font-size:12px;color:var(--muted)}
+.dial-pop-count{font-size:12px;color:var(--muted)}
+.dial-pop-value{text-align:right;font-weight:600;white-space:nowrap}
+.dial-pop-bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.dial-pop-bar span{display:block;height:100%;background:var(--dial-color)}
+.dial-pop-empty{color:var(--muted)}
+.dial-pop-missing{margin-top:12px!important;font-size:13px;color:var(--warn-text)}
+@media (max-width:620px){
+  .macro-dial{position:static}
+  .dial-pop,.macro-dial:first-child .dial-pop,.macro-dial:last-child .dial-pop{left:0;right:0;width:auto;max-width:none;transform:none;top:calc(100% + 4px)}
+}

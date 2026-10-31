@@ -102,3 +102,16 @@ test('Energy chart draws the kcal target line on the intake axis only when a tar
  assert.match(html,/>2\.500<\/text>/,'scale grows to fit the target');
  assert.doesNotMatch(renderEnergyChart(days,{currentDate:day}),/energy-target/);
 });
+
+test('Macro details rank the foods driving each macro, show energy share and name foods without data',()=>{
+ const rows=[meal({id:'a',food:'Phở bò',meal:'lunch',kcal:600,protein:30,fat:20}),meal({id:'b',food:'Bánh mì trứng',meal:'breakfast',kcal:400,protein:15,fat:12}),meal({id:'c',food:'phở bò ',meal:'dinner',kcal:300,protein:10,fat:4}),meal({id:'d',food:'Sữa chua',meal:'snack',kcal:100,protein:5,fat:0}),meal({id:'e',food:'<b>Trà sữa</b>',meal:'snack',kcal:'',protein:'',fat:''})];
+ const items=macroProgress(rows,{kcal_target:2000});const fat=items.find(m=>m.key==='fat');
+ assert.deepEqual(fat.top.map(t=>[t.food,t.value,t.entries]),[['Phở bò',24,2],['Bánh mì trứng',12,1]],'same food is grouped, zero-fat foods are not ranked');
+ assert.equal(Math.round(fat.top[0].share),67);assert.deepEqual(fat.missing,['<b>Trà sữa</b>']);
+ assert.equal(Math.round(fat.energyShare),23,'36 g × 9 kcal over 1.400 kcal logged');assert.equal(items[0].energyShare,null);
+ const html=renderMacroDials(items);
+ assert.match(html,/class="dial-trigger" aria-expanded="false" aria-controls="dial-pop-fat"/);assert.match(html,/id="dial-pop-fat"/);
+ assert.match(html,/Món đóng góp nhiều nhất/);assert.match(html,/Phở bò <span class="dial-pop-count">×2<\/span>/);assert.match(html,/Bữa trưa, tối/);assert.match(html,/<strong>23%<\/strong> năng lượng đã ghi đến từ chất béo/);
+ assert.match(html,/Chưa có số liệu: &lt;b&gt;Trà sữa&lt;\/b&gt;/);assert.doesNotMatch(html,/<b>Trà sữa/);
+ assert.match(renderMacroDials(macroProgress([],{})),/Chưa có món nào có số liệu chất béo/);
+});

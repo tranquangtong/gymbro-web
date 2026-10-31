@@ -5,11 +5,19 @@ const skipped=r=>String(r.skipped).toLowerCase()==='true';
 const valid=v=>num(v)!==null&&num(v)>=0;
 export function macroProgress(rows,profile={}){
   const meals=active(rows).filter(r=>!skipped(r)),goal=profile.goal&&typeof profile.goal==='object'?profile.goal:{};
-  return [['kcal','Năng lượng','kcal',profile.kcal_target],['protein','Protein','g',profile.protein_target],['carbs','Carbs','g',goal.carbs_target],['fat','Chất béo','g',goal.fat_target]].map(([key,label,unit,rawTarget])=>{
+  const items=[['kcal','Năng lượng','kcal',profile.kcal_target],['protein','Protein','g',profile.protein_target],['carbs','Carbs','g',goal.carbs_target],['fat','Chất béo','g',goal.fat_target]].map(([key,label,unit,rawTarget])=>{
     const known=meals.filter(r=>valid(r[key])),value=known.length?known.reduce((sum,r)=>sum+num(r[key]),0):null,target=num(rawTarget)>0?num(rawTarget):null;
     const percent=value!==null&&target!==null?value/target*100:null;
-    return {key,label,unit,value,target,percent,fill:percent===null?0:Math.max(0,Math.min(percent,100)),over:percent!==null&&percent>100+1e-8,known:known.length,count:meals.length,incomplete:known.length<meals.length};
+    const name=r=>String(r.food||'').trim()||'Món không tên',groups=new Map();
+    for(const r of known){const v=num(r[key]);if(!(v>0))continue;const k=norm(name(r));const g=groups.get(k)||{food:name(r),meals:new Set(),value:0,entries:0};g.value+=v;g.entries++;if(r.meal)g.meals.add(r.meal);groups.set(k,g);}
+    const top=[...groups.values()].sort((a,b)=>b.value-a.value).slice(0,3).map(g=>({food:g.food,meals:[...g.meals],entries:g.entries,value:g.value,share:value>0?g.value/value*100:0}));
+    const missing=meals.filter(r=>!valid(r[key])).map(name);
+    return {key,label,unit,value,target,percent,fill:percent===null?0:Math.max(0,Math.min(percent,100)),over:percent!==null&&percent>100+1e-8,known:known.length,count:meals.length,incomplete:known.length<meals.length,top,missing,energyShare:null};
   });
+  // Share of logged energy from each macro (4/4/9 kcal per gram); only meaningful when kcal is known.
+  const kcal=items[0].value,factor={protein:4,carbs:4,fat:9};
+  for(const m of items)if(factor[m.key]&&kcal>0&&m.value!==null)m.energyShare=m.value*factor[m.key]/kcal*100;
+  return items;
 }
 export function energyDays(data,end,range=10){
   if(!DASHBOARD_RANGES.includes(range))throw Error('Khoảng biểu đồ không hợp lệ.');
@@ -35,11 +43,19 @@ export function energyScales(days){
 }
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const format=(n,d=0)=>n===null?'—':Number(n).toLocaleString('vi-VN',{maximumFractionDigits:d});
+const MEAL_NAMES={breakfast:'sáng',lunch:'trưa',dinner:'tối',snack:'phụ'};
+function renderDialPopover(m){
+  const d=m.key==='kcal'?0:1,lower=m.label.toLowerCase();
+  const share=m.energyShare!==null?`<p class="dial-pop-share"><strong>${format(m.energyShare)}%</strong> năng lượng đã ghi đến từ ${lower} (1 g = ${m.key==='fat'?9:4} kcal).</p>`:'';
+  const top=m.top.length?`<p class="dial-pop-label">Món đóng góp nhiều nhất</p><ol class="dial-pop-list">${m.top.map(t=>`<li><span class="dial-pop-food">${escape(t.food)}${t.entries>1?` <span class="dial-pop-count">×${t.entries}</span>`:''}${t.meals.length?`<small>Bữa ${t.meals.map(k=>MEAL_NAMES[k]||k).join(', ')}</small>`:''}</span><span class="dial-pop-value">${format(t.value,d)} ${m.unit}<small>${format(t.share)}%</small></span><span class="dial-pop-bar" aria-hidden="true"><span style="width:${Math.min(100,t.share).toFixed(1)}%"></span></span></li>`).join('')}</ol>`:`<p class="dial-pop-empty">Chưa có món nào có số liệu ${lower}.</p>`;
+  const missing=m.missing.length?`<p class="dial-pop-missing">Chưa có số liệu: ${m.missing.slice(0,3).map(escape).join(', ')}${m.missing.length>3?` và ${m.missing.length-3} món khác`:''}. Tổng thực tế có thể cao hơn.</p>`:'';
+  return `<div class="dial-pop" id="dial-pop-${m.key}" role="region" aria-label="Chi tiết ${escape(lower)}"><p class="dial-pop-title">${m.label}: ${format(m.value,d)} ${m.unit}</p>${share}${top}${missing}</div>`;
+}
 export function renderMacroDials(items){
   return `<div class="macro-dials">${items.map(m=>{
     const status=m.target===null?'Chưa đặt mục tiêu':m.value===null?'Chưa có số liệu':m.over?`Vượt ${format(m.value-m.target,1)} ${m.unit}`:`Còn ${format(Math.max(0,m.target-m.value),1)} ${m.unit}`;
     const label=`${m.label}: ${m.value===null?'chưa có số liệu':format(m.value,1)+' '+m.unit}${m.target===null?', chưa đặt mục tiêu':', mục tiêu '+format(m.target,1)+' '+m.unit}. ${status}${m.incomplete?'. Tổng chưa đầy đủ.':''}`;
-    return `<article class="macro-dial ${m.key}${m.over?' over':''}${m.target===null?' no-target':''}" aria-label="${escape(label)}"><h3>${m.label}</h3><div class="dial-circle"><svg viewBox="0 0 120 120" role="img" aria-label="${escape(label)}"><circle class="dial-track" cx="60" cy="60" r="51"/><circle class="dial-fill" cx="60" cy="60" r="51" pathLength="100" stroke-dasharray="${m.fill.toFixed(2)} 100" stroke-dashoffset="0"/></svg><div class="dial-value"><strong>${format(m.value,m.key==='kcal'?0:1)}</strong><small>${m.unit}</small></div></div><div class="dial-target">${m.target!==null?'/ '+format(m.target,1)+' '+m.unit:'Chưa đặt mục tiêu'}</div><p class="dial-status">${m.target!==null?status:'Đặt mục tiêu để xem %'}${m.percent!==null?' · '+format(m.percent)+'%':''}</p>${m.incomplete?'<small class="dial-incomplete">Chưa đủ số liệu</small>':''}</article>`;
+    return `<article class="macro-dial ${m.key}${m.over?' over':''}${m.target===null?' no-target':''}" aria-label="${escape(label)}"><h3>${m.label}</h3><button type="button" class="dial-trigger" aria-expanded="false" aria-controls="dial-pop-${m.key}" aria-label="Xem chi tiết ${escape(m.label.toLowerCase())}"><div class="dial-circle"><svg viewBox="0 0 120 120" role="img" aria-label="${escape(label)}"><circle class="dial-track" cx="60" cy="60" r="51"/><circle class="dial-fill" cx="60" cy="60" r="51" pathLength="100" stroke-dasharray="${m.fill.toFixed(2)} 100" stroke-dashoffset="0"/></svg><div class="dial-value"><strong>${format(m.value,m.key==='kcal'?0:1)}</strong><small>${m.unit}</small></div></div></button>${renderDialPopover(m)}<div class="dial-target">${m.target!==null?'/ '+format(m.target,1)+' '+m.unit:'Chưa đặt mục tiêu'}</div><p class="dial-status">${m.target!==null?status:'Đặt mục tiêu để xem %'}${m.percent!==null?' · '+format(m.percent)+'%':''}</p>${m.incomplete?'<small class="dial-incomplete">Chưa đủ số liệu</small>':''}</article>`;
   }).join('')}</div>`;
 }
 export const MEAL_SHORT={breakfast:'Sáng',lunch:'Trưa',dinner:'Tối',snack:'Phụ'};
