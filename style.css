@@ -524,3 +524,38 @@ dialog::backdrop{background:var(--scrim)}
 .update-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:40;display:flex;align-items:center;gap:12px;max-width:calc(100vw - 32px);padding:10px 12px 10px 16px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow)}
 @media (min-width:621px){.update-banner{bottom:24px}}
 .estimate-steps details.prompt-details{margin:8px 0 0}
+
+
+/* Dashboard actions stay in the page; diary add actions remain floating. */
+.dashboard-quick-actions{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px}
+.dashboard-quick-actions .button{min-height:48px}
+
+/* Compact logging sheet: group related fields instead of stacking every input. */
+#quick-dialog.compose-dialog .dialog-header{margin-bottom:12px;align-items:center}
+#quick-dialog.compose-dialog .input-tabs{margin-bottom:12px}
+#quick-dialog.compose-dialog .compose-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+#quick-dialog.compose-dialog .compose-meta>.field:only-child{grid-column:1/-1}
+#quick-dialog.compose-dialog .field{min-width:0;margin-bottom:12px}
+#quick-dialog.compose-dialog .compose-meta .field{margin:0}
+#quick-dialog.compose-dialog .field input,#quick-dialog.compose-dialog .field select{min-width:0;min-height:44px;padding:8px 10px;font-size:16px}
+#quick-dialog.compose-dialog .workout-numbers{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#quick-dialog.compose-dialog .workout-numbers>.field:only-child{grid-column:1/-1}
+#quick-dialog.compose-dialog .form-actions{margin-top:12px;padding-top:12px}
+.compose-food-library{margin:0 0 12px}
+.compose-food-library>summary{cursor:pointer;min-height:44px;align-content:center;color:var(--accent);font-size:15px;font-weight:600}
+.compose-food-library .quick-foods{margin:8px 0}
+#quick-dialog.compose-dialog .photo-tools{margin:8px 0;gap:8px}
+#quick-dialog.compose-dialog .photo-tools .subtle{flex-basis:100%;font-size:12px}
+#quick-dialog.compose-dialog .photo-strip:empty{display:none}
+@media (max-width:620px){
+  .dashboard-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .dashboard-quick-actions .button{padding:10px 12px;font-size:15px}
+  #quick-dialog.compose-dialog .dialog-inner{padding:16px 16px calc(12px + env(safe-area-inset-bottom))}
+  #quick-dialog.compose-dialog .dialog-header h2{font-size:26px}
+  #quick-dialog.compose-dialog .field{font-size:14px;gap:4px}
+  #quick-dialog.compose-dialog .input-tabs{padding:3px}
+  #quick-dialog.compose-dialog .meal-fields{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px}
+  #quick-dialog.compose-dialog .form-actions{bottom:calc(-12px - env(safe-area-inset-bottom));padding-bottom:calc(8px + env(safe-area-inset-bottom));gap:8px}
+  #quick-dialog.compose-dialog .form-actions .button{min-height:44px;padding:10px 12px;font-size:15px}
+  #quick-dialog.compose-dialog .form-actions .text-button{font-size:14px}
+}
