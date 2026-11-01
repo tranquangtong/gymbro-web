@@ -660,3 +660,16 @@ dialog::backdrop{background:var(--scrim)}
  #quick-dialog .form-actions .button{flex:1 1 auto}
  #quick-dialog .form-actions .text-button{flex:0 0 auto}
 }
+
+/* Anchor the sheet above the iOS keyboard, including Safari's viewport pan. */
+@media(max-width:700px){
+ .keyboard-open #quick-dialog[open],.keyboard-open #editor.log-editor[open]{position:fixed;inset:auto 0 auto;top:calc(var(--dialog-viewport-top,0px) + 6px);margin:0 auto;width:100%;max-height:calc(var(--dialog-viewport) - 12px);border-radius:16px}
+ .keyboard-open #quick-dialog .dialog-inner,.keyboard-open #quick-dialog.compose-dialog .dialog-inner,.keyboard-open #editor.log-editor .dialog-inner{max-height:calc(var(--dialog-viewport) - 14px);padding:10px 12px}
+ .keyboard-open #quick-dialog .dialog-header,.keyboard-open #quick-dialog.compose-dialog .dialog-header,.keyboard-open #editor.log-editor .dialog-header{margin-bottom:6px}
+ .keyboard-open #quick-dialog .dialog-header h2,.keyboard-open #quick-dialog.compose-dialog .dialog-header h2,.keyboard-open #editor.log-editor .dialog-header h2{font-size:21px}
+ .keyboard-open #quick-dialog .close-button,.keyboard-open #editor.log-editor .close-button{width:36px;height:36px;min-height:36px}
+ .keyboard-open #quick-dialog .form-actions,.keyboard-open #quick-dialog.compose-dialog .form-actions,.keyboard-open #editor.log-editor .form-actions{padding-top:6px;margin-top:4px;gap:6px}
+ .keyboard-open #quick-dialog .inline-suggestions{max-height:104px}
+ .keyboard-open #quick-dialog .quick-content,.keyboard-open #editor.log-editor .editor-fields{scroll-padding-block:12px;overflow-anchor:none}
+ .keyboard-open #quick-dialog input,.keyboard-open #editor.log-editor input{scroll-margin-block:12px}
+}
