@@ -1,0 +1,21 @@
+name: Repair stuck Pages deployment
+# Recovery for the specific stale deployment blocking the 2026-11-01 release.
+# Does not change site settings, source files, or Cloudflare resources.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/repair-pages-lock.yml']
+permissions:
+  pages: write
+jobs:
+  cancel-stale-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Cancel only the identified stale Pages deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/deployments/3170d13b3e8d7bf62fcec201fe04566daf8a3b67/cancel"
+          echo "Cancellation requested for stale deployment 3170d13."
