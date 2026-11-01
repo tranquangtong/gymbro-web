@@ -13,6 +13,8 @@ on:
       - 'quick.js'
       - 'workout-kcal.js'
       - 'reconcile.js'
+      - 'media.js'
+      - 'photo-retention.js'
       - '.github/workflows/deploy-worker.yml'
 permissions:
   contents: read
