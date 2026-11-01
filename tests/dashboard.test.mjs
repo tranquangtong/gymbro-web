@@ -17,11 +17,11 @@ test('Historical Dashboard selects daily logs and week while sharing current nut
  assert.deepEqual(selected.meals.map(r=>r.id),['old']);assert.deepEqual(selected.workouts.map(r=>r.id),['old']);assert.equal(selected.profile.kcal_target,2200);assert.equal(selected.summary.sessions,1);assert.equal(selected.week.sessions,2);
  assert.equal(energyDays(data,selected.date).at(-1).intake,300);assert.equal(dashboardDay(data,day).profile.kcal_target,2200);
 });
-test('Burn line shares the kcal axis with intake and labels known, zero and partial totals',()=>{
+test('Burn line uses its own zero-based kcal axis and labels known, zero and partial totals',()=>{
  const days=[{date:'2026-10-28',intake:4000,burned:100,intakeIncomplete:true},{date:'2026-10-29',intake:0,burned:200,burnIncomplete:true},{date:day,intake:null,burned:null}];
  assert.deepEqual(energyScales(days),{intakeMax:4000,burnMax:200});
  const html=renderEnergyChart(days);
- assert.match(html,/class="burn-point" cx="194" cy="238.95"/);assert.match(html,/class="burn-point partial" cx="450" cy="233.9"/);
+ assert.match(html,/class="burn-point" cx="194" cy="143"/);assert.match(html,/class="burn-point partial" cx="450" cy="42"/);
  assert.equal((html.match(/class="intake-data-label"/g)||[]).length,2);assert.equal((html.match(/class="burn-data-label"/g)||[]).length,2);
  assert.match(html,/text-anchor="middle">4\.000\*<\/text>/);assert.match(html,/text-anchor="middle">200\*<\/text>/);assert.match(html,/text-anchor="middle">0<\/text>/);assert.match(html,/trục trái/);
  assert.deepEqual(energyScales([{intake:0,burned:0}]),{intakeMax:500,burnMax:100});
@@ -81,7 +81,7 @@ test('Energy chart hides the workout axis and legend when no burned estimate exi
  assert.doesNotMatch(html,/class="burn-axis/);assert.doesNotMatch(html,/class="chart-axis-unit burn-axis"/);assert.doesNotMatch(html,/burn-key/);
  assert.match(html,/Chưa có ước tính kcal tập luyện trong khoảng này/);
  const withBurn=renderEnergyChart(energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day),{currentDate:day});
- assert.doesNotMatch(withBurn,/class="burn-axis-line"/);assert.match(withBurn,/burn-key/);
+ assert.match(withBurn,/class="burn-axis-line"/);assert.match(withBurn,/burn-key/);
 });
 
 test('Energy hero groups known kcal into one plate per meal and reports remaining, over and unknown',()=>{
@@ -133,4 +133,17 @@ test('Daily protein bars and dashed target use grams, retain known zero and flag
  assert.ok(proteinY>=42&&proteinY<=244);assert.ok(kcalY>=42&&kcalY<=244);assert.notEqual(proteinY,kcalY);
  assert.equal((html.match(/<svg/g)||[]).length,1);assert.match(html,/viewBox="0 0 \d+ 320"/);assert.doesNotMatch(html,/protein-panel|phần dưới/);
  const barY=Number(html.match(/class="protein-bar partial"[^>]*y="([^"]+)"/)[1]);assert.ok(barY>=42&&barY<=244);
+});
+
+
+test('Combined chart keeps the workout line high on its own scale without changing values or splitting the plot',()=>{
+ const days=[{date:'2026-10-29',intake:3500,protein:150,burned:300},{date:day,intake:2000,protein:120,burned:500}];
+ const html=renderEnergyChart(days,{currentDate:day,proteinTarget:140,target:2765});
+ const positions=[...html.matchAll(/class="burn-point[^"\n]*" cx="[^"]+" cy="([^"]+)"/g)].map(m=>Number(m[1]));
+ assert.ok(Math.abs(positions[0]-122.8)<1e-8);assert.equal(positions[1],42);
+ assert.match(html,/>300<\/text>/);assert.match(html,/>500<\/text>/);
+ assert.match(html,/class="burn-axis"/);assert.match(html,/class="protein-axis"/);
+ assert.equal((html.match(/<svg/g)||[]).length,1);
+ const zero=renderEnergyChart([{date:day,intake:2500,protein:100,burned:0}],{currentDate:day});
+ assert.match(zero,/class="burn-point today"[^>]*cy="244"/);
 });
