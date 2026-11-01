@@ -17,13 +17,13 @@ test('Historical Dashboard selects daily logs and week while sharing current nut
  assert.deepEqual(selected.meals.map(r=>r.id),['old']);assert.deepEqual(selected.workouts.map(r=>r.id),['old']);assert.equal(selected.profile.kcal_target,2200);assert.equal(selected.summary.sessions,1);assert.equal(selected.week.sessions,2);
  assert.equal(energyDays(data,selected.date).at(-1).intake,300);assert.equal(dashboardDay(data,day).profile.kcal_target,2200);
 });
-test('Burn line uses independent right-axis coordinates and labels known, zero and partial totals',()=>{
+test('Burn line shares the kcal axis with intake and labels known, zero and partial totals',()=>{
  const days=[{date:'2026-10-28',intake:4000,burned:100,intakeIncomplete:true},{date:'2026-10-29',intake:0,burned:200,burnIncomplete:true},{date:day,intake:null,burned:null}];
  assert.deepEqual(energyScales(days),{intakeMax:4000,burnMax:200});
  const html=renderEnergyChart(days);
- assert.match(html,/class="burn-point" cx="194" cy="143"/);assert.match(html,/class="burn-point partial" cx="450" cy="42"/);
+ assert.match(html,/class="burn-point" cx="194" cy="238.95"/);assert.match(html,/class="burn-point partial" cx="450" cy="233.9"/);
  assert.equal((html.match(/class="intake-data-label"/g)||[]).length,2);assert.equal((html.match(/class="burn-data-label"/g)||[]).length,2);
- assert.match(html,/text-anchor="middle">4\.000\*<\/text>/);assert.match(html,/text-anchor="middle">200\*<\/text>/);assert.match(html,/text-anchor="middle">0<\/text>/);assert.match(html,/trục phải/);
+ assert.match(html,/text-anchor="middle">4\.000\*<\/text>/);assert.match(html,/text-anchor="middle">200\*<\/text>/);assert.match(html,/text-anchor="middle">0<\/text>/);assert.match(html,/trục trái/);
  assert.deepEqual(energyScales([{intake:0,burned:0}]),{intakeMax:500,burnMax:100});
 });
 test('Macro dials compare actual intake with explicit targets, cap fill, and announce over-target values in text',()=>{
@@ -61,7 +61,7 @@ test('Optional carb/fat targets persist with profile goals and do not become onb
 
 test('Chart marks exactly today and focuses today or the last date of a historical range',()=>{
  const days=energyDays({WebMeals:[meal()]},day,28),html=renderEnergyChart(days,{currentDate:day});
- assert.equal(energyFocusDate(days,day),day);assert.equal((html.match(/class="today-highlight"/g)||[]).length,1);assert.match(html,/class="intake-bar today"/);assert.match(html,/class="chart-today-label"/);assert.match(html,/data-focus-date="2026-10-30"/);assert.match(html,/min-width:1876px/);
+ assert.equal(energyFocusDate(days,day),day);assert.equal((html.match(/class="today-highlight"/g)||[]).length,1);assert.match(html,/class="intake-bar today"/);assert.match(html,/class="chart-today-label"/);assert.match(html,/data-focus-date="2026-10-30"/);assert.ok(Number(html.match(/min-width:(\d+)px/)[1])>=28*70);
  const past=energyDays({WebMeals:[meal({date:'2026-10-29'})]},'2026-10-29',7),pastHtml=renderEnergyChart(past,{currentDate:day});
  assert.equal(energyFocusDate(past,day),'2026-10-29');assert.doesNotMatch(pastHtml,/class="today-highlight"/);assert.doesNotMatch(pastHtml,/class="chart-today-label"/);assert.match(pastHtml,/data-focus-date="2026-10-29"/);
  // Today can still be highlighted with missing actual values, without fabricating a bar.
@@ -81,7 +81,7 @@ test('Energy chart hides the workout axis and legend when no burned estimate exi
  assert.doesNotMatch(html,/class="burn-axis/);assert.doesNotMatch(html,/class="chart-axis-unit burn-axis"/);assert.doesNotMatch(html,/burn-key/);
  assert.match(html,/Chưa có ước tính kcal tập luyện trong khoảng này/);
  const withBurn=renderEnergyChart(energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day),{currentDate:day});
- assert.match(withBurn,/class="burn-axis-line"/);assert.match(withBurn,/burn-key/);
+ assert.doesNotMatch(withBurn,/class="burn-axis-line"/);assert.match(withBurn,/burn-key/);
 });
 
 test('Energy hero groups known kcal into one plate per meal and reports remaining, over and unknown',()=>{
@@ -130,5 +130,7 @@ test('Daily protein bars and dashed target use grams, retain known zero and flag
  assert.match(html,/<th scope="col">Protein \(g\)<\/th>/);
  const proteinY=Number(html.match(/class="protein-target"[^>]*y1="([^"]+)"/)[1]);
  const kcalY=Number(html.match(/class="energy-target"[^>]*y1="([^"]+)"/)[1]);
- assert.ok(proteinY>=332&&proteinY<=438);assert.notEqual(proteinY,kcalY);
+ assert.ok(proteinY>=42&&proteinY<=244);assert.ok(kcalY>=42&&kcalY<=244);assert.notEqual(proteinY,kcalY);
+ assert.equal((html.match(/<svg/g)||[]).length,1);assert.match(html,/viewBox="0 0 \d+ 320"/);assert.doesNotMatch(html,/protein-panel|phần dưới/);
+ const barY=Number(html.match(/class="protein-bar partial"[^>]*y="([^"]+)"/)[1]);assert.ok(barY>=42&&barY<=244);
 });
