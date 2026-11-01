@@ -128,7 +128,7 @@ function mealPrompt(q){
   return `Bạn là chuyên gia dinh dưỡng. Hãy ước tính kcal, protein, carbs và fat cho từng món ăn tôi đã ăn ngày ${q.date}. Đây là ước tính, không phải đo lường.
 
 Cách làm cho từng món:
-1. Đọc tên món, lượng và ghi chú. Ảnh (nếu có) được in nhãn "Món N" ở góc trên; chỉ dùng ảnh có đúng số của món đó.
+1. Đọc tên món, lượng và ghi chú. Ảnh (nếu có) mang nhãn "Món N" ở phía trên; nếu nhiều món được ghép trong một ảnh, mỗi ô có nhãn riêng. Chỉ dùng phần ảnh có đúng số của món đó.
 2. Ước lượng khối lượng từng thành phần chính theo gam, kể cả dầu mỡ, nước sốt, đường. Nếu lượng chưa ghi, giả định một khẩu phần phổ biến ở Việt Nam và nói rõ.
 3. Tính kcal, protein, carbs, fat (gam). Kiểm tra kcal ≈ 4×protein + 4×carbs + 9×fat, lệch không quá 10%.
 4. Giá trị "đã biết" phải giữ nguyên; chỉ ước tính phần còn thiếu sao cho tổng vẫn hợp lý.

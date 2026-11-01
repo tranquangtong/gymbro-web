@@ -517,3 +517,4 @@ dialog::backdrop{background:var(--scrim)}
 /* New release available */
 .update-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:40;display:flex;align-items:center;gap:12px;max-width:calc(100vw - 32px);padding:10px 12px 10px 16px;border-radius:14px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow)}
 @media (min-width:621px){.update-banner{bottom:24px}}
+.estimate-steps details.prompt-details{margin:8px 0 0}

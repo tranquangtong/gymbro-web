@@ -27,3 +27,21 @@ export async function labeledPhotoBlob(photo,label,type='image/jpeg'){
 export async function labeledPhotoFile(photo,label,name){return new File([await labeledPhotoBlob(photo,label)],name,{type:'image/jpeg'});}
 export const canCopyImages=()=>typeof ClipboardItem!=='undefined'&&!!navigator.clipboard?.write;
 export function canShareFiles(){try{return !!navigator.canShare?.({files:[new File([new Uint8Array(1)],'x.jpg',{type:'image/jpeg'})]});}catch{return false;}}
+// One labelled image holding every meal photo, for clipboards that carry a single image
+// (Chrome on desktop). Two columns of 720 px cells, each with its "Món N · tên" banner.
+export async function collageBlob(items,type='image/png'){
+  if(!items.length)throw Error('Chưa có ảnh để ghép.');
+  const cell=720,band=56,gap=12,cols=items.length===1?1:2;
+  const imgs=await Promise.all(items.map(async({photo})=>{const img=new Image();img.src=photo.data_url;await img.decode();return img;}));
+  const heights=imgs.map(img=>Math.round(cell*img.naturalHeight/img.naturalWidth)+band);
+  const rows=[];for(let i=0;i<imgs.length;i+=cols)rows.push(Math.max(...heights.slice(i,i+cols)));
+  const canvas=document.createElement('canvas');canvas.width=cols*cell+(cols+1)*gap;canvas.height=rows.reduce((a,b)=>a+b,0)+(rows.length+1)*gap;
+  const g=canvas.getContext('2d');g.fillStyle='#ffffff';g.fillRect(0,0,canvas.width,canvas.height);
+  let y=gap;
+  rows.forEach((h,r)=>{for(let c=0;c<cols;c++){const i=r*cols+c;if(i>=imgs.length)break;const x=gap+c*(cell+gap);
+    g.fillStyle='#1d2730';g.fillRect(x,y,cell,band);g.drawImage(imgs[i],x,y+band,cell,heights[i]-band);
+    g.fillStyle='#ffffff';g.font='600 30px system-ui,-apple-system,"Segoe UI",sans-serif';g.textBaseline='middle';
+    let text=items[i].label;while(text.length>6&&g.measureText(text).width>cell-32)text=text.slice(0,-2);if(text!==items[i].label)text=text.trimEnd()+'…';
+    g.fillText(text,x+16,y+band/2);}y+=h+gap;});
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,type,.88));if(!blob)throw Error('Không ghép được ảnh.');return blob;
+}
