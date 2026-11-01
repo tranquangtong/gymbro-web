@@ -4,15 +4,15 @@ import {createQuickUI} from '../quick-ui.js';
 
 // Exercise the real composer without a browser or a live database.
 function composer(t,saved={}){
- const events={},values=new Map(),storage=new Map(Object.entries(saved));
- const dialog={innerHTML:'',open:false,classList:{toggle(){}},setAttribute(){},addEventListener(){},showModal(){this.open=true;},querySelector(){return null;}};
+ const events={},dialogEvents={},values=new Map(),storage=new Map(Object.entries(saved));
+ const dialog={innerHTML:'',open:false,classList:{toggle(){}},setAttribute(){},addEventListener:(name,fn)=>dialogEvents[name]=fn,showModal(){this.open=true;},querySelector(){return null;},querySelectorAll(){return [];}};
  t.mock.method(globalThis,'setInterval',()=>0);
  const setGlobal=(key,value)=>{const old=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{configurable:true,writable:true,value});t.after(()=>old?Object.defineProperty(globalThis,key,old):delete globalThis[key]);};
- setGlobal('document',{createElement:()=>dialog,body:{append(){}},querySelector:s=>values.get(s)||null,addEventListener:(name,fn)=>events[name]=fn});
+ setGlobal('document',{createElement:tag=>tag==='canvas'?{getContext:()=>({fillRect(){},drawImage(){}}),toDataURL:()=> 'data:image/jpeg;base64,AAAA'}:dialog,body:{append(){}},querySelector:s=>values.get(s)||null,addEventListener:(name,fn)=>events[name]=fn});
  setGlobal('sessionStorage',{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)});
  const state={mode:'firebase',date:'2026-11-01',data:{WebProfile:[]},repo:{ownerUid:'test',uid:'test',loadFoods:async()=>[{id:'banana',name:'Chuối'}]}};
  const ui=createQuickUI({getState:()=>state,writable:()=>true,esc:v=>String(v??''),fmt:v=>String(v??''),icon:()=>'',toast:()=>{},reload:async()=>{},render(){},saveMessage:()=>''});
- return {ui,dialog,values,state,click:(action,extra={})=>events.click({target:{closest:()=>({dataset:{quick:action,...extra}})},preventDefault(){}})};
+ return {ui,dialog,values,state,dialogEvents,click:(action,extra={})=>events.click({target:{closest:()=>({dataset:{quick:action,...extra}})},preventDefault(){}})};
 }
 
 test('New meal and workout composers default to compact entry, retaining selected date and draft values',async t=>{
@@ -64,4 +64,26 @@ test('Exercise chip fills the compact form with the correct kind and date withou
  assert.match(c.dialog.innerHTML,/id="compact-kg"[^>]*value=""/);
  assert.match(c.dialog.innerHTML,/id="quick-date"[^>]*value="2026-11-01"/);
  assert.equal(c.state.data.WebWorkouts.length,1);
+});
+
+
+test('An existing meal retains a failed camera upload and can retry without taking the photo again',async t=>{
+ const c=composer(t),row={id:'m1',food:'Soda chanh',date:'2026-11-01',photo_ids:[],updated_at:'original'};
+ c.state.data.WebMeals=[row];let fail=true,uploads=[],saved=[];
+ const oldImage=Object.getOwnPropertyDescriptor(globalThis,'Image');
+ Object.defineProperty(globalThis,'Image',{configurable:true,writable:true,value:class{naturalWidth=100;naturalHeight=100;async decode(){}}});
+ t.after(()=>oldImage?Object.defineProperty(globalThis,'Image',oldImage):delete globalThis.Image);
+ c.state.repo.savePhoto=async p=>{uploads.push(p);if(fail)throw Object.assign(Error('Offline'),{code:'unavailable'});};
+ c.state.repo.saveMany=async(table,rows)=>{saved.push(...rows);};
+ await c.ui.showPhotos('m1');
+ c.dialogEvents.change({target:{id:'existing-camera',files:[new File(['jpeg'],'camera.jpg',{type:'image/jpeg'})],value:'camera.jpg'}});
+ await new Promise(setImmediate);
+ assert.equal(uploads.length,1);assert.equal(saved.length,0);
+ assert.match(c.dialog.innerHTML,/Ảnh chờ tải lên/);assert.match(c.dialog.innerHTML,/Thử lại tải ảnh/);
+ await c.ui.showPhotos('m1'); // Queue also survives closing/reopening within the tab.
+ assert.match(c.dialog.innerHTML,/Thử lại tải ảnh/);
+ fail=false;c.click('retry-photos');await new Promise(setImmediate);
+ assert.equal(uploads.length,2);assert.equal(uploads[0].id,uploads[1].id);
+ assert.equal(saved.length,1);assert.deepEqual(saved[0].photo_ids,[uploads[0].id]);
+ assert.doesNotMatch(c.dialog.innerHTML,/Thử lại tải ảnh/);
 });

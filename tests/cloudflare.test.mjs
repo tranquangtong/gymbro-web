@@ -71,3 +71,31 @@ test('a photo saved on one device opens on another through the API', async () =>
   assert.deepEqual(await laptop.getPhoto('ph1'), photo);
   await assert.rejects(() => laptop.getPhoto('missing'), e => e.code === 'photo/not-found');
 });
+
+test('photo upload retries a lost acknowledgement with the same ID, storing only one full-size photo',async()=>{
+  const e=env(),s=await service(),photo={id:'retry-photo',meal_id:'m1',created_at:'2026-10-31T10:00:00Z',data_url:'data:image/jpeg;base64,'+'A'.repeat(320000)};
+  const fetchWorker=workerFetch(e),sent=[];
+  const repo=new CloudflareRepository(s,null,{apiBase:'https://api.test',fetchImpl:async(url,init)=>{
+    const body=JSON.parse(init.body);sent.push(body.photo);
+    const result=await fetchWorker(url,init);
+    if(sent.length===1)throw new TypeError('Connection lost after upload');
+    return result;
+  }});
+  await repo.savePhoto(photo);
+  assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1]);
+  assert.equal(e.DB.db.prepare('SELECT count(*) n FROM photos').get().n,1);
+  const loaded=await fetchWorker('https://api.test/v1/photos/retry-photo',{headers:{authorization:'Bearer '+await s.auth.currentUser.getIdToken()}});
+  assert.deepEqual(await loaded.json(),photo);
+});
+
+test('photo upload retries temporary service failures but never retries denied permissions',async()=>{
+  const photo={id:'service-photo',meal_id:'m1',created_at:'2026-10-31T10:00:00Z',data_url:'data:image/jpeg;base64,AAAA'};
+  for(const status of [503,403]){
+    let attempts=0;
+    const repo=new CloudflareRepository(await service(),null,{apiBase:'https://api.test',fetchImpl:async()=>{
+      attempts++;return new Response(JSON.stringify({error:'Test service failure'}),{status:status===503&&attempts>1?200:status,headers:{'content-type':'application/json'}});
+    }});
+    if(status===503){await repo.savePhoto(photo);assert.equal(attempts,2);}
+    else{await assert.rejects(()=>repo.savePhoto(photo),e=>e.status===403&&e.operation==='photo');assert.equal(attempts,1);}
+  }
+});

@@ -31,13 +31,13 @@ export class CloudflareRepository{
     this.title=this.ownerUid===this.uid?'Cloudflare · '+s.auth.currentUser.email:'Quản trị · dữ liệu UID '+this.ownerUid;
   }
   check(){assertSession(this.s.sessionExpiresAt);if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
-  async api(path,{method='GET',params={},body}={}){
+  async api(path,{method='GET',params={},body,timeoutMs=0}={}){
     this.check();
     const url=new URL(this.apiBase+path);for(const [k,v] of Object.entries(params))if(v!==undefined&&v!==null&&v!=='')url.searchParams.set(k,v);
     if(this.ownerUid!==this.uid&&method==='GET')url.searchParams.set('owner',this.ownerUid);
-    const token=await this.s.auth.currentUser.getIdToken();let res;
-    try{res=await this.fetchImpl(url.toString(),{method,headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(this.ownerUid!==this.uid?{...body,owner:this.ownerUid}:body):undefined});}
-    catch{const e=Error('Không kết nối được máy chủ GymBro (Cloudflare). Kiểm tra mạng; nội dung đang nhập vẫn được giữ.');e.code='unavailable';throw e;}
+    const token=await this.s.auth.currentUser.getIdToken();let res;const controller=timeoutMs?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
+    try{res=await this.fetchImpl(url.toString(),{method,...(controller?{signal:controller.signal}:{}),headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(this.ownerUid!==this.uid?{...body,owner:this.ownerUid}:body):undefined});}
+    catch{const e=Error('Không kết nối được máy chủ GymBro (Cloudflare). Kiểm tra mạng; nội dung đang nhập vẫn được giữ.');e.code='unavailable';throw e;}finally{if(timer)clearTimeout(timer);}
     const data=await res.json().catch(()=>({}));
     if(!res.ok){const e=Error(data.error||`Máy chủ GymBro trả lỗi ${res.status}.`);e.code=data.code||String(res.status);e.status=res.status;throw e;}
     this.check();return data;
@@ -120,8 +120,18 @@ export class CloudflareRepository{
   async seedFoods(){const now=new Date().toISOString();await this.write('FoodLibrary',DEFAULT_FOODS.map(f=>({record:cleanFood({...f,updated_at:now}),insertOnly:true})));return this.loadFoods();}
   async saveFood(food,{insertOnly=false}={}){const clean=cleanFood(food);await this.write('FoodLibrary',[{record:clean,expected:insertOnly?undefined:food._revision,insertOnly}]);}
   async savePhoto(photo){
-    this.check();await this.api('/v1/photos',{method:'POST',body:{photo}});
-    try{await this.photos.savePhoto(photo);}catch{}// cache only; the API copy is the shared one
+    this.check();validatePhoto(photo);
+    // The photo endpoint is immutable by ID: retrying after a lost response cannot duplicate it.
+    const payload=clone(photo);
+    for(let attempt=0;;attempt++){
+      try{await this.api('/v1/photos',{method:'POST',body:{photo:payload},timeoutMs:20000});break;}
+      catch(e){
+        const transient=['unavailable','auth/network-request-failed'].includes(e.code)||[408,429,500,502,503,504,520,522,524].includes(e.status);
+        if(!transient||attempt>=2){e.operation='photo';throw e;}
+        await new Promise(resolve=>setTimeout(resolve,attempt===0?400:1000));this.check();
+      }
+    }
+    try{await this.photos.savePhoto(payload);}catch{}// cache only; the API copy is the shared one
   }
   async getPhoto(id){
     this.check();
