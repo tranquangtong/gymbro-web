@@ -12,7 +12,7 @@ function composer(t,saved={}){
  setGlobal('sessionStorage',{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)});
  const state={mode:'firebase',date:'2026-11-01',data:{WebProfile:[]},repo:{ownerUid:'test',uid:'test',loadFoods:async()=>[{id:'banana',name:'Chuối'}]}};
  const ui=createQuickUI({getState:()=>state,writable:()=>true,esc:v=>String(v??''),fmt:v=>String(v??''),icon:()=>'',toast:()=>{},reload:async()=>{},render(){},saveMessage:()=>''});
- return {ui,dialog,values,click:action=>events.click({target:{closest:()=>({dataset:{quick:action}})},preventDefault(){}})};
+ return {ui,dialog,values,state,click:(action,extra={})=>events.click({target:{closest:()=>({dataset:{quick:action,...extra}})},preventDefault(){}})};
 }
 
 test('New meal and workout composers default to compact entry, retaining selected date and draft values',async t=>{
@@ -49,4 +49,19 @@ test('Compact workout kind controls preserve cardio, bodyweight and assistance e
    else assert.match(c.dialog.innerHTML,/Kg trợ lực<input id="compact-kg"/);
   }
  }
+});
+
+
+test('Exercise chip fills the compact form with the correct kind and date without saving a log',async t=>{
+ const c=composer(t);
+ c.state.data.WebWorkouts=[{exercise:'Assisted chin up',kind:'assisted',date:'2026-10-31'}];
+ await c.ui.open('workouts');
+ assert.match(c.dialog.innerHTML,/Bài tập quen/);
+ c.values.set('#compact-kg',{value:'80'});
+ c.click('insert-exercise',{exercise:'assisted chin up|assisted'});
+ assert.match(c.dialog.innerHTML,/id="compact-exercise"[^>]*value="Assisted chin up"/);
+ assert.match(c.dialog.innerHTML,/value="assisted" selected/);
+ assert.match(c.dialog.innerHTML,/id="compact-kg"[^>]*value=""/);
+ assert.match(c.dialog.innerHTML,/id="quick-date"[^>]*value="2026-11-01"/);
+ assert.equal(c.state.data.WebWorkouts.length,1);
 });
