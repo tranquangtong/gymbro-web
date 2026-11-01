@@ -571,3 +571,62 @@ dialog::backdrop{background:var(--scrim)}
 .exercise-library-list>div{min-width:0}
 .exercise-library-list .chip-button{width:100%;overflow-wrap:anywhere}
 .exercise-library-list small{display:block;padding:3px 8px;font-size:12px;color:var(--muted)}
+
+
+/* Protein has its own aligned gram panel: never plot grams on a kcal axis. */
+:root{--protein-chart:#8661c5}
+@media(prefers-color-scheme:dark){:root{--protein-chart:#c5a6ff}}
+.protein-bar{fill:var(--protein-chart);opacity:.65}
+.protein-bar.partial{opacity:.4}
+.protein-target{stroke:var(--protein-chart);stroke-width:2;stroke-dasharray:5 5}
+.energy-chart .protein-axis,.energy-chart .protein-data-label{fill:var(--protein-chart)}
+.energy-chart .protein-data-label{font-family:var(--font-display);font-size:17px;font-weight:600;paint-order:stroke fill;stroke:var(--surface);stroke-width:3}
+.protein-key{width:12px;height:12px;border-radius:3px;background:var(--protein-chart)}
+.protein-target-key{width:22px;border-top:2px dashed var(--protein-chart)}
+
+/* One scroll region per sheet, with close and save controls always reachable. */
+#quick-dialog{overflow:hidden;max-height:min(92dvh,calc(var(--dialog-viewport,100dvh) - 12px))}
+#quick-dialog .dialog-inner{display:flex;flex-direction:column;overflow:hidden;max-height:min(92dvh,calc(var(--dialog-viewport,100dvh) - 12px));padding:20px}
+#quick-dialog .dialog-header{flex-shrink:0;margin-bottom:12px}
+#quick-dialog .quick-content{min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;padding:2px 4px 8px 0}
+#quick-dialog .form-actions{position:static;flex-shrink:0;margin-top:8px;padding:10px 0 0}
+#quick-dialog .form-error{flex-shrink:0;max-height:100px;overflow:auto;font-size:14px}
+#quick-dialog .dialog-header h2{font-size:28px;line-height:1.15;overflow-wrap:anywhere}
+#quick-dialog .close-button{flex-shrink:0}
+#quick-dialog.compose-dialog .dialog-inner{padding:20px}
+#quick-dialog.compose-dialog .form-actions{position:static;padding:10px 0 0;margin-top:8px}
+#quick-dialog .parse-preview{padding:12px;border-radius:12px}
+#quick-dialog .parse-preview .section-label{margin:0 0 6px}
+#quick-dialog .parse-preview .form-note{margin:6px 0 0;line-height:1.45;font-size:13px}
+#quick-dialog .preview-row{gap:4px 12px;padding:8px 0;align-items:flex-start}
+#quick-dialog .preview-row>div{min-width:0;overflow-wrap:anywhere}
+#quick-dialog .preview-row>div:first-child{flex:1}
+#quick-dialog .preview-row small{font-size:13px;line-height:1.45}
+#quick-dialog .exercise-picker{margin-bottom:4px}
+#quick-dialog .photo-tools .button{padding:8px 12px;min-height:44px}
+#editor.log-editor{overflow:hidden;max-height:min(92dvh,calc(var(--dialog-viewport,100dvh) - 12px))}
+#editor.log-editor .dialog-inner{display:flex;flex-direction:column;overflow:hidden;max-height:min(92dvh,calc(var(--dialog-viewport,100dvh) - 12px));padding:20px}
+#editor.log-editor .dialog-header{flex-shrink:0;margin-bottom:12px}
+#editor.log-editor .dialog-header .eyebrow{display:none}
+#editor.log-editor .dialog-header h2{font-size:28px;line-height:1.15}
+#editor.log-editor #entry-form{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#editor.log-editor .editor-fields{min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;padding-right:4px}
+#editor.log-editor .editor-fields>div,#editor.log-editor .editor-fields>.field:has(textarea),#editor.log-editor .editor-fields>.field:has([name=food]),#editor.log-editor .editor-fields>.field:has([name=exercise]){grid-column:1/-1}
+#editor.log-editor .field{min-width:0;font-size:14px;margin-bottom:12px;gap:4px}
+#editor.log-editor input,#editor.log-editor select,#editor.log-editor textarea{font-size:16px;min-width:0;min-height:44px;padding:8px 10px}
+#editor.log-editor textarea{min-height:72px}
+#editor.log-editor .form-actions{flex-shrink:0;position:static;margin-top:8px;padding:10px 0 0}
+#editor.log-editor .form-error{flex-shrink:0;max-height:80px;overflow:auto}
+@media(max-width:620px){
+ #quick-dialog .dialog-inner,#quick-dialog.compose-dialog .dialog-inner,#editor.log-editor .dialog-inner{padding:16px 12px calc(12px + env(safe-area-inset-bottom))}
+ #quick-dialog .dialog-header h2,#quick-dialog.compose-dialog .dialog-header h2,#editor.log-editor .dialog-header h2{font-size:25px}
+ #quick-dialog .form-actions .button{flex:1;padding:10px 12px;font-size:15px;min-height:44px}
+ #quick-dialog .form-actions .text-button{flex:0 0 auto;margin-left:0;font-size:14px}
+ #quick-dialog .compose-meta{gap:10px}
+ #quick-dialog .exercise-chips .chip-button{font-size:14px;max-width:200px}
+ #quick-dialog .quick-content input[type=date]{max-width:100%;appearance:none;-webkit-appearance:none;min-height:44px}
+ #editor.log-editor .set-head,#editor.log-editor .set-row{grid-template-columns:28px minmax(0,1fr) minmax(0,1fr) 40px;gap:6px}
+ #editor.log-editor .preset-row{margin:0 0 10px}
+ #editor.log-editor .preset{font-size:13px;max-width:100%;white-space:normal}
+}
+#quick-dialog .dialog-header h2{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}

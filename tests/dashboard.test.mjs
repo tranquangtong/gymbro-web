@@ -51,7 +51,7 @@ test('The rendered chart exposes both series and a readable daily table, with ga
  const days=energyDays({WebMeals:[meal()],WebWorkouts:[workout({date:'2026-10-28'}),workout()]},day),html=renderEnergyChart(days);
  assert.match(html,/Kcal ăn vào/);assert.match(html,/Kcal tập luyện \(ước tính\)/);assert.match(html,/Xem số liệu từng ngày/);assert.match(html,/không phải tổng tiêu hao cả ngày/);
  assert.equal((html.match(/class="burn-point/g)||[]).length,2);assert.equal((html.match(/class="burn-line"/g)||[]).length,0,'must not connect across an unknown day');assert.equal((html.match(/<tr>/g)||[]).length,11);
- assert.match(renderEnergyChart(energyDays({WebMeals:[],WebWorkouts:[]},day)),/Chưa có số liệu kcal trong 10 ngày/);
+ assert.match(renderEnergyChart(energyDays({WebMeals:[],WebWorkouts:[]},day)),/Chưa có số liệu dinh dưỡng hoặc tập luyện trong 10 ngày/);
 });
 test('Optional carb/fat targets persist with profile goals and do not become onboarding requirements',()=>{
  const p={id:'p',weight_kg:85,height_cm:175,TDEE:2500,goal:{bmr_kcal:1800,target_weight_kg:78,training_goal:'Tăng sức mạnh'}};
@@ -99,7 +99,7 @@ test('Energy hero groups known kcal into one plate per meal and reports remainin
 test('Energy chart draws the kcal target line on the intake axis only when a target exists',()=>{
  const days=energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day);
  const html=renderEnergyChart(days,{currentDate:day,target:2100});
- assert.match(html,/class="energy-target"/);assert.match(html,/Mục tiêu 2\.100/);assert.match(html,/target-key/);assert.match(html,/class="burn-point today"/);
+ assert.match(html,/class="energy-target"/);assert.doesNotMatch(html,/energy-target-label|Mục tiêu 2\.100/);assert.match(html,/target-key/);assert.match(html,/class="burn-point today"/);
  assert.match(html,/>2\.500<\/text>/,'scale grows to fit the target');
  assert.doesNotMatch(renderEnergyChart(days,{currentDate:day}),/energy-target/);
 });
@@ -115,4 +115,20 @@ test('Macro details rank the foods driving each macro, show energy share and nam
  assert.match(html,/Món đóng góp nhiều nhất/);assert.match(html,/Phở bò <span class="dial-pop-count">×2<\/span>/);assert.match(html,/Bữa trưa, tối/);assert.match(html,/<strong>23%<\/strong> năng lượng đã ghi đến từ chất béo/);
  assert.match(html,/Chưa có số liệu: &lt;b&gt;Trà sữa&lt;\/b&gt;/);assert.doesNotMatch(html,/<b>Trà sữa/);
  assert.match(renderMacroDials(macroProgress([],{})),/Chưa có món nào có số liệu chất béo/);
+});
+
+
+test('Daily protein bars and dashed target use grams, retain known zero and flag incomplete totals',()=>{
+ const data={WebMeals:[meal({protein:30}),meal({id:'unknown',protein:'',kcal:''}),meal({id:'zero',date:'2026-10-29',protein:0})],WebWorkouts:[]};
+ const days=energyDays(data,day),last=days.at(-1);
+ assert.equal(last.protein,30);assert.equal(last.proteinIncomplete,true);assert.equal(days.at(-2).protein,0);assert.equal(days[0].protein,null);
+ const html=renderEnergyChart(days,{target:2765,proteinTarget:140,currentDate:day});
+ assert.match(html,/class="energy-target"/);assert.doesNotMatch(html,/energy-target-label/);
+ assert.match(html,/class="protein-target"/);assert.match(html,/Protein · g/);
+ assert.equal((html.match(/class="protein-bar/g)||[]).length,2);
+ assert.match(html,/>30\*<\/text>/);assert.match(html,/>0<\/text>/);
+ assert.match(html,/<th scope="col">Protein \(g\)<\/th>/);
+ const proteinY=Number(html.match(/class="protein-target"[^>]*y1="([^"]+)"/)[1]);
+ const kcalY=Number(html.match(/class="energy-target"[^>]*y1="([^"]+)"/)[1]);
+ assert.ok(proteinY>=332&&proteinY<=438);assert.notEqual(proteinY,kcalY);
 });

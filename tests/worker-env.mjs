@@ -8,13 +8,14 @@ import { resetKeyCache, JWKS_URL } from '../worker/src/auth.js';
 // batch runs in one transaction like D1.
 class Stmt {
   constructor(db, sql, args = []) { this.db = db; this.sql = sql; this.args = args; }
+  bindArgs() { return /\?\d+/.test(this.sql) && this.args.length ? [Object.fromEntries(this.args.map((v,i)=>['?'+(i+1),v]))] : this.args; }
   bind(...args) { return new Stmt(this.db, this.sql, args); }
-  async first(col) { const row = this.db.prepare(this.sql).get(...this.args); return row ? (col ? row[col] : { ...row }) : null; }
-  async all() { return { results: this.db.prepare(this.sql).all(...this.args).map(r => ({ ...r })) }; }
+  async first(col) { const row = this.db.prepare(this.sql).get(...this.bindArgs()); return row ? (col ? row[col] : { ...row }) : null; }
+  async all() { return { results: this.db.prepare(this.sql).all(...this.bindArgs()).map(r => ({ ...r })) }; }
   async run() { return this._run(); }
   _run() {
-    if (/^\s*select/i.test(this.sql)) return { results: this.db.prepare(this.sql).all(...this.args), meta: { changes: 0 } };
-    const r = this.db.prepare(this.sql).run(...this.args); return { results: [], meta: { changes: Number(r.changes) } };
+    if (/^\s*select/i.test(this.sql)) return { results: this.db.prepare(this.sql).all(...this.bindArgs()), meta: { changes: 0 } };
+    const r = this.db.prepare(this.sql).run(...this.bindArgs()); return { results: [], meta: { changes: Number(r.changes) } };
   }
 }
 export class D1 {

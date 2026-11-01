@@ -12,6 +12,7 @@ on:
       - 'migration.js'
       - 'quick.js'
       - 'workout-kcal.js'
+      - 'walking.js'
       - 'reconcile.js'
       - 'media.js'
       - 'photo-retention.js'

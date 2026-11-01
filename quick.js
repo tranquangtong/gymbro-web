@@ -1,3 +1,4 @@
+import {applyWalkingSettings} from './walking.js';
 import {estimateWorkoutBatch} from './workout-kcal.js';
 import {norm,num,uid,validateRecord,setsOf} from './core.js';
 
@@ -101,7 +102,7 @@ export function compactWorkout(fields,{date}={}){
     if(kind!=='bodyweight'&&String(fields.kg??'').trim()==='')throw Error('Nhập kg cho bài tập.');
     r.sets_json=JSON.stringify(Array.from({length:count},()=>({weight_kg:kind==='bodyweight'?'':Number(fields.kg),reps:Number(fields.reps)})));
   }
-  return validateRecord('WebWorkouts',r);
+  return validateRecord('WebWorkouts',applyWalkingSettings(r,fields));
 }
 export function ensureWorkoutDay(existing,planned){
   for(const day of new Set(planned.map(r=>r.date))){const same=[...existing.filter(r=>r.date===day&&!r.deleted),...planned.filter(r=>r.date===day)];if(same.some(r=>r.kind==='rest')&&same.length>1)throw Error('Ngày này có mục nghỉ. Xóa mục nghỉ trước khi thêm bài tập (hoặc chọn ngày khác).');}
