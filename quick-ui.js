@@ -4,7 +4,7 @@ import {quotaMessage} from './errors.js';
 import {forgetExpiredPhotos} from './photo-retention.js';
 import {purgeLocalPhotoCache} from './local-extras.js';
 import {estimateWorkoutBatch,workoutWeight} from './workout-kcal.js';
-import {today,dateLabel,uid,active,latestProfile,num,MEALS,KINDS,setsOf} from './core.js';
+import {today,dateLabel,uid,active,latestProfile,num,norm,MEALS,KINDS,setsOf} from './core.js';
 import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,validateFood,makeRequest,requestPrompt,parseEstimate,needsMealEstimate} from './quick.js';
 import {compressPhoto,copyText,photoFile,downloadFile,labeledPhotoBlob,labeledPhotoFile,canCopyImages,canShareFiles,collageBlob} from './media.js';
 
@@ -18,10 +18,11 @@ export function createQuickUI(env){
   const field=(label,id,value='',type='text',extra='')=>`<label class="field">${label}<input id="${id}" type="${type}" value="${esc(value)}" ${extra}></label>`;
   const select=(label,id,values,value)=>`<label class="field">${label}<select id="${id}">${Object.entries(values).map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`;
   const frame=(title,body,subtitle='',compose=false)=>{
+    const focused=document.activeElement,focusId=focused?.id,selection=typeof focused?.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null,scroll=$('#quick-dialog .quick-content')?.scrollTop||0;
     dialog.classList.toggle('compose-dialog',compose);
     const split=compose?body.lastIndexOf('<div class="form-actions">'):-1,content=split<0?body:body.slice(0,split),footer=split<0?'':body.slice(split);
     dialog.innerHTML=`<div class="dialog-inner"><div class="dialog-header"><div><h2 id="quick-title">${title}</h2>${subtitle?`<p>${subtitle}</p>`:''}</div><button class="close-button" data-quick="close" aria-label="Đóng">${icon('close')}</button></div><div class="quick-content">${content}</div>${footer}<div id="quick-error" class="form-error" role="alert"></div></div>`;
-    if(!dialog.open){dialog.showModal();dialog.scrollTop=0;}
+    if(!dialog.open){dialog.showModal();dialog.scrollTop=0;}else{const content=$('#quick-dialog .quick-content');if(content)content.scrollTop=scroll;if(focusId&&/^[-a-zA-Z0-9_]+$/.test(focusId)){const field=$('#'+focusId);field?.focus?.({preventScroll:true});if(selection)try{field?.setSelectionRange?.(...selection);}catch{}}}
   };
   const table=type=>type==='meals'?'WebMeals':'WebWorkouts';
   async function foods(seed=false){const repo=getState().repo;if(!repo)return DEFAULT_FOODS;library=seed?await repo.seedFoods():await repo.loadFoods();if(!library.length&&(getState().mode!=='firebase'||repo.ownerUid===repo.uid))library=await repo.seedFoods();return library.length?library:DEFAULT_FOODS;}
@@ -47,10 +48,17 @@ export function createQuickUI(env){
     const chip=x=>btn('+ '+esc(x.name),'insert-exercise','chip-button',`data-exercise="${esc(x.key)}" title="${esc(x.name+' · '+KINDS[x.kind])}"`);
     return `<section class="exercise-picker" aria-label="Bài tập quen"><p class="section-label">Bài tập quen</p><div class="exercise-chips">${choices.slice(0,6).map(chip).join('')}</div><details class="exercise-library"><summary>Tất cả bài tập (${choices.length})</summary><div class="exercise-library-list">${choices.map(x=>`<div>${chip(x)}<small>${esc(KINDS[x.kind])}</small></div>`).join('')}</div></details></section>`;
   }
+  function renderNameSuggestions(id){
+    const meal=id==='compact-food',target=$(meal?'#food-suggestions':'#exercise-suggestions');if(!target)return;
+    const query=norm(meal?ctx.food:ctx.exercise),all=meal?(library.length?library:DEFAULT_FOODS):exerciseChoices(getState().data.WebWorkouts,ctx.date);
+    const matches=query?all.filter(x=>norm(x.name).includes(query)).slice(0,5):[];
+    target.hidden=!matches.length;
+    target.innerHTML=matches.map(x=>meal?btn(esc(x.name),'insert-food','suggestion-button',`data-id="${esc(x.id)}"`):btn(`<span>${esc(x.name)}</span><small>${esc(KINDS[x.kind])}</small>`,'insert-exercise','suggestion-button',`data-exercise="${esc(x.key)}"`)).join('');
+  }
   function drawCompose(){
     const meal=ctx.type==='meals',known=library.length?library:DEFAULT_FOODS,choices=exerciseChoices(getState().data.WebWorkouts,ctx.date),walking=ctx.kind==='cardio'&&isWalking(ctx.exercise);
-    const form=meal?`<div class="compact-fields meal-fields"><label class="field">Món ăn<input id="compact-food" list="food-options" value="${esc(ctx.food||'')}" placeholder="Chọn món quen hoặc nhập tên món"><datalist id="food-options">${known.map(f=>`<option value="${esc(f.name)}"></option>`).join('')}</datalist></label>${field('Khẩu phần','compact-amount',ctx.amount||1,'number','min="0.1" max="1000" step="0.1"')}</div>`:
-      `<div class="compact-fields workout-fields">${field('Bài tập','compact-exercise',ctx.exercise||'','text','list="exercise-options" placeholder="Chọn bài quen hoặc nhập tên bài"')}<datalist id="exercise-options">${choices.map(x=>`<option value="${esc(x.name)}">${esc(KINDS[x.kind])}</option>`).join('')}</datalist><div class="field-row workout-numbers">${ctx.kind==='cardio'?field('Phút','compact-duration',ctx.duration,'number','min="0.1" max="1440" step="0.1"')+(walking?field('Độ dốc (%)','compact-incline',ctx.incline??'','number','min="0" max="40" step="0.1"')+field('Tốc độ (kph)','compact-speed',ctx.speed??'','number','min="0.1" max="25" step="0.1"'):''):ctx.kind==='rest'?'':field('Set','compact-count',ctx.count||3,'number','min="1" max="50" step="1"')+field('Reps','compact-reps',ctx.reps||12,'number','min="1" max="1000" step="1"')+(ctx.kind==='bodyweight'?'':field(ctx.kind==='assisted'?'Kg trợ lực':'Kg','compact-kg',ctx.kg,'number','min="0" max="2000" step="0.1"'))}</div></div>`;
+    const form=meal?`<div class="compact-fields meal-fields"><div class="name-field-group"><label class="field">Món ăn<input id="compact-food" autocomplete="off" value="${esc(ctx.food||'')}" placeholder="Chọn món quen hoặc nhập tên món"></label><div id="food-suggestions" class="inline-suggestions" role="group" aria-label="Gợi ý món ăn" hidden></div></div>${field('Khẩu phần','compact-amount',ctx.amount||1,'number','min="0.1" max="1000" step="0.1"')}</div>`:
+      `<div class="compact-fields workout-fields"><div class="name-field-group">${field('Bài tập','compact-exercise',ctx.exercise||'','text','autocomplete="off" placeholder="Chọn bài quen hoặc nhập tên bài"')}<div id="exercise-suggestions" class="inline-suggestions" role="group" aria-label="Gợi ý bài tập" hidden></div></div><div class="field-row workout-numbers">${ctx.kind==='cardio'?field('Phút','compact-duration',ctx.duration,'number','min="0.1" max="1440" step="0.1"')+(walking?field('Độ dốc (%)','compact-incline',ctx.incline??'','number','min="0" max="40" step="0.1"')+field('Tốc độ (kph)','compact-speed',ctx.speed??'','number','min="0.1" max="25" step="0.1"'):''):ctx.kind==='rest'?'':field('Set','compact-count',ctx.count||3,'number','min="1" max="50" step="1"')+field('Reps','compact-reps',ctx.reps||12,'number','min="1" max="1000" step="1"')+(ctx.kind==='bodyweight'?'':field(ctx.kind==='assisted'?'Kg trợ lực':'Kg','compact-kg',ctx.kg,'number','min="0" max="2000" step="0.1"'))}</div></div>`;
     const photos=meal?`<details class="compose-food-library"><summary>Món quen &amp; thư viện</summary><div class="quick-foods">${known.slice(0,6).map(f=>btn('+ '+esc(f.name),'insert-food','chip-button',`data-id="${esc(f.id)}"`)).join('')}${btn('Thư viện món','library','text-button')}</div></details><div class="photo-tools"><label class="button upload-label">${icon('plus')}Thêm ảnh<input class="sr-only" type="file" id="meal-photo" accept="image/*" multiple></label><label class="button upload-label">${icon('camera')}Chụp ảnh<input class="sr-only" type="file" id="meal-camera" accept="image/*" capture="environment"></label><span class="subtle">Tối đa 3 ảnh · tự xóa sau 7 ngày</span></div><div class="photo-strip">${ctx.photos.map((p,i)=>`<figure><img src="${p.data_url}" alt="Ảnh bữa ăn ${i+1}"><button data-quick="remove-photo" data-index="${i}" aria-label="Bỏ ảnh ${i+1}">×</button></figure>`).join('')}</div>`:exercisePicker();
     frame(meal?'Ghi ăn uống':'Ghi tập luyện',`<div class="compose-meta">${field('Ngày','quick-date',ctx.date,'date')}${meal?select('Bữa','quick-meal',MEALS,ctx.meal):select('Loại bài','compact-kind',KINDS,ctx.kind||'strength')}</div>${form}${photos}<div id="quick-preview">${ctx.preview?preview(ctx.preview,ctx.type):''}</div><div class="form-actions">${btn('Xem trước','parse',ctx.preview?'':'primary')}${ctx.preview?btn('Lưu '+ctx.preview.length+' mục','save','primary'):''}${btn('Chi tiết','detailed','text-button')}</div>`,'',true);
   }
@@ -216,7 +224,7 @@ export function createQuickUI(env){
   document.addEventListener('click',e=>{const el=e.target.closest('[data-quick]');if(el){e.preventDefault();if(busy)return;Promise.resolve(action(el)).catch(error);}});
   dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
   dialog.addEventListener('input',e=>{
-    if(ctx?.view==='compose'){rememberCompose();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
+    if(ctx?.view==='compose'){rememberCompose();if(['compact-food','compact-exercise'].includes(e.target.id))renderNameSuggestions(e.target.id);if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
     if(e.target.id==='estimate-output'){estimate.text=e.target.value;rememberEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
     if(e.target.id==='session-minutes'&&estimate?.q){estimate.sessionMinutes=e.target.value;estimate.q=null;estimate.result=null;drawEstimate();$('#session-minutes')?.focus();}
   });

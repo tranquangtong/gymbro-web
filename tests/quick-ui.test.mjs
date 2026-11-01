@@ -95,3 +95,25 @@ test('Steep walking composer exposes minutes, incline and speed without any inpu
  for(const id of ['duration','incline','speed'])assert.match(c.dialog.innerHTML,new RegExp('id="compact-'+id+'"'));
  assert.doesNotMatch(c.dialog.innerHTML,/input-tabs|method-text|quick-text/);
 });
+
+
+test('Meal and exercise name suggestions stay inline with no native datalist popup',async t=>{
+ const c=composer(t);
+ await c.ui.open('meals');
+ assert.doesNotMatch(c.dialog.innerHTML,/<datalist| list=/);
+ const foodSuggestions={hidden:true,innerHTML:''};
+ c.values.set('#food-suggestions',foodSuggestions);c.values.set('#compact-food',{value:'chu'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ assert.equal(foodSuggestions.hidden,false);assert.match(foodSuggestions.innerHTML,/Chuối/);
+ c.click('insert-food',{id:'banana'});
+ assert.match(c.dialog.innerHTML,/id="compact-food"[^>]*value="Chuối"/);
+ c.values.clear();c.state.data.WebWorkouts=[{exercise:'Assisted pull up',kind:'assisted',date:'2026-10-31'}];
+ await c.ui.open('workouts');assert.doesNotMatch(c.dialog.innerHTML,/<datalist| list=/);
+ const exercises={hidden:true,innerHTML:''};
+ c.values.set('#exercise-suggestions',exercises);c.values.set('#compact-exercise',{value:'pull'});
+ c.dialogEvents.input({target:{id:'compact-exercise'}});
+ assert.equal(exercises.hidden,false);assert.match(exercises.innerHTML,/Assisted pull up/);
+ c.click('insert-exercise',{exercise:'assisted pull up|assisted'});
+ assert.match(c.dialog.innerHTML,/value="assisted" selected/);
+ for(const id of ['count','reps','kg'])assert.match(c.dialog.innerHTML,new RegExp('id="compact-'+id+'"'));
+});
