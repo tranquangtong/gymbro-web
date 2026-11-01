@@ -2,7 +2,7 @@
 // Every request (except /v1/health) carries a Firebase ID token. A user can
 // only touch their own rows; the verified admin may pass ?owner=<uid>.
 import { verifyIdToken, AuthError } from './auth.js';
-import { StoreError, assertKind, listRecords, changesSince, saveRecords, registerUser, listUsers, reconcile, savePhoto, getPhoto, purgeExpiredPhotos } from './store.js';
+import { StoreError, assertKind, listRecords, changesSince, saveRecords, registerUser, listUsers, reconcile, savePhoto, getPhoto, purgeExpiredPhotos, purgeDeletedRecords } from './store.js';
 
 const MAX_BODY = 512 * 1024;
 
@@ -69,7 +69,7 @@ export async function handle(request, env, { fetchImpl = fetch, now = Date.now()
       const body = await readJson(request);
       const owner = ownerFor(user, body.owner);
       assertKind(body.kind);
-      return json(await saveRecords(db, owner, body.kind, body.items), 200, headers);
+      return json(await saveRecords(db, owner, body.kind, body.items, now), 200, headers);
     }
     if (path === '/v1/changes' && request.method === 'GET') {
       const owner = ownerFor(user, q.get('owner'));
@@ -98,13 +98,15 @@ export async function handle(request, env, { fetchImpl = fetch, now = Date.now()
 }
 
 export async function scheduled(env, now = Date.now()) {
-  const removed = await purgeExpiredPhotos(env.DB, now);
-  console.log(`Removed ${removed} expired photos`);
-  return removed;
+  const photos = await purgeExpiredPhotos(env.DB, now);
+  const records = await purgeDeletedRecords(env.DB, now);
+  console.log(`Removed ${photos} expired photos and ${records} records deleted over 60 days ago`);
+  return { photos, records };
 }
 
 export default {
   fetch: (request, env) => handle(request, env),
-  // Daily cron (wrangler.toml [triggers]): delete photos older than 7 days.
+  // Daily cron (wrangler.toml [triggers]): delete photos older than 7 days and records
+  // soft-deleted more than 60 days ago.
   scheduled: (event, env, ctx) => ctx.waitUntil(scheduled(env, event.scheduledTime || Date.now()))
 };
