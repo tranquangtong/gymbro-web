@@ -3,13 +3,16 @@
 // - load() fetches a recent window of meals/workouts (plus all profile and archive rows),
 //   never the whole history; ensureRange() pages older dates in on demand.
 // - subscribe() polls /v1/changes instead of realtime listeners.
-// - Meal photos stay on this device (IndexedDB) and expire after 5 days.
+// - Meal photos are stored by the API for 7 days so every device sees them; a copy is cached
+//   on this device (IndexedDB) for fast, repeat viewing.
 import {SCHEMAS,emptyData,today,shiftDate,LocalRepository} from './core.js';
 import {cleanRecord} from './migration.js';
 import {DEFAULT_FOODS,cleanFood} from './quick.js';
 import {assertSession} from './access.js';
 import {isAdmin} from './firebase.js';
-import './local-extras.js';
+import {listLocalPhotos} from './local-extras.js';
+import {validatePhoto} from './media.js';
+import {photoExpired} from './photo-retention.js';
 
 export const WINDOW_DAYS=120;
 export const POLL_MS=45000;
@@ -53,7 +56,7 @@ export class CloudflareRepository{
       const from=this.loadedFrom&&!force?this.loadedFrom:shiftDate(today(),-this.windowDays),data=emptyData();data.Archive=[];
       const parts=await Promise.all([...DATED.map(k=>this.page(k,{from}).then(r=>[k,r])),...ALL.map(k=>this.page(k).then(r=>[k,r]))]);
       for(const [k,r] of parts)data[k]=r.rows;
-      this.seq=Math.min(...parts.map(([,r])=>r.seq));this.loadedFrom=from;this._cache=data;return data;
+      this.seq=Math.min(...parts.map(([,r])=>r.seq));this.loadedFrom=from;this._cache=data;this.uploadLocalPhotos().catch(()=>{});return data;
     }finally{this._loadTask=null;}})();
     return clone(await this._loadTask);
   }
@@ -116,9 +119,29 @@ export class CloudflareRepository{
   async loadFoods(){return (await this.page('FoodLibrary')).rows;}
   async seedFoods(){const now=new Date().toISOString();await this.write('FoodLibrary',DEFAULT_FOODS.map(f=>({record:cleanFood({...f,updated_at:now}),insertOnly:true})));return this.loadFoods();}
   async saveFood(food,{insertOnly=false}={}){const clean=cleanFood(food);await this.write('FoodLibrary',[{record:clean,expected:insertOnly?undefined:food._revision,insertOnly}]);}
-  // Photos never leave the device on this backend.
-  async savePhoto(photo){this.check();return this.photos.savePhoto(photo);}
-  async getPhoto(id){this.check();return this.photos.getPhoto(id);}
+  async savePhoto(photo){
+    this.check();await this.api('/v1/photos',{method:'POST',body:{photo}});
+    try{await this.photos.savePhoto(photo);}catch{}// cache only; the API copy is the shared one
+  }
+  async getPhoto(id){
+    this.check();
+    try{return await this.photos.getPhoto(id);}catch(e){if(e.code==='photo/expired')throw e;}
+    const photo=validatePhoto(await this.api('/v1/photos/'+encodeURIComponent(id)));
+    try{await this.photos.savePhoto(photo);}catch{}
+    return photo;
+  }
+  // Photos taken before cloud sync existed only live in this device's cache: upload them once.
+  async uploadLocalPhotos(){
+    if(this.ownerUid!==this.uid||this._uploading)return 0;this._uploading=true;
+    const doneKey='gymbro.cf.uploaded.'+this.ownerUid;let done=[];try{done=JSON.parse(globalThis.localStorage?.getItem(doneKey)||'[]');}catch{}
+    const seen=new Set(done);let uploaded=0;
+    for(const photo of await listLocalPhotos(this.photos.key+'/').catch(()=>[])){
+      if(seen.has(photo.id)||photoExpired(photo))continue;
+      try{await this.api('/v1/photos',{method:'POST',body:{photo}});seen.add(photo.id);uploaded++;}catch(e){if(e.code==='photo/expired')seen.add(photo.id);}
+    }
+    try{globalThis.localStorage?.setItem(doneKey,JSON.stringify([...seen].slice(-200)));}catch{}
+    return uploaded;
+  }
   async importBundle(bundle,onProgress=()=>{}){
     let inserted=0,skipped=0,done=0;const total=TABLES.reduce((n,t)=>n+(bundle.data[t]||[]).length,0);
     for(const table of TABLES){const rows=(bundle.data[table]||[]).map(r=>cleanRecord(table,r));

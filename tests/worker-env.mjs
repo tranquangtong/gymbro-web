@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle } from '../worker/src/index.js';
 import { resetKeyCache, JWKS_URL } from '../worker/src/auth.js';
@@ -18,7 +18,7 @@ class Stmt {
   }
 }
 export class D1 {
-  constructor() { this.db = new DatabaseSync(':memory:'); this.db.exec(readFileSync(new URL('../worker/migrations/0001_init.sql', import.meta.url), 'utf8')); }
+  constructor() { this.db = new DatabaseSync(':memory:'); const dir = new URL('../worker/migrations/', import.meta.url); for (const f of readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) this.db.exec(readFileSync(new URL(f, dir), 'utf8')); }
   prepare(sql) { return new Stmt(this.db, sql); }
   async batch(stmts) { this.db.exec('BEGIN'); try { const out = stmts.map(s => s._run()); this.db.exec('COMMIT'); return out; } catch (e) { this.db.exec('ROLLBACK'); throw e; } }
 }

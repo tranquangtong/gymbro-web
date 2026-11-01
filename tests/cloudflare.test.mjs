@@ -63,3 +63,11 @@ test('food library seeds once and import is insert-only', async () => {
 test('migration diff names missing, changed and extra IDs', () => {
   assert.deepEqual(diffRows([{ id: 'a', updated_at: '1' }, { id: 'b', updated_at: '2' }], [{ id: 'b', updated_at: '3' }, { id: 'c', updated_at: '1' }]), { missing: ['a'], changed: ['b'], extra: ['c'] });
 });
+
+test('a photo saved on one device opens on another through the API', async () => {
+  const e = env(), phone = await repoFor(e), laptop = await repoFor(e);
+  const photo = { id: 'ph1', meal_id: 'm1', data_url: 'data:image/jpeg;base64,AAAA', created_at: new Date().toISOString() };
+  await phone.savePhoto(photo);
+  assert.deepEqual(await laptop.getPhoto('ph1'), photo);
+  await assert.rejects(() => laptop.getPhoto('missing'), e => e.code === 'photo/not-found');
+});

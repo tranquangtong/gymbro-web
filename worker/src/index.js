@@ -2,7 +2,7 @@
 // Every request (except /v1/health) carries a Firebase ID token. A user can
 // only touch their own rows; the verified admin may pass ?owner=<uid>.
 import { verifyIdToken, AuthError } from './auth.js';
-import { StoreError, assertKind, listRecords, changesSince, saveRecords, registerUser, listUsers, reconcile } from './store.js';
+import { StoreError, assertKind, listRecords, changesSince, saveRecords, registerUser, listUsers, reconcile, savePhoto, getPhoto, purgeExpiredPhotos } from './store.js';
 
 const MAX_BODY = 512 * 1024;
 
@@ -75,6 +75,16 @@ export async function handle(request, env, { fetchImpl = fetch, now = Date.now()
       const owner = ownerFor(user, q.get('owner'));
       return json(await changesSince(db, owner, q.get('since'), q.get('limit')), 200, headers);
     }
+    if (path === '/v1/photos' && request.method === 'POST') {
+      const body = await readJson(request);
+      const owner = ownerFor(user, body.owner);
+      return json(await savePhoto(db, owner, body.photo, now), 200, headers);
+    }
+    const photoPath = path.match(/^\/v1\/photos\/([^/]+)$/);
+    if (photoPath && request.method === 'GET') {
+      const owner = ownerFor(user, q.get('owner'));
+      return json(await getPhoto(db, owner, decodeURIComponent(photoPath[1]), now), 200, headers);
+    }
     if (path === '/v1/reconcile' && request.method === 'GET') {
       const owner = ownerFor(user, q.get('owner'));
       return json(await reconcile(db, owner), 200, headers);
@@ -87,4 +97,14 @@ export async function handle(request, env, { fetchImpl = fetch, now = Date.now()
   }
 }
 
-export default { fetch: (request, env) => handle(request, env) };
+export async function scheduled(env, now = Date.now()) {
+  const removed = await purgeExpiredPhotos(env.DB, now);
+  console.log(`Removed ${removed} expired photos`);
+  return removed;
+}
+
+export default {
+  fetch: (request, env) => handle(request, env),
+  // Daily cron (wrangler.toml [triggers]): delete photos older than 7 days.
+  scheduled: (event, env, ctx) => ctx.waitUntil(scheduled(env, event.scheduledTime || Date.now()))
+};

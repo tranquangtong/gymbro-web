@@ -4,6 +4,8 @@ import { cleanRecord, validateArchive } from '../../migration.js';
 import { validateRecord } from '../../core.js';
 import { cleanFood, validateFood } from '../../quick.js';
 import { fingerprint } from '../../reconcile.js';
+import { validatePhoto } from '../../media.js';
+import { PHOTO_RETENTION_MS } from '../../photo-retention.js';
 
 export const DATED_KINDS = ['WebMeals', 'WebWorkouts', 'WebProfile', 'Archive'];
 export const KINDS = [...DATED_KINDS, 'FoodLibrary'];
@@ -135,4 +137,27 @@ export async function reconcile(db, owner) {
     out[kind] = { count: results.length, hash: await fingerprint(results) };
   }
   return out;
+}
+
+// Meal photos: immutable once stored, readable by the owner (or admin) on any device for 7 days.
+export async function savePhoto(db, owner, photo, now = Date.now()) {
+  let p;
+  try { p = validatePhoto(photo); } catch (e) { throw new StoreError(e.message || 'Ảnh không hợp lệ.'); }
+  const created = Date.parse(p.created_at);
+  // Never trust a client clock to extend retention: at most 7 days from now.
+  const expires = Math.min(Number.isFinite(created) ? created + PHOTO_RETENTION_MS : Infinity, now + PHOTO_RETENTION_MS);
+  if (expires <= now) throw new StoreError('Ảnh đã quá hạn lưu 7 ngày.', 410, 'photo/expired');
+  const r = await db.prepare('INSERT INTO photos (owner_uid, id, meal_id, data_url, created_at, expires_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (owner_uid, id) DO NOTHING')
+    .bind(owner, p.id, p.meal_id, p.data_url, p.created_at, expires).run();
+  return { saved: (r.meta?.changes ?? 0) > 0, expires_at: expires };
+}
+export async function getPhoto(db, owner, id, now = Date.now()) {
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(String(id || ''))) throw new StoreError('ID ảnh không hợp lệ.');
+  const row = await db.prepare('SELECT id, meal_id, data_url, created_at, expires_at FROM photos WHERE owner_uid = ?1 AND id = ?2 AND expires_at > ?3').bind(owner, id, now).first();
+  if (!row) throw new StoreError('Ảnh không còn được lưu (ảnh chỉ giữ 7 ngày).', 404, 'photo/not-found');
+  return { id: row.id, meal_id: row.meal_id, data_url: row.data_url, created_at: row.created_at };
+}
+export async function purgeExpiredPhotos(db, now = Date.now()) {
+  const r = await db.prepare('DELETE FROM photos WHERE expires_at <= ?1').bind(now).run();
+  return r.meta?.changes ?? 0;
 }

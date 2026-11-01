@@ -93,3 +93,26 @@ test('reconcile fingerprints match the shared client-side fingerprint', async ()
   const r = await call(e, 'GET', '/v1/reconcile', { tok: a });
   assert.equal(r.body.WebMeals.count, 2); assert.equal(r.body.WebMeals.hash, await fingerprint(rows)); assert.equal(r.body.FoodLibrary.count, 0);
 });
+
+test('photos are shared across devices for 7 days, scoped by owner, and purged by the daily job', async () => {
+  const { scheduled } = await import('../worker/src/index.js');
+  const e = env(), a = await token(), b = await token({ sub: 'user-b', email: 'b@example.com' });
+  const NOW_ISO = new Date(T * 1000).toISOString();
+  const photo = { id: 'p1', meal_id: 'm1', data_url: 'data:image/jpeg;base64,AAAA', created_at: NOW_ISO };
+  const saved = await call(e, 'POST', '/v1/photos', { tok: a, body: { photo } });
+  assert.equal(saved.status, 200); assert.equal(saved.body.saved, true); assert.equal(saved.body.expires_at, T * 1000 + 7 * 86400e3);
+  assert.equal((await call(e, 'POST', '/v1/photos', { tok: a, body: { photo: { ...photo, data_url: 'data:image/jpeg;base64,BBBB' } } })).body.saved, false, 'photos are immutable');
+  const got = await call(e, 'GET', '/v1/photos/p1', { tok: a });
+  assert.deepEqual(got.body, photo);
+  assert.equal((await call(e, 'GET', '/v1/photos/p1', { tok: b })).status, 404, 'another user cannot see it');
+  assert.equal((await call(e, 'GET', '/v1/photos/p1?owner=user-a', { tok: b })).status, 403);
+  assert.equal((await call(e, 'GET', '/v1/photos/p1?owner=user-a', { tok: await token({ sub: 'admin', email: ADMIN }) })).status, 200);
+  const old = await call(e, 'POST', '/v1/photos', { tok: a, body: { photo: { ...photo, id: 'old', created_at: new Date((T - 8 * 86400) * 1000).toISOString() } } });
+  assert.equal(old.status, 410);
+  const future = await call(e, 'POST', '/v1/photos', { tok: a, body: { photo: { ...photo, id: 'fut', created_at: '2099-01-01T00:00:00Z' } } });
+  assert.equal(future.body.expires_at, T * 1000 + 7 * 86400e3, 'client clock cannot extend retention');
+  assert.equal((await call(e, 'POST', '/v1/photos', { tok: a, body: { photo: { ...photo, id: 'bad', data_url: 'data:image/png;base64,AAAA' } } })).status, 400);
+  assert.equal(await scheduled(e, T * 1000 + 6 * 86400e3), 0);
+  assert.equal(await scheduled(e, T * 1000 + 7 * 86400e3 + 1), 2);
+  assert.equal(e.DB.db.prepare('SELECT count(*) n FROM photos').get().n, 0);
+});
