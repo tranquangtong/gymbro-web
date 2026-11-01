@@ -9,7 +9,7 @@ import {compressPhoto,copyText,photoFile,downloadFile,labeledPhotoBlob,labeledPh
 
 export function createQuickUI(env){
   const {getState,esc,fmt,icon,toast,writable,reload,render,saveMessage}=env,$=s=>document.querySelector(s);
-  let ctx=null,estimate=null,library=[],drafts=new Map(),busy=false;
+  let ctx=null,estimate=null,library=[],drafts=new Map(),pendingPhotoDrafts=new Map(),busy=false;
   const dialog=document.createElement('dialog');dialog.id='quick-dialog';dialog.setAttribute('aria-labelledby','quick-title');document.body.append(dialog);
   const scope=()=>{const s=getState();return s.mode+':'+(s.repo?.ownerUid||s.repo?.key||'none');};
   const error=e=>{const message=quotaMessage(e)||e.message||String(e),target=$('#quick-error');if(target)target.textContent=(e.operation==='photo'?'Tải ảnh: ':'')+message;else toast(message,true);};
@@ -124,20 +124,36 @@ export function createQuickUI(env){
   }
   async function saveFood(){scopeGuard(ctx.scope);const f={...ctx.food,name:$('#food-name').value.trim(),serving_label:$('#food-serving').value.trim(),aliases:$('#food-aliases').value.split(',').map(x=>x.trim()).filter(Boolean),source:$('#food-source').value,source_note:$('#food-note').value.trim(),updated_at:new Date().toISOString()};for(const k of ['kcal','protein','carbs','fat'])f[k]=$('#food-'+k).value===''?null:Number($('#food-'+k).value);f.serving_g=$('#food-grams').value===''?null:Number($('#food-grams').value);validateFood(f);await getState().repo.saveFood(f);toast('Đã lưu món vào thư viện.');await showLibrary();}
   async function showPhotos(id){
-    if(!writable())return;const s=getState(),r=s.data.WebMeals.find(r=>r.id===id&&!r.deleted);if(!r)throw Error('Không tìm thấy món ăn.');ctx={view:'photos',scope:scope(),record:r,photos:[]};frame('Ảnh · '+esc(r.food),'<p>Đang tải ảnh…</p>');const results=await Promise.allSettled((r.photo_ids||[]).map(id=>s.repo.getPhoto(id)));if(ctx?.view!=='photos'||ctx?.record?.id!==id)return;ctx.photos=results.filter(x=>x.status==='fulfilled').map(x=>x.value);const failed=results.find(x=>x.status==='rejected'&&!['photo/expired','photo/not-found'].includes(x.reason?.code));if(!failed)ctx.record={...ctx.record,photo_ids:ctx.photos.map(p=>p.id)};drawPhotos();if(failed)error(failed.reason);
+    if(!writable())return;const s=getState(),r=s.data.WebMeals.find(r=>r.id===id&&!r.deleted);if(!r)throw Error('Không tìm thấy món ăn.');ctx={view:'photos',scope:scope(),record:r,photos:[],pendingPhotos:pendingPhotoDrafts.get(scope()+':'+id)||[]};frame('Ảnh · '+esc(r.food),'<p>Đang tải ảnh…</p>');const results=await Promise.allSettled((r.photo_ids||[]).map(id=>s.repo.getPhoto(id)));if(ctx?.view!=='photos'||ctx?.record?.id!==id)return;ctx.photos=results.filter(x=>x.status==='fulfilled').map(x=>x.value);const failed=results.find(x=>x.status==='rejected'&&!['photo/expired','photo/not-found'].includes(x.reason?.code));if(!failed)ctx.record={...ctx.record,photo_ids:ctx.photos.map(p=>p.id)};drawPhotos();if(failed)error(failed.reason);
   }
-  function drawPhotos(){frame('Ảnh · '+esc(ctx.record.food),`${!ctx.photos.length?'<p class="form-note">Chưa có ảnh hoặc ảnh cũ đã hết hạn lưu 7 ngày.</p>':''}<div class="photo-strip large">${ctx.photos.map((p,i)=>`<figure><img src="${p.data_url}" alt="Ảnh ${i+1} của ${esc(ctx.record.food)}">${btn('Tải ảnh','download-entry-photo','',`data-index="${i}"`)}${btn('Bỏ ảnh','unlink-photo','',`data-index="${i}"`)}</figure>`).join('')}</div><div class="photo-tools"><label class="button upload-label">${icon('plus')}Thêm ảnh<input class="sr-only" type="file" id="existing-photo" accept="image/*" multiple></label><label class="button upload-label">${icon('camera')}Chụp ảnh<input class="sr-only" type="file" id="existing-camera" accept="image/*" capture="environment"></label></div><p class="form-note">Ảnh chỉ giữ 7 ngày rồi tự xóa. Nhật ký và macro vẫn giữ nguyên. Tối đa 3 ảnh nén/món.</p>`);}
+  function drawPhotos(){frame('Ảnh · '+esc(ctx.record.food),`${!ctx.photos.length&&!ctx.pendingPhotos?.length?'<p class="form-note">Chưa có ảnh hoặc ảnh cũ đã hết hạn lưu 7 ngày.</p>':''}<div class="photo-strip large">${ctx.photos.map((p,i)=>`<figure><img src="${p.data_url}" alt="Ảnh ${i+1} của ${esc(ctx.record.food)}">${btn('Tải ảnh','download-entry-photo','',`data-index="${i}"`)}${btn('Bỏ ảnh','unlink-photo','',`data-index="${i}"`)}</figure>`).join('')}</div>${ctx.pendingPhotos?.length?`<section class="pending-photos"><p class="form-note">${ctx.pendingPhotos.length} ảnh đang chờ lưu lên máy chủ. Ảnh được giữ trong tab này; chưa tải lại trang.</p><div class="photo-strip">${ctx.pendingPhotos.map(p=>`<figure><img src="${p.data_url}" alt="Ảnh chờ tải lên"></figure>`).join('')}</div>${btn('Thử lại tải ảnh','retry-photos','primary')}${btn('Bỏ ảnh chờ','discard-pending-photos','text-button')}</section>`:''}<div class="photo-tools"><label class="button upload-label">${icon('plus')}Thêm ảnh<input class="sr-only" type="file" id="existing-photo" accept="image/*" multiple></label><label class="button upload-label">${icon('camera')}Chụp ảnh<input class="sr-only" type="file" id="existing-camera" accept="image/*" capture="environment"></label></div><p class="form-note">Ảnh chỉ giữ 7 ngày rồi tự xóa. Nhật ký và macro vẫn giữ nguyên. Tối đa 3 ảnh nén/món.</p>`);}
+  async function flushExistingPhotos(target){
+    scopeGuard(target.scope);const repo=getState().repo,photos=[...target.pendingPhotos];
+    if(!photos.length)return;
+    for(const p of photos)await repo.savePhoto(p);
+    scopeGuard(target.scope);
+    const r={...target.record,photo_ids:[...new Set([...(target.record.photo_ids||[]),...photos.map(p=>p.id)])],updated_at:new Date().toISOString(),_originalUpdatedAt:target.record.updated_at};
+    await repo.saveMany('WebMeals',[r]);
+    target.record={...r,_revision:r.updated_at};target.photos.push(...photos);target.pendingPhotos=[];pendingPhotoDrafts.delete(target.scope+':'+r.id);
+    if(ctx===target&&dialog.open)drawPhotos();toast('Đã lưu ảnh.');
+    try{await reload();render();}catch(e){toast('Đã lưu ảnh, nhưng chưa làm mới được nhật ký: '+e.message,true);}
+  }
   async function addPhotos(files){
     const isExisting=ctx.view==='photos',target=ctx,expected=ctx.scope;rememberCompose();if(!files?.length)return;
-    const existing=ctx.photos||[];if(existing.length+files.length>3)throw Error('Tối đa 3 ảnh cho mỗi món.');busy=true;lock(true);
+    const existing=[...(ctx.photos||[]),...(ctx.pendingPhotos||[])];if(existing.length+files.length>3)throw Error('Tối đa 3 ảnh cho mỗi món.');busy=true;lock(true);
     try{const photos=await Promise.all([...files].map(file=>compressPhoto(file,isExisting?target.record.id:'pending')));scopeGuard(expected);if(ctx!==target)throw Error('Màn hình đã thay đổi. Thêm ảnh lại.');
-      if(isExisting){for(const p of photos)await getState().repo.savePhoto(p);const r={...target.record,photo_ids:[...(target.record.photo_ids||[]),...photos.map(p=>p.id)],updated_at:new Date().toISOString(),_originalUpdatedAt:target.record.updated_at};await getState().repo.saveMany('WebMeals',[r]);await reload();render();ctx.record=getState().data.WebMeals.find(x=>x.id===r.id);ctx.photos.push(...photos);drawPhotos();toast('Đã lưu ảnh.');}
+      if(isExisting){target.pendingPhotos=[...(target.pendingPhotos||[]),...photos];pendingPhotoDrafts.set(target.scope+':'+target.record.id,target.pendingPhotos);await flushExistingPhotos(target);}
       else{ctx.photos.push(...photos);drawCompose();}
-    }finally{busy=false;lock(false);}
+    }catch(e){if(isExisting&&ctx===target&&dialog.open)drawPhotos();e.operation='photo';throw e;}finally{busy=false;lock(false);}
   }
   async function action(el){
     const a=el.dataset.quick;if(ctx?.view==='estimate'&&$('#estimate-output'))estimate.text=$('#estimate-output').value;if(busy&&a!=='close')return;
     if(a==='close')return close();
+    if(a==='discard-pending-photos'&&ctx?.view==='photos'){ctx.pendingPhotos=[];pendingPhotoDrafts.delete(ctx.scope+':'+ctx.record.id);return drawPhotos();}
+    if(a==='retry-photos'&&ctx?.view==='photos'){
+      const target=ctx;busy=true;lock(true);
+      try{await flushExistingPhotos(target);}catch(e){if(ctx===target&&dialog.open)drawPhotos();e.operation='photo';throw e;}finally{busy=false;lock(false);}return;
+    }
     if(a==='method-text'||a==='method-form'){rememberCompose();ctx.method=a==='method-text'?'text':'form';ctx.preview=null;return drawCompose();}
     if(a==='parse')return parseCompose();if(a==='save')return saveCompose();
     if(a==='detailed'){const type=ctx.type;rememberCompose();dialog.close();return env.openDetailed(table(type),null,{date:ctx.date,meal:ctx.meal});}
@@ -190,14 +206,16 @@ export function createQuickUI(env){
     if(e.target.id==='estimate-output'){estimate.text=e.target.value;rememberEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
     if(e.target.id==='session-minutes'&&estimate?.q){estimate.sessionMinutes=e.target.value;estimate.q=null;estimate.result=null;drawEstimate();$('#session-minutes')?.focus();}
   });
-  dialog.addEventListener('change',e=>{if(e.target.id==='estimate-result-file'){const file=e.target.files?.[0];if(!file)return;if(file.size>200000)return error(Error('File kết quả tối đa 200 KB.'));const target=estimate;file.text().then(text=>{if(estimate!==target||ctx?.view!=='estimate')return;estimate.text=text;estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();$('#estimate-output').value=text;rememberEstimate();return parseOutput();}).catch(error);return;}if(['meal-photo','meal-camera','existing-photo','existing-camera'].includes(e.target.id))addPhotos(e.target.files).catch(error);if(e.target.id==='compact-exercise'&&ctx?.view==='compose'&&ctx.type==='workouts'){
+  dialog.addEventListener('change',e=>{if(e.target.id==='estimate-result-file'){const file=e.target.files?.[0];if(!file)return;if(file.size>200000)return error(Error('File kết quả tối đa 200 KB.'));const target=estimate;file.text().then(text=>{if(estimate!==target||ctx?.view!=='estimate')return;estimate.text=text;estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();$('#estimate-output').value=text;rememberEstimate();return parseOutput();}).catch(error);return;}if(['meal-photo','meal-camera','existing-photo','existing-camera'].includes(e.target.id)){const files=[...(e.target.files||[])];e.target.value='';addPhotos(files).catch(error);}if(e.target.id==='compact-exercise'&&ctx?.view==='compose'&&ctx.type==='workouts'){
     rememberCompose();const matches=exerciseChoices(getState().data.WebWorkouts,ctx.date).filter(x=>x.name.toLocaleLowerCase()===ctx.exercise.trim().toLocaleLowerCase());
     if(matches.length===1){Object.assign(ctx,exerciseForm(matches[0]),{preview:null});drawCompose();}
   }if(e.target.id==='compact-kind'){rememberCompose();drawCompose();}});
   function purgeMemoryPhotos(){
     if(busy)return;
     if(ctx?.view==='compose')rememberCompose();
+    for(const [key,photos] of pendingPhotoDrafts){const fresh=forgetExpiredPhotos(photos);if(fresh.length)pendingPhotoDrafts.set(key,fresh);else pendingPhotoDrafts.delete(key);}
     let redraw=false;
+    if(ctx?.view==='photos'&&ctx.pendingPhotos)ctx.pendingPhotos=forgetExpiredPhotos(ctx.pendingPhotos);
     for(const draft of new Set([...drafts.values(),ctx,estimate])){
       if(!draft?.photos)continue;const fresh=forgetExpiredPhotos(draft.photos);
       if(fresh.length!==draft.photos.length){draft.photos=fresh;if(draft.preview)draft.preview=null;if(draft===ctx||draft===estimate)redraw=true;}
