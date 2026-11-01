@@ -150,9 +150,13 @@ main:focus{outline:none}
 .plate-labels>div{flex:var(--kcal) 1 0;min-width:6px;overflow:hidden;white-space:nowrap;line-height:1.35}
 .plate-labels strong{display:block;color:var(--ink);font-weight:600}
 .energy-hero .form-note{margin:12px 0 0}
-.dashboard-quick-actions{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 28px}
-.quick-log-button{min-height:56px;min-width:200px;font-size:17px;border-radius:14px;border:0}
-.quick-log-button svg{width:22px;height:22px}
+/* Keep logging within thumb reach, with room to scroll the last entry clear. */
+.floating-log-actions{position:fixed;right:max(32px,env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));z-index:6;display:flex;justify-content:flex-end;gap:12px;max-width:calc(100vw - 64px)}
+.floating-log-button{min-height:56px;padding:14px 22px;border:0;border-radius:999px;font-size:17px;white-space:nowrap;box-shadow:var(--shadow)}
+.floating-log-button svg{width:22px;height:22px;flex-shrink:0}
+.floating-log-button:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+main:has(.floating-log-actions){padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+body:has(.floating-log-actions) .toast,body:has(.floating-log-actions) .update-banner{bottom:calc(96px + env(safe-area-inset-bottom))}
 .workout-log-button{background:var(--gym);color:var(--gym-ink)}
 .workout-log-button:hover{background:var(--gym);filter:brightness(1.05)}
 .dashboard-overview{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(260px,1fr);gap:20px;align-items:stretch}
@@ -427,8 +431,10 @@ dialog::backdrop{background:var(--scrim)}
   .barbell-plates{height:116px}
   .plate{height:116px;border-radius:6px}
   .plate-labels{font-size:12px}
-  .dashboard-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .quick-log-button{min-width:0;padding:12px 8px;font-size:16px}
+  .floating-log-actions{right:calc(16px + env(safe-area-inset-right));left:calc(16px + env(safe-area-inset-left));bottom:calc(84px + env(safe-area-inset-bottom));gap:10px;max-width:none}
+  .floating-log-button{min-width:0;padding:14px 18px;font-size:15px}
+  .floating-log-actions:has(.floating-log-button:nth-child(2)) .floating-log-button{flex:1;padding-inline:12px}
+  body:has(.floating-log-actions) .toast,body:has(.floating-log-actions) .update-banner{bottom:calc(156px + env(safe-area-inset-bottom))}
   .macro-dials{gap:6px}
   .macro-dial h3{font-size:13px;margin-bottom:6px;white-space:nowrap}
   .dial-value strong{font-size:22px}
