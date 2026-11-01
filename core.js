@@ -6,7 +6,7 @@ export const SCHEMAS = {
 };
 export const MEALS = { breakfast:'Bữa sáng', lunch:'Bữa trưa', dinner:'Bữa tối', snack:'Bữa phụ' };
 export const KINDS = { strength:'Tạ ngoài', assisted:'Có trợ lực', bodyweight:'Trọng lượng cơ thể', cardio:'Cardio', rest:'Ngày nghỉ' };
-export const EXERCISES = ['Kneeling easy chin-up','Lat pulldown','Reverse grip lat pulldown','Seated cable row','Incline bench press','Chest press','Dumbbell shoulder press','Lateral raise','Biceps curl','Triceps pushdown','Leg press','Leg curl','Leg extension','Squat','Đi bộ','Đạp xe'];
+export const EXERCISES = ['Kneeling easy chin-up','Lat pulldown','Reverse grip lat pulldown','Seated cable row','Incline bench press','Chest press','Dumbbell shoulder press','Lateral raise','Biceps curl','Triceps pushdown','Leg press','Leg curl','Leg extension','Squat','Steep walking','Đi bộ','Đạp xe'];
 export const uid = () => globalThis.crypto.randomUUID();
 export const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:TIMEZONE,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 export function shiftDate(date, days) { const d=new Date(date+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); }

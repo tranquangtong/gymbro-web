@@ -12,7 +12,7 @@ export function exerciseChoices(rows=[],date='9999-12-31'){
   }
   for(const name of EXERCISES){
     if(seenNames.has(norm(name)))continue;
-    const kind=name==='Kneeling easy chin-up'?'assisted':['Đi bộ','Đạp xe'].includes(name)?'cardio':'strength';
+    const kind=name==='Kneeling easy chin-up'?'assisted':['Steep walking','Đi bộ','Đạp xe'].includes(name)?'cardio':'strength';
     const key=norm(name)+'|'+kind;choices.set(key,{key,name,kind,recent:false});
   }
   return [...choices.values()];

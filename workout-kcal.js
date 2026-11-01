@@ -1,3 +1,4 @@
+import {walkingSettings} from './walking.js';
 import {num,norm,setsOf,latestProfile} from './core.js';
 const round=n=>Math.round((n+1e-9)*10)/10,clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 export const workoutWeight=(profiles,date)=>num(latestProfile(profiles||[],date).weight_kg)??num(latestProfile(profiles||[]).weight_kg);
@@ -27,9 +28,8 @@ function loadFactor(row,set,p,weight){
  return clamp(repsFactor*load*(volume>0?clamp(.96+volume*.018,.94,1.12):1),.85,1.35);
 }
 function cardioMet(row){
- const raw=String(row.exercise||'')+' '+String(row.notes||''),t=norm(raw),speed=Number(raw.match(/(\d+(?:[.,]\d+)?)\s*(?:kph|km\/h|kmh)\b/i)?.[1]?.replace(',','.'))||0;
- const grade=Number(raw.match(/(\d+(?:[.,]\d+)?)\s*%/)?.[1]?.replace(',','.'))||0;
- if(/walk|di bo|treadmill/.test(t))return speed>0&&grade>0?(0.1*speed*1000/60+1.8*speed*1000/60*grade/100+3.5)/3.5:speed>=6.4?5.5:speed>=5.6?4.8:speed>=4.5?3.8:speed>0?3:grade>0?4.5:3.8;
+ const raw=String(row.exercise||'')+' '+String(row.notes||''),t=norm(raw),settings=walkingSettings(row),speed=Number(settings.speed)||0,grade=Number(settings.incline)||0;
+ if(/walk|di bo|treadmill/.test(t))return speed>0&&settings.incline!==''?(0.1*speed*1000/60+1.8*speed*1000/60*grade/100+3.5)/3.5:speed>=6.4?5.5:speed>=5.6?4.8:speed>=4.5?3.8:speed>0?3:grade>0?4.5:3.8;
  if(/bike|cycling|bicycle|dap xe/.test(t)){
   const watts=Number(raw.match(/(\d+(?:[.,]\d+)?)\s*(?:watts?|w)\b/i)?.[1]?.replace(',','.'))||0;
   if(watts>0)return [[30,3.5],[50,4],[60,5],[80,5.8],[100,6],[125,6.8],[150,8],[199,10.3],[229,10.8],[250,12.5],[305,13.8],[Infinity,16.3]].find(([max])=>watts<=max)[1];

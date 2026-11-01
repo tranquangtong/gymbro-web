@@ -19,7 +19,7 @@ test('New meal and workout composers default to compact entry, retaining selecte
  for(const type of ['meals','workouts'])await t.test(type,async t=>{
   const c=composer(t,{['gymbro.quick.firebase:test.'+type]:JSON.stringify({method:'text',text:'',food:'Chuối',amount:2,exercise:'Lat pulldown',kg:40})});
   await c.ui.open(type);
-  assert.match(c.dialog.innerHTML,/class="button selected" data-quick="method-form"/);
+  assert.doesNotMatch(c.dialog.innerHTML,/method-form|method-text|input-tabs/);
   assert.match(c.dialog.innerHTML,/id="quick-date" type="date" value="2026-11-01"/);
   assert.doesNotMatch(c.dialog.innerHTML,/id="quick-text"/);
   assert.match(c.dialog.innerHTML,type==='meals'?/id="compact-food"[^>]*value="Chuối"/:/id="compact-exercise"[^>]*value="Lat pulldown"/);
@@ -29,9 +29,9 @@ test('New meal and workout composers default to compact entry, retaining selecte
 test('Unfinished text and explicit text shortcuts remain usable after changing the default',async t=>{
  const c=composer(t,{'gymbro.quick.firebase:test.workouts':JSON.stringify({method:'text',text:'Lat pulldown 40kg 3x12'})});
  await c.ui.open('workouts');
- assert.match(c.dialog.innerHTML,/id="quick-text"[^>]*>Lat pulldown 40kg 3x12/);
+ assert.match(c.dialog.innerHTML,/id="compact-exercise"[^>]*value="Lat pulldown"/);assert.match(c.dialog.innerHTML,/id="compact-kg"[^>]*value="40"/);
  await c.ui.open('meals',{text:'Chuối'});
- assert.match(c.dialog.innerHTML,/id="quick-text"[^>]*>Chuối/);
+ assert.match(c.dialog.innerHTML,/id="compact-food"[^>]*value="Chuối"/);assert.doesNotMatch(c.dialog.innerHTML,/id="quick-text"/);
 });
 
 test('Compact workout kind controls preserve cardio, bodyweight and assistance entry',async t=>{
@@ -86,4 +86,12 @@ test('An existing meal retains a failed camera upload and can retry without taki
  assert.equal(uploads.length,2);assert.equal(uploads[0].id,uploads[1].id);
  assert.equal(saved.length,1);assert.deepEqual(saved[0].photo_ids,[uploads[0].id]);
  assert.doesNotMatch(c.dialog.innerHTML,/Thử lại tải ảnh/);
+});
+
+
+test('Steep walking composer exposes minutes, incline and speed without any input mode tabs',async t=>{
+ const c=composer(t);
+ await c.ui.open('workouts',{exercise:'steep walking',kind:'cardio',duration:15,incline:8,speed:5});
+ for(const id of ['duration','incline','speed'])assert.match(c.dialog.innerHTML,new RegExp('id="compact-'+id+'"'));
+ assert.doesNotMatch(c.dialog.innerHTML,/input-tabs|method-text|quick-text/);
 });
