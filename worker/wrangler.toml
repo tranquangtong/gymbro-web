@@ -9,7 +9,8 @@ FIREBASE_PROJECT_ID = "gymbro-web"
 ADMIN_EMAIL = "tongquangtran@gmail.com"
 ALLOWED_ORIGINS = "https://tranquangtong.github.io,http://127.0.0.1:4173,http://localhost:4173"
 
-# Daily at 03:17 UTC: delete meal photos older than 7 days (Cron Triggers are on the Free plan).
+# Daily at 03:17 UTC: delete meal photos older than 7 days and records soft-deleted more
+# than 60 days ago (Cron Triggers are on the Free plan).
 [triggers]
 crons = ["17 3 * * *"]
 

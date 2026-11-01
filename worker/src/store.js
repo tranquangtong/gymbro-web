@@ -84,7 +84,7 @@ export async function changesSince(db, owner, since, limit = 500) {
 // expected → the stored updated_at must equal it (fails the whole batch otherwise).
 // insertOnly → keep an existing row untouched (import, safe to retry).
 // newerOnly → insert, or replace only when the incoming updated_at is later (migration re-runs).
-export async function saveRecords(db, owner, kind, items) {
+export async function saveRecords(db, owner, kind, items, now = Date.now()) {
   assertKind(kind);
   if (!Array.isArray(items) || !items.length || items.length > MAX_WRITE) throw new StoreError(`Mỗi lần lưu từ 1 đến ${MAX_WRITE} mục.`);
   const cleans = items.map(i => ({ ...i, clean: cleanForKind(kind, i?.record, { strict: !i?.insertOnly && !i?.newerOnly }) }));
@@ -99,10 +99,11 @@ export async function saveRecords(db, owner, kind, items) {
     if (expected !== undefined && expected !== null && expected !== '') {
       stmts.push(db.prepare('INSERT INTO revision_guard (ok) SELECT coalesce((SELECT updated_at FROM records WHERE owner_uid = ?1 AND kind = ?2 AND id = ?3) = ?4, 0)').bind(owner, kind, clean.id, String(expected)));
     }
-    const update = 'ON CONFLICT (owner_uid, kind, id) DO UPDATE SET date = excluded.date, updated_at = excluded.updated_at, deleted = excluded.deleted, body = excluded.body, seq = excluded.seq';
+    // deleted_at keeps the first time a row was seen deleted; restoring a row clears it.
+    const update = 'ON CONFLICT (owner_uid, kind, id) DO UPDATE SET date = excluded.date, updated_at = excluded.updated_at, deleted = excluded.deleted, body = excluded.body, seq = excluded.seq, deleted_at = CASE WHEN excluded.deleted = 1 THEN coalesce(records.deleted_at, excluded.deleted_at) ELSE NULL END';
     const conflict = insertOnly ? 'ON CONFLICT (owner_uid, kind, id) DO NOTHING' : newerOnly ? update + ' WHERE excluded.updated_at > records.updated_at' : update;
     writeIndex.push(stmts.length);
-    stmts.push(db.prepare(`INSERT INTO records (owner_uid, kind, id, date, updated_at, deleted, body, seq) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ${seqExpr}) ${conflict}`).bind(owner, kind, clean.id, date, updated, del, body));
+    stmts.push(db.prepare(`INSERT INTO records (owner_uid, kind, id, date, updated_at, deleted, body, seq, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ${seqExpr}, ?8) ${conflict}`).bind(owner, kind, clean.id, date, updated, del, body, del ? now : null));
   }
   stmts.push(db.prepare('DELETE FROM revision_guard'));
   let results;
@@ -159,5 +160,13 @@ export async function getPhoto(db, owner, id, now = Date.now()) {
 }
 export async function purgeExpiredPhotos(db, now = Date.now()) {
   const r = await db.prepare('DELETE FROM photos WHERE expires_at <= ?1').bind(now).run();
+  return r.meta?.changes ?? 0;
+}
+
+export const DELETED_RETENTION_MS = 60 * 24 * 60 * 60 * 1000;
+// Soft-deleted rows are kept 60 days (every device has synced the deletion and the admin can
+// still restore by mistake), then removed for good by the daily cron.
+export async function purgeDeletedRecords(db, now = Date.now()) {
+  const r = await db.prepare('DELETE FROM records WHERE deleted = 1 AND deleted_at IS NOT NULL AND deleted_at <= ?1').bind(now - DELETED_RETENTION_MS).run();
   return r.meta?.changes ?? 0;
 }

@@ -112,7 +112,24 @@ test('photos are shared across devices for 7 days, scoped by owner, and purged b
   const future = await call(e, 'POST', '/v1/photos', { tok: a, body: { photo: { ...photo, id: 'fut', created_at: '2099-01-01T00:00:00Z' } } });
   assert.equal(future.body.expires_at, T * 1000 + 7 * 86400e3, 'client clock cannot extend retention');
   assert.equal((await call(e, 'POST', '/v1/photos', { tok: a, body: { photo: { ...photo, id: 'bad', data_url: 'data:image/png;base64,AAAA' } } })).status, 400);
-  assert.equal(await scheduled(e, T * 1000 + 6 * 86400e3), 0);
-  assert.equal(await scheduled(e, T * 1000 + 7 * 86400e3 + 1), 2);
+  assert.equal((await scheduled(e, T * 1000 + 6 * 86400e3)).photos, 0);
+  assert.equal((await scheduled(e, T * 1000 + 7 * 86400e3 + 1)).photos, 2);
   assert.equal(e.DB.db.prepare('SELECT count(*) n FROM photos').get().n, 0);
+});
+
+test('soft-deleted records are removed 60 days after deletion; live and restored rows stay', async () => {
+  const { scheduled } = await import('../worker/src/index.js');
+  const e = env(), a = await token(), DAY = 86400e3, NOW = T * 1000;
+  await call(e, 'POST', '/v1/records', { tok: a, body: { kind: 'WebMeals', items: ['keep', 'gone', 'back'].map(id => ({ record: meal(id, '2026-10-30') })) } });
+  const del = id => ({ record: meal(id, '2026-10-30', { deleted: true, updated_at: 'd-' + id }), expected: '2026-10-30T05:00:00Z' });
+  assert.equal((await call(e, 'POST', '/v1/records', { tok: a, body: { kind: 'WebMeals', items: [del('gone'), del('back')] } })).status, 200);
+  const row = id => e.DB.db.prepare("SELECT deleted, deleted_at FROM records WHERE id = ?").get(id);
+  assert.equal(row('gone').deleted_at, NOW, 'server time, not the client clock');
+  assert.equal(row('keep').deleted_at, null);
+  // Saving a deleted row again keeps its original deletion time; restoring clears it.
+  await call(e, 'POST', '/v1/records', { tok: a, body: { kind: 'WebMeals', items: [{ record: meal('gone', '2026-10-30', { deleted: true, updated_at: 'd2' }), expected: 'd-gone' }, { record: meal('back', '2026-10-30', { deleted: false, updated_at: 'r' }), expected: 'd-back' }] } });
+  assert.equal(row('gone').deleted_at, NOW); assert.equal(row('back').deleted_at, null);
+  assert.equal((await scheduled(e, NOW + 59 * DAY)).records, 0);
+  assert.equal((await scheduled(e, NOW + 60 * DAY)).records, 1);
+  assert.deepEqual(e.DB.db.prepare('SELECT id FROM records ORDER BY id').all().map(r => r.id), ['back', 'keep']);
 });
