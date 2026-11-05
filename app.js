@@ -1,4 +1,5 @@
 import {installDialogViewport} from './dialog-viewport.js';
+import {installNavTap} from './nav-tap.js';
 import {walkingSettings,applyWalkingSettings,isWalking} from './walking.js';
 import {estimateWorkoutBatch,workoutWeight} from './workout-kcal.js';
 import {DASHBOARD_RANGES,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './dashboard.js';
@@ -277,3 +278,4 @@ function adminPage(){if(!isAdmin(state.repo?.s.auth.currentUser))return empty('K
 function openArchiveEditor(r){if(!writable()||!isAdmin(state.repo?.s.auth.currentUser))return;editorContext={table:'Archive',original:r,id:r.id,created_at:r.created_at};$('#editor').innerHTML=`<div class="dialog-inner"><div class="dialog-header"><h2 id="dialog-title">Admin · Sửa tư liệu</h2><button data-action="close-editor" class="close-button" aria-label="Đóng">${icon('close')}</button></div><form id="entry-form">${field('Ngày','date','date',r.date,'','required')}${field('Tiêu đề','archive_title','text',r.title,'','required')}<label class="field">Nội dung JSON<textarea name="archive_payload" rows="14" required>${esc(JSON.stringify(r.payload,null,2))}</textarea></label><div class="form-error" id="entry-error" role="alert"></div><div class="form-actions"><button class="button primary" type="submit">Lưu thay đổi</button></div></form></div>`;$('#editor').showModal();}
 
 installDialogViewport();
+installNavTap($('#navigation'),href=>{if(location.hash!==href)location.hash=href;});
