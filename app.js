@@ -38,7 +38,11 @@ function floatingLogActions(type='both'){
 
 function card(title,subtitle,body,tools='',cls=''){return `<section class="card ${cls}"><div class="card-head"><div><h2>${title}</h2>${subtitle?`<p class="card-sub">${subtitle}</p>`:''}</div>${tools}</div>${body}</section>`;}
 function renderChrome(){
-  const visibleNav=nav.filter(n=>n[0]!=='archive');$('#navigation').innerHTML=visibleNav.map(([id,ico,label])=>`<a href="#${id}" class="nav-link ${route()===id?'active':''}" ${route()===id?'aria-current="page"':''} title="${label}">${icon(ico)}<span class="nav-text">${label}</span></a>`).join('');
+  // Build the nav links once and only flip the active state afterwards. Replacing them on every
+  // render (live-sync ticks right after a save + toast) swallowed taps on phones.
+  const navEl=$('#navigation'),visibleNav=nav.filter(n=>n[0]!=='archive'),navKey=visibleNav.map(n=>n[0]).join();
+  if(navEl.dataset.key!==navKey){navEl.innerHTML=visibleNav.map(([id,ico,label])=>`<a href="#${id}" class="nav-link" data-route="${id}" title="${label}">${icon(ico)}<span class="nav-text">${label}</span></a>`).join('');navEl.dataset.key=navKey;}
+  for(const link of navEl.querySelectorAll('.nav-link')){const on=link.dataset.route===route();link.classList.toggle('active',on);if(on)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
   $('#page-label').textContent=route()==='admin'?'Quản trị':nav.find(n=>n[0]===route())?.[2]||'GymBro';
   const mode=state.mode==='demo'?'Dữ liệu mẫu':state.mode==='local'?'Trên thiết bị':state.connected?(state.initialized?backendName()+' · tự đồng bộ':backendName()+' · chờ kết nối'):state.authRestoring?'Đang khôi phục…':'Chưa đăng nhập';
   $('#mode-button').innerHTML=`<span class="status-dot"></span>${mode}`;
