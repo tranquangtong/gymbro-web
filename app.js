@@ -1,5 +1,4 @@
 import {installDialogViewport} from './dialog-viewport.js';
-import {installNavTap} from './nav-tap.js';
 import {walkingSettings,applyWalkingSettings,isWalking} from './walking.js';
 import {estimateWorkoutBatch,workoutWeight} from './workout-kcal.js';
 import {DASHBOARD_RANGES,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './dashboard.js';
@@ -246,7 +245,7 @@ document.addEventListener('input',e=>{if(e.target.closest('#entry-form')){if(e.t
 $('#editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});$('#confirm-dialog').addEventListener('cancel',e=>{if(state.busy)e.preventDefault();});
 $('#mode-button').onclick=()=>location.hash='settings';
 $('#refresh').onclick=async()=>{if(state.busy)return;if(!writable({profile:true}))return;if(state.mode==='firebase'&&!state.connected){location.hash='settings';return toast('Đăng nhập Google để làm mới dữ liệu.',true);}state.busy=true;$('#refresh').disabled=true;try{await load({force:true});state.connectionError='';if(state.mode==='firebase'){state.initialized=true;liveSync.start(state.repo);await updateLocalPending();}render();toast('Đã làm mới dữ liệu.');}catch(e){state.connectionError=e.message;render();toast(e.message,true);}finally{state.busy=false;$('#refresh').disabled=false;}};
-window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0});});
+window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0});$('.shell').scrollTop=0;});
 window.addEventListener('storage',async e=>{if(state.mode!=='firebase'&&e.key===state.repo?.key){try{await load();render();}catch(e){toast(e.message,true);}}});
 const liveSync=createLiveSync({isCurrent:repo=>state.mode==='firebase'&&state.connected&&state.repo===repo,onRows:(table,rows)=>{state.data[table]=rows;if(table==='WebProfile'&&state.repo?.ownerUid===state.repo?.uid)state.accountProfile=latestProfile(rows);render();},onError:e=>{state.connectionError='Tự đồng bộ tạm dừng: '+e.message;render();}});
 const quick=createQuickUI({getState:()=>state,esc,fmt,icon,toast,writable,reload:load,render,openDetailed:openEditor,saveMessage:count=>saveMessage(state,count)});
@@ -278,4 +277,3 @@ function adminPage(){if(!isAdmin(state.repo?.s.auth.currentUser))return empty('K
 function openArchiveEditor(r){if(!writable()||!isAdmin(state.repo?.s.auth.currentUser))return;editorContext={table:'Archive',original:r,id:r.id,created_at:r.created_at};$('#editor').innerHTML=`<div class="dialog-inner"><div class="dialog-header"><h2 id="dialog-title">Admin · Sửa tư liệu</h2><button data-action="close-editor" class="close-button" aria-label="Đóng">${icon('close')}</button></div><form id="entry-form">${field('Ngày','date','date',r.date,'','required')}${field('Tiêu đề','archive_title','text',r.title,'','required')}<label class="field">Nội dung JSON<textarea name="archive_payload" rows="14" required>${esc(JSON.stringify(r.payload,null,2))}</textarea></label><div class="form-error" id="entry-error" role="alert"></div><div class="form-actions"><button class="button primary" type="submit">Lưu thay đổi</button></div></form></div>`;$('#editor').showModal();}
 
 installDialogViewport();
-installNavTap($('#navigation'),href=>{if(location.hash!==href)location.hash=href;});

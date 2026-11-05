@@ -421,7 +421,12 @@ dialog::backdrop{background:var(--scrim)}
   .nav-link.active{background:transparent;border-top-color:var(--ink)}
   .nav-link:hover{background:transparent}
   .nav-text{display:block}
-  .shell{margin-left:0;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  /* The page scrolls inside .shell, not the document. iOS spends the first tap during momentum
+     scroll on stopping the scroller under the finger; with the bar outside the scroller, taps on it
+     always navigate. */
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  .shell{position:fixed;inset:0 0 calc(68px + env(safe-area-inset-bottom)) 0;margin-left:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .access-locked .shell{bottom:0}
   .topbar{height:56px;padding:0 16px}
   .storage-banner{padding:10px 16px;font-size:14px}
   main{padding:20px 16px 32px}
