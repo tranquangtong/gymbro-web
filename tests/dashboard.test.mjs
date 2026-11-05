@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../dashboard.js';
+import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../dashboard.js';
 import {validatePersonalProfile} from '../access.js';
 import {cleanRecord} from '../migration.js';
 const day='2026-10-30';
@@ -147,3 +147,27 @@ test('Combined chart keeps the workout line high on its own scale without changi
  const zero=renderEnergyChart([{date:day,intake:2500,protein:100,burned:0}],{currentDate:day});
  assert.match(zero,/class="burn-point today"[^>]*cy="244"/);
 });
+test('Phone chart fits a fixed 340-unit viewBox for every range, with one left axis and no per-bar numbers',()=>{
+ for(const n of [7,10,28]){
+  const days=energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day,n),html=renderEnergyChartCompact(days,{currentDate:day,target:2400,proteinTarget:140});
+  assert.match(html,/class="energy-chart compact-chart" viewBox="0 0 340 192"/);assert.doesNotMatch(html,/min-width:|energy-chart-scroll/);
+  assert.doesNotMatch(html,/protein-axis|burn-axis|data-label/);
+  assert.equal((html.match(/data-action="chart-day"/g)||[]).length,n);
+  assert.equal((html.match(/class="chart-date/g)||[]).length,n<=7?7:n<=14?Math.ceil(n/2):4);
+  assert.match(html,/class="chart-date today"/,'last label is always today');
+ }
+});
+test('Phone chart readout follows the tapped day and falls back to today; stats average only logged days',()=>{
+ const days=[{date:'2026-10-28',intake:2000,protein:120,burned:400},{date:'2026-10-29',intake:null,protein:null,burned:0,rest:true},{date:day,intake:1000,protein:60,burned:null,intakeIncomplete:true}];
+ const stats=energyStats(days);
+ assert.equal(stats.intake.avg,1500);assert.equal(stats.intake.count,2);assert.equal(stats.protein.avg,90);assert.equal(stats.burned.avg,400);assert.equal(stats.burned.count,1);assert.equal(stats.incomplete,true);
+ const html=renderEnergyChartCompact(days,{currentDate:day,target:2000,proteinTarget:120});
+ assert.match(html,/1\.500<em>kcal<\/em><\/strong><span>75% mục tiêu/);assert.match(html,/90<em>g<\/em><\/strong><span>75% mục tiêu/);assert.match(html,/400<em>kcal<\/em><\/strong><span>1 buổi tập/);assert.equal((html.match(/class=\"burn-point/g)||[]).length,1,'no dot for the 0-kcal rest day');assert.doesNotMatch(html,/burn-line/);
+ assert.match(html,/Trung bình trên 2\/3 ngày có ghi ăn uống, gồm cả ngày chưa đầy đủ/);
+ assert.match(html,/<strong>30-10 · Hôm nay|<strong>[^<]*Hôm nay<\/strong><span class="intake">Ăn 1\.000\* \/ 2\.000 kcal/);
+ const picked=renderEnergyChartCompact(days,{currentDate:day,selectedDate:'2026-10-29'});
+ assert.match(picked,/class="chart-readout"[^>]*><strong>29-10<\/strong><span class="intake">Ăn —/);assert.match(picked,/Tập nghỉ/);
+ assert.match(renderEnergyChartCompact(days,{currentDate:day,selectedDate:'2020-01-01'}),/Hôm nay<\/strong>/,'unknown selection falls back');
+ assert.match(renderEnergyChartCompact(energyDays({WebMeals:[],WebWorkouts:[]},day)),/Chưa có số liệu/);
+});
+

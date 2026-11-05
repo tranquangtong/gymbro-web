@@ -683,3 +683,31 @@ dialog::backdrop{background:var(--scrim)}
  .keyboard-open #quick-dialog .quick-content,.keyboard-open #editor.log-editor .editor-fields{scroll-padding-block:12px;overflow-anchor:none}
  .keyboard-open #quick-dialog input,.keyboard-open #editor.log-editor input{scroll-margin-block:12px}
 }
+
+/* Phone chart: fits the card, one left axis, values in the stats row and the tapped-day readout. */
+.compact-chart{min-width:0;margin-top:4px;-webkit-tap-highlight-color:transparent}
+.energy-chart.compact-chart text{font-size:11px}
+.energy-chart.compact-chart .chart-date.today{font-weight:700}
+.compact-chart .chart-hit{fill:transparent;cursor:pointer}
+.compact-chart .chart-selected{fill:none;stroke:var(--ink);stroke-width:1.25;opacity:.45}
+.compact-chart .burn-point{fill:var(--gym-text);stroke:var(--surface);stroke-width:1.5}
+.compact-chart .burn-point.partial{fill:var(--gym-tint);stroke:var(--gym-text)}
+.burn-dot-key{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--gym-text)}
+.compact-chart .energy-target,.compact-chart .protein-target{stroke-width:1.5;stroke-dasharray:4 4}
+.chart-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;margin:4px 0 2px}
+.chart-stat{display:flex;flex-direction:column;min-width:0;padding:10px;border-radius:12px;background:var(--surface-2)}
+.chart-stat small{font-size:12px;color:var(--muted);white-space:nowrap}
+.chart-stat strong{font-family:var(--font-display);font-size:24px;line-height:1.15;white-space:nowrap}
+.chart-stat strong em{font-family:var(--font-body);font-style:normal;font-size:12px;font-weight:500;margin-left:3px;color:var(--muted)}
+.chart-stat span{font-size:12px;color:var(--muted);line-height:1.35}
+.chart-stat.intake strong{color:var(--accent)}
+.chart-stat.protein strong{color:var(--protein-chart)}
+.chart-stat.burn strong{color:var(--gym-text)}
+.chart-stats-note{margin:4px 0 10px;font-size:12px;color:var(--muted)}
+.chart-readout{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;padding:8px 0 2px;font-size:14px;border-top:1px solid var(--line)}
+.chart-readout strong{flex-basis:100%;font-size:14px}
+.chart-readout .intake{color:var(--accent)}
+.chart-readout .protein{color:var(--protein-chart)}
+.chart-readout .burn{color:var(--gym-text)}
+.compact-legend{justify-content:flex-start;gap:6px 14px;font-size:12px;margin:8px 0}
+
