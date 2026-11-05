@@ -392,6 +392,10 @@ dialog::backdrop{background:var(--scrim)}
 .toast{position:fixed;left:calc(50% + 110px);bottom:24px;transform:translateX(-50%);z-index:30;max-width:min(90vw,560px);padding:12px 20px;border-radius:12px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow);line-height:1.6}
 .toast.error{background:var(--danger);color:var(--surface)}
 .toast:empty{display:none}
+/* Toasts are display-only: never let them (or their shadow) catch taps meant for the bottom bar. */
+.toast{pointer-events:none}
+.nav-link{touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.nav-link>*{pointer-events:none}
 
 /* Wide tablets */
 @media (max-width:1100px){
@@ -409,10 +413,11 @@ dialog::backdrop{background:var(--scrim)}
 }
 /* Phones: bottom bar, sheets */
 @media (max-width:620px){
-  .sidebar{inset:auto 0 0;width:100%;height:calc(68px + env(safe-area-inset-bottom));padding:0 4px env(safe-area-inset-bottom);border-right:0;border-top:1px solid var(--line);flex-direction:row}
+  .sidebar{inset:auto 0 0;width:100%;height:calc(68px + env(safe-area-inset-bottom));padding:0 4px env(safe-area-inset-bottom);border-right:0;border-top:1px solid var(--line);flex-direction:row;z-index:35}
   .brand{display:none}
-  .sidebar nav{flex-direction:row;flex:1;margin:0;gap:0}
-  .nav-link{flex:1;flex-direction:column;gap:3px;padding:8px 2px 6px;border-radius:0;border-top:3px solid transparent;font-size:12px;min-height:0}
+  .sidebar nav{flex-direction:row;flex:1;margin:0;gap:0;align-items:stretch}
+  .nav-link{flex:1;flex-direction:column;justify-content:center;gap:3px;padding:8px 2px 6px;border-radius:0;border-top:3px solid transparent;font-size:12px;min-height:0;min-width:0}
+  .nav-link:active{background:var(--surface-2)}
   .nav-link.active{background:transparent;border-top-color:var(--ink)}
   .nav-link:hover{background:transparent}
   .nav-text{display:block}
