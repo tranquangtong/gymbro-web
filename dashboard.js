@@ -133,7 +133,7 @@ export function energyStats(days){
   return {intake:{avg:mean(intake),count:intake.length},protein:{avg:mean(protein),count:protein.length},burned:{avg:mean(burned),count:burned.length},
     incomplete:days.some(d=>d.intakeIncomplete||d.proteinIncomplete||d.burnIncomplete)};
 }
-const shortKcal=v=>v>=1000?format(v/1000,1)+'k':format(v);
+const shortKcal=v=>v>=1000?format(v/1000,2)+'k':format(v);
 const percentOf=(v,goal)=>v!==null&&goal?Math.round(v/goal*100)+'% mục tiêu':'';
 // Phone layout: fits the card width for every range, one left axis, no per-bar numbers.
 // Protein and workout kcal keep their own zero-based scales; tapping a day shows its values.
@@ -150,6 +150,7 @@ export function renderEnergyChartCompact(days,{currentDate=today(),target=null,p
   const selected=days.some(d=>d.date===selectedDate)?selectedDate:energyFocusDate(days,currentDate),sel=days.find(d=>d.date===selected);
   const every=n<=7?1:n<=14?2:7,showDate=i=>(n-1-i)%every===0;
   const slot=(i,cls,pad=1)=>`<rect class="${cls}" x="${x(i)-step/2+pad}" y="${top-6}" width="${Math.max(1,step-pad*2)}" height="${bottom-top+40}" rx="${Math.min(8,step/3)}"/>`;
+  const segments=[];let seg=[];days.forEach((d,i)=>{if(num(d.burned)===null){if(seg.length)segments.push(seg);seg=[];}else seg.push(`${x(i)},${yBurn(d.burned)}`);});if(seg.length)segments.push(seg);
   const describe=d=>`${dateLabel(d.date)} · Ăn vào: ${format(num(d.intake))} kcal · Protein: ${format(num(d.protein),1)} g · Tập luyện: ${format(num(d.burned))} kcal`;
   const svg=`<svg class="energy-chart compact-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="Biểu đồ ${n} ngày: kcal ăn vào theo trục trái; protein và kcal tập luyện dùng thang riêng. Chạm vào một ngày để xem số liệu.">`
     +days.map((d,i)=>d.date===currentDate?slot(i,'today-highlight'):'').join('')
@@ -158,8 +159,9 @@ export function renderEnergyChartCompact(days,{currentDate=today(),target=null,p
     +days.map((d,i)=>`${num(d.intake)!==null?`<rect class="intake-bar${d.date===selected?' today':''}${d.intakeIncomplete?' partial':''}" x="${intakeX(i)}" y="${yKcal(d.intake)}" width="${bw}" height="${Math.max(d.intake===0?1.5:0,bottom-yKcal(d.intake))}" rx="${Math.min(3,bw/3)}"/>`:''}${num(d.protein)!==null?`<rect class="protein-bar${d.proteinIncomplete?' partial':''}" x="${proteinX(i)}" y="${yProtein(d.protein)}" width="${bw}" height="${Math.max(d.protein===0?1.5:0,bottom-yProtein(d.protein))}" rx="${Math.min(3,bw/3)}"/>`:''}`).join('')
     +(goal?`<line class="energy-target" x1="${left}" x2="${right}" y1="${yKcal(goal)}" y2="${yKcal(goal)}"/>`:'')
     +(proteinGoal?`<line class="protein-target" x1="${left}" x2="${right}" y1="${yProtein(proteinGoal)}" y2="${yProtein(proteinGoal)}"/>`:'')
-    // Sessions are separate events: dots only, and no dot for a 0-kcal (rest) day.
-    +days.map((d,i)=>num(d.burned)>0?`<circle class="burn-point${d.burnIncomplete?' partial':''}${d.date===selected?' today':''}" cx="${x(i)}" cy="${yBurn(d.burned)}" r="${n>14?3:4}"/>`:'').join('')
+    // Same as the desktop chart: the line joins every known value (0 on rest days) and breaks on missing days.
+    +segments.filter(s=>s.length>1).map(s=>`<polyline class="burn-line" points="${s.join(' ')}"/>`).join('')
+    +days.map((d,i)=>num(d.burned)!==null?`<circle class="burn-point${d.burnIncomplete?' partial':''}${d.date===selected?' today':''}" cx="${x(i)}" cy="${yBurn(d.burned)}" r="${n>14?3:4}"/>`:'').join('')
     +days.map((d,i)=>showDate(i)?`<text class="chart-date${d.date===currentDate?' today':''}" x="${x(i)+16>width?width-1:x(i)}" y="${bottom+20}" text-anchor="${x(i)+16>width?'end':'middle'}">${dateLabel(d.date)}</text>`:'').join('')
     +days.map((d,i)=>`<rect class="chart-hit" data-action="chart-day" data-date="${d.date}" x="${x(i)-step/2}" y="0" width="${step}" height="${height}"><title>${escape(describe(d))}</title></rect>`).join('')
     +`</svg>`;
@@ -167,7 +169,7 @@ export function renderEnergyChartCompact(days,{currentDate=today(),target=null,p
   const statRow=`<div class="chart-stats">${tile('intake','Ăn vào TB',format(stats.intake.avg),'kcal',percentOf(stats.intake.avg,goal))}${hasProtein?tile('protein','Protein TB',format(stats.protein.avg),'g',percentOf(stats.protein.avg,proteinGoal)):''}${tile('burn','Tập luyện TB',format(stats.burned.avg),'kcal',stats.burned.count+' buổi tập')}</div><p class="chart-stats-note">Trung bình trên ${stats.intake.count}/${n} ngày có ghi ăn uống${stats.incomplete?', gồm cả ngày chưa đầy đủ (*)':''}.</p>`;
   const star=flag=>flag?'*':'';
   const readout=`<div class="chart-readout" aria-live="polite"><strong>${dateLabel(selected)}${selected===currentDate?' · Hôm nay':''}</strong><span class="intake">Ăn ${format(num(sel.intake))}${star(sel.intakeIncomplete)}${goal?' / '+format(goal):''} kcal</span>${hasProtein?`<span class="protein">Protein ${format(num(sel.protein),1)}${star(sel.proteinIncomplete)}${proteinGoal?' / '+format(proteinGoal):''} g</span>`:''}<span class="burn">Tập ${sel.rest&&!num(sel.burned)?'nghỉ':format(num(sel.burned))+star(sel.burnIncomplete)+' kcal'}</span></div>`;
-  const legend=`<div class="energy-legend compact-legend"><span><i class="intake-key"></i>Ăn vào</span>${hasProtein?'<span><i class="protein-key"></i>Protein</span>':''}${hasBurn?'<span><i class="burn-dot-key"></i>Buổi tập (kcal)</span>':''}${goal?'<span><i class="target-key"></i>Mục tiêu kcal</span>':''}${proteinGoal?'<span><i class="protein-target-key"></i>Mục tiêu protein</span>':''}</div>`;
+  const legend=`<div class="energy-legend compact-legend"><span><i class="intake-key"></i>Ăn vào</span>${hasProtein?'<span><i class="protein-key"></i>Protein</span>':''}${hasBurn?'<span><i class="burn-key"></i>Tập luyện (kcal)</span>':''}${goal?'<span><i class="target-key"></i>Mục tiêu kcal</span>':''}${proteinGoal?'<span><i class="protein-target-key"></i>Mục tiêu protein</span>':''}</div>`;
   return statRow+readout+svg+legend+`<p class="form-note">Chạm vào một ngày để xem số. Trục trái là kcal ăn vào; protein và kcal tập luyện dùng thang riêng, đều từ 0. Kcal tập luyện là ước tính, chưa trừ vào kcal ăn vào.</p>`+energyTable(days);
 }
 

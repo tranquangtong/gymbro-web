@@ -162,12 +162,16 @@ test('Phone chart readout follows the tapped day and falls back to today; stats 
  const stats=energyStats(days);
  assert.equal(stats.intake.avg,1500);assert.equal(stats.intake.count,2);assert.equal(stats.protein.avg,90);assert.equal(stats.burned.avg,400);assert.equal(stats.burned.count,1);assert.equal(stats.incomplete,true);
  const html=renderEnergyChartCompact(days,{currentDate:day,target:2000,proteinTarget:120});
- assert.match(html,/1\.500<em>kcal<\/em><\/strong><span>75% mục tiêu/);assert.match(html,/90<em>g<\/em><\/strong><span>75% mục tiêu/);assert.match(html,/400<em>kcal<\/em><\/strong><span>1 buổi tập/);assert.equal((html.match(/class=\"burn-point/g)||[]).length,1,'no dot for the 0-kcal rest day');assert.doesNotMatch(html,/burn-line/);
+ assert.match(html,/1\.500<em>kcal<\/em><\/strong><span>75% mục tiêu/);assert.match(html,/90<em>g<\/em><\/strong><span>75% mục tiêu/);assert.match(html,/400<em>kcal<\/em><\/strong><span>1 buổi tập/);assert.equal((html.match(/class="burn-point/g)||[]).length,2,'rest day 0 kcal is a point');assert.match(html,/<polyline class="burn-line" points="[\d.]+,10 [\d.]+,160"\/>/,'line joins 400 → 0 and breaks before the missing day');
  assert.match(html,/Trung bình trên 2\/3 ngày có ghi ăn uống, gồm cả ngày chưa đầy đủ/);
  assert.match(html,/<strong>30-10 · Hôm nay|<strong>[^<]*Hôm nay<\/strong><span class="intake">Ăn 1\.000\* \/ 2\.000 kcal/);
  const picked=renderEnergyChartCompact(days,{currentDate:day,selectedDate:'2026-10-29'});
  assert.match(picked,/class="chart-readout"[^>]*><strong>29-10<\/strong><span class="intake">Ăn —/);assert.match(picked,/Tập nghỉ/);
  assert.match(renderEnergyChartCompact(days,{currentDate:day,selectedDate:'2020-01-01'}),/Hôm nay<\/strong>/,'unknown selection falls back');
  assert.match(renderEnergyChartCompact(energyDays({WebMeals:[],WebWorkouts:[]},day)),/Chưa có số liệu/);
+});
+test('Phone chart axis ticks are not rounded to a misleading value',()=>{
+ const html=renderEnergyChartCompact([{date:day,intake:3200,protein:100,burned:200}],{currentDate:day});
+ assert.match(html,/>1,75k<\/text>/);assert.match(html,/>3,5k<\/text>/);
 });
 
