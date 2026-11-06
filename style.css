@@ -544,6 +544,7 @@ dialog::backdrop{background:var(--scrim)}
 /* Dashboard actions stay in the page; diary add actions remain floating. */
 .dashboard-quick-actions{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px}
 .dashboard-quick-actions .button{min-height:48px}
+.dashboard-quick-actions .floating-log-button{min-height:56px}
 
 /* Compact logging sheet: group related fields instead of stacking every input. */
 #quick-dialog.compose-dialog .dialog-header{margin-bottom:12px;align-items:center}
@@ -565,6 +566,10 @@ dialog::backdrop{background:var(--scrim)}
 @media (max-width:620px){
   .dashboard-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .dashboard-quick-actions .button{padding:10px 12px;font-size:15px}
+  /* Date controls on one row: ‹ [Hôm nay] [Chọn ngày] ›; the date input, when opened, goes below. */
+  .dashboard-date-controls{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;width:100%}
+  .dashboard-date-controls .button{min-width:0;padding:8px 10px;font-size:14px;white-space:nowrap}
+  .dashboard-date-controls .dashboard-date-field{grid-column:1/-1}
   #quick-dialog.compose-dialog .dialog-inner{padding:16px 16px calc(12px + env(safe-area-inset-bottom))}
   #quick-dialog.compose-dialog .dialog-header h2{font-size:26px}
   #quick-dialog.compose-dialog .field{font-size:14px;gap:4px}
@@ -853,10 +858,6 @@ dialog::backdrop{background:var(--scrim)}
 .workout-log-button.floating-log-button{--glow:var(--gym)}
 .floating-log-button:hover{box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 55%,transparent),0 8px 22px color-mix(in srgb,var(--glow) 48%,transparent),0 0 44px color-mix(in srgb,var(--glow) 40%,transparent)}
 @supports not (color:color-mix(in srgb,red 50%,transparent)){.floating-log-button{box-shadow:0 0 22px #2f5fa766,var(--shadow)}.workout-log-button.floating-log-button{box-shadow:0 0 22px #e3a82b66,var(--shadow)}}
-@media (prefers-reduced-motion:no-preference){
-  .floating-log-button{animation:log-glow 3.2s ease-in-out infinite}
-  @keyframes log-glow{50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 50%,transparent),0 6px 20px color-mix(in srgb,var(--glow) 44%,transparent),0 0 42px color-mix(in srgb,var(--glow) 38%,transparent)}}
-}
 
 /* ============================================================================
    Liquid Glass, app-wide (phone and desktop). Surfaces are translucent with a
