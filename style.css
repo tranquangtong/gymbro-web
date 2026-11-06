@@ -1026,3 +1026,10 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
   }
 }
 
+/* Sign-in from an in-app browser (Zalo, Messenger…): how to open GymBro in the real browser. */
+.inapp-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 6px}
+.inapp-actions .button{min-height:48px}
+.inapp-steps{margin:14px 0 10px;padding-left:20px;color:var(--muted);line-height:1.6}
+.inapp-steps li{margin:6px 0}
+.inapp-steps code{overflow-wrap:anywhere;font-size:13px;color:var(--ink)}
+
