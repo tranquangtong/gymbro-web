@@ -22,12 +22,14 @@ export function macroProgress(rows,profile={}){
 export function energyDays(data,end,range=10){
   if(!DASHBOARD_RANGES.includes(range))throw Error('Khoảng biểu đồ không hợp lệ.');
   const meals=active(data.WebMeals||[]).filter(r=>!skipped(r)),workouts=active(data.WebWorkouts||[]);
-  return Array.from({length:range},(_,i)=>{
-    const date=shiftDate(end,i-range+1),food=meals.filter(r=>r.date===date),foodKnown=food.filter(r=>valid(r.kcal)),training=workouts.filter(r=>r.date===date&&r.kind!=='rest'),trainingKnown=training.filter(r=>valid(r.kcal_burned_est));
+  return Array.from({length:range},(_,i)=>dayEnergy(meals,workouts,shiftDate(end,i-range+1)));
+}
+// Totals for one date from active meals/workouts: null = nothing known, * flags = partial.
+export function dayEnergy(meals,workouts,date){
+  const food=meals.filter(r=>r.date===date),foodKnown=food.filter(r=>valid(r.kcal)),training=workouts.filter(r=>r.date===date&&r.kind!=='rest'),trainingKnown=training.filter(r=>valid(r.kcal_burned_est));
     const rest=workouts.some(r=>r.date===date&&r.kind==='rest')&&training.length===0;
     const proteinKnown=food.filter(r=>valid(r.protein));
     return {date,protein:proteinKnown.length?proteinKnown.reduce((n,r)=>n+num(r.protein),0):null,proteinIncomplete:proteinKnown.length<food.length,proteinKnown:proteinKnown.length,intake:foodKnown.length?foodKnown.reduce((n,r)=>n+num(r.kcal),0):null,burned:trainingKnown.length?trainingKnown.reduce((n,r)=>n+num(r.kcal_burned_est),0):rest?0:null,intakeIncomplete:foodKnown.length<food.length,burnIncomplete:trainingKnown.length<training.length,intakeKnown:foodKnown.length,intakeCount:food.length,burnKnown:trainingKnown.length,burnCount:training.length,rest};
-  });
 }
 export function chooseDashboardDate(value,current=today()){
   if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))throw Error('Ngày Dashboard không hợp lệ.');
