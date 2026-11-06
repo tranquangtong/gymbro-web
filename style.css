@@ -427,7 +427,7 @@ dialog::backdrop{background:var(--scrim)}
      scroll on stopping the scroller under the finger; with the bar outside the scroller, taps on it
      always navigate. */
   html,body{height:100%;overflow:hidden;overscroll-behavior:none}
-  .shell{position:fixed;inset:0 0 calc(68px + env(safe-area-inset-bottom)) 0;margin-left:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .shell{position:fixed;inset:0;margin-left:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
   .access-locked .shell{bottom:0}
   .topbar{height:56px;padding:0 16px}
   .storage-banner{padding:10px 16px;font-size:14px}
@@ -796,5 +796,26 @@ dialog::backdrop{background:var(--scrim)}
   .cal-figure{padding:8px}
   .cal-figure strong{font-size:20px}
   .cal-day-panel .card-head{flex-wrap:wrap}
+}
+
+/* Phone bottom bar: matte glass. Content scrolls underneath (.shell runs to the bottom edge);
+   the bar is a separate layer above the scroller, so taps on it are never taken by scrolling. */
+:root{--glass:#ffffffb8;--glass-line:#1d27301f}
+@media (prefers-color-scheme:dark){:root{--glass:#1c252dc2;--glass-line:#ffffff17}}
+@media (max-width:620px){
+  .sidebar{background:var(--surface);border-top-color:var(--glass-line)}
+  @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+    .sidebar{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);box-shadow:0 -1px 0 var(--glass-line),0 -8px 24px #0000000d}
+  }
+}
+
+/* "Thêm món" / "Thêm bài tập": a soft halo in the button's own colour so it stands out from content. */
+.floating-log-button{--glow:var(--accent);box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 40%,transparent),0 6px 18px color-mix(in srgb,var(--glow) 38%,transparent),0 0 34px color-mix(in srgb,var(--glow) 30%,transparent)}
+.workout-log-button.floating-log-button{--glow:var(--gym)}
+.floating-log-button:hover{box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 55%,transparent),0 8px 22px color-mix(in srgb,var(--glow) 48%,transparent),0 0 44px color-mix(in srgb,var(--glow) 40%,transparent)}
+@supports not (color:color-mix(in srgb,red 50%,transparent)){.floating-log-button{box-shadow:0 0 22px #2f5fa766,var(--shadow)}.workout-log-button.floating-log-button{box-shadow:0 0 22px #e3a82b66,var(--shadow)}}
+@media (prefers-reduced-motion:no-preference){
+  .floating-log-button{animation:log-glow 3.2s ease-in-out infinite}
+  @keyframes log-glow{50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 50%,transparent),0 6px 20px color-mix(in srgb,var(--glow) 44%,transparent),0 0 42px color-mix(in srgb,var(--glow) 38%,transparent)}}
 }
 
