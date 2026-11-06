@@ -900,9 +900,15 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .button,.icon-button{background:var(--gb-bg);border-color:var(--gs-line);box-shadow:var(--gb-rim)}
 .button:hover,.icon-button:hover{background:var(--gb-bg);filter:brightness(1.04)}
 .button.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 72%,#fff),var(--accent));border-color:color-mix(in srgb,var(--accent) 60%,#fff);box-shadow:inset 0 1px 0 #ffffff8c,inset 0 -1px 0 #0000001f,0 2px 8px color-mix(in srgb,var(--accent) 30%,transparent)}
-.workout-log-button{background:linear-gradient(180deg,color-mix(in srgb,var(--gym) 70%,#fff),var(--gym));border-color:color-mix(in srgb,var(--gym) 60%,#fff)}
+/* Tinted buttons keep their colour on hover/press (the generic .button:hover glass must not override them). */
+.button.primary:hover{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 72%,#fff),var(--accent));filter:brightness(1.06)}
+.workout-log-button,.workout-log-button:hover,.workout-log-button:active{background:linear-gradient(180deg,color-mix(in srgb,var(--gym) 70%,#fff),var(--gym));border-color:color-mix(in srgb,var(--gym) 60%,#fff);color:var(--gym-ink)}
+.workout-log-button:hover{filter:brightness(1.05)}
 .button.danger{background:linear-gradient(180deg,var(--danger-soft),color-mix(in srgb,var(--danger-soft) 80%,var(--danger)))}
 /* The add buttons keep their halo; the rim is folded into the same shadow. */
+/* The accent is a pale blue in dark mode, so the add-food halo uses a saturated blue and a bit more strength to match the amber one. */
+.floating-log-button.primary{--glow:#3d84f5}
+.floating-log-button.primary,.floating-log-button.primary:hover{box-shadow:inset 0 1px 0 #ffffff99,inset 0 -1px 0 #0000001f,0 0 0 1px color-mix(in srgb,var(--glow) 55%,transparent),0 6px 20px color-mix(in srgb,var(--glow) 55%,transparent),0 0 38px color-mix(in srgb,var(--glow) 48%,transparent)}
 .floating-log-button{box-shadow:inset 0 1px 0 #ffffff99,inset 0 -1px 0 #0000001f,0 0 0 1px color-mix(in srgb,var(--glow) 40%,transparent),0 6px 18px color-mix(in srgb,var(--glow) 38%,transparent),0 0 34px color-mix(in srgb,var(--glow) 30%,transparent)}
 
 /* Barbell hero: glass plates and a polished bar */
