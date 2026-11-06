@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {viewportBounds,fieldScrollDelta,installDialogViewport} from '../dialog-viewport.js';
+import {viewportBounds,fieldScrollDelta,installDialogViewport,focusLiftDelta} from '../dialog-viewport.js';
 test('iOS keyboard tracks both visible height and Safari pan without treating pinch zoom as keyboard',()=>{
  const win={innerHeight:800,visualViewport:{height:340,offsetTop:96,scale:1}};
  assert.deepEqual(viewportBounds(win),{height:340,top:96,keyboard:true});
@@ -30,4 +30,10 @@ test('Resize, viewport pan and input all remeasure the current focused field aft
  listeners['view:scroll']();listeners['doc:input']();assert.equal(queue.length,1);
  doc.activeElement=null;win.visualViewport.height=800;win.visualViewport.offsetTop=0;queue.shift()();
  assert.equal(classes['keyboard-open'],false);assert.equal(container.scrollTop,46);
+});
+test('A field low on the screen is lifted to the top of the sheet before the keyboard opens',()=>{
+ const container={top:120,bottom:640};
+ assert.equal(focusLiftDelta({top:180,bottom:224},container,664),0,'already in the upper part: no scroll');
+ assert.equal(focusLiftDelta({top:500,bottom:640},container,664),368,'lifted to container top + 12');
+ assert.equal(focusLiftDelta({top:110,bottom:400},{top:120,bottom:640},664),0,'never scrolls backwards');
 });
