@@ -24,6 +24,8 @@ export function estimateEnergy({weight_kg,height_cm,age,gender,activity_factor})
   return {bmr_kcal:bmr,tdee_kcal:Math.round(bmr*factor)};
 }
 export function accessStage(state,now=Date.now()){
+  // A saved copy of this account's data is shown, view-only, until the server load finishes.
+  if(state.cached&&!state.initialized&&sessionValid(state.cached.sessionExpiresAt,now))return 'cached';
   if(state.authRestoring)return 'restoring';
   if(state.mode!=='firebase'||!state.connected||!sessionValid(state.repo?.s.sessionExpiresAt,now))return 'login';
   if(!state.initialized)return 'loading';
