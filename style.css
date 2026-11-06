@@ -415,19 +415,22 @@ dialog::backdrop{background:var(--scrim)}
 }
 /* Phones: bottom bar, sheets */
 @media (max-width:620px){
-  .sidebar{inset:auto 0 0;width:100%;height:calc(68px + env(safe-area-inset-bottom));padding:0 4px env(safe-area-inset-bottom);border-right:0;border-top:1px solid var(--line);flex-direction:row;z-index:35}
+  /* Floating capsule (iOS 26/27 style): inset from the edges, sitting just above the home indicator. */
+  .sidebar{inset:auto calc(12px + env(safe-area-inset-right)) max(10px,calc(env(safe-area-inset-bottom) - 12px)) calc(12px + env(safe-area-inset-left));width:auto;height:62px;padding:5px;border:1px solid var(--line);border-radius:31px;flex-direction:row;z-index:35;box-shadow:0 10px 30px #1d27302e}
   .brand{display:none}
   .sidebar nav{flex-direction:row;flex:1;margin:0;gap:0;align-items:stretch}
-  .nav-link{flex:1;flex-direction:column;justify-content:center;gap:3px;padding:8px 2px 6px;border-radius:0;border-top:3px solid transparent;font-size:12px;min-height:0;min-width:0}
-  .nav-link:active{background:var(--surface-2)}
-  .nav-link.active{background:transparent;border-top-color:var(--ink)}
+  .nav-link{flex:1;flex-direction:column;justify-content:center;gap:2px;padding:4px 2px;border-radius:26px;font-size:11.5px;min-height:0;min-width:0;transition:background-color .2s}
+  .nav-link svg{width:21px;height:21px}
+  .nav-link:active{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+  .nav-link.active{background:color-mix(in srgb,var(--ink) 11%,transparent)}
   .nav-link:hover{background:transparent}
+  .nav-link.active:hover{background:color-mix(in srgb,var(--ink) 11%,transparent)}
   .nav-text{display:block}
   /* The page scrolls inside .shell, not the document. iOS spends the first tap during momentum
      scroll on stopping the scroller under the finger; with the bar outside the scroller, taps on it
      always navigate. */
   html,body{height:100%;overflow:hidden;overscroll-behavior:none}
-  .shell{position:fixed;inset:0;margin-left:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  .shell{position:fixed;inset:0;margin-left:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(88px + env(safe-area-inset-bottom))}
   .access-locked .shell{bottom:0}
   .topbar{height:56px;padding:0 16px}
   .storage-banner{padding:10px 16px;font-size:14px}
@@ -800,13 +803,13 @@ dialog::backdrop{background:var(--scrim)}
 
 /* Phone bottom bar: matte glass. Content scrolls underneath (.shell runs to the bottom edge);
    the bar is a separate layer above the scroller, so taps on it are never taken by scrolling. */
-/* iOS-style material: heavy blur, light tint, boosted colour, so what is behind still shows. */
-:root{--glass:#ffffff8c;--glass-line:#1d27301a}
-@media (prefers-color-scheme:dark){:root{--glass:#1c252d8c;--glass-line:#ffffff14}}
+/* iOS 18-style frosted material: heavy blur, a fairly dense tint and boosted colour; behind shows as colour, not detail. */
+:root{--glass:#ffffffad;--glass-line:#1d27301f;--glass-hi:#ffffffb3}
+@media (prefers-color-scheme:dark){:root{--glass:#1c252dad;--glass-line:#ffffff1f;--glass-hi:#ffffff1f}}
 @media (max-width:620px){
-  .sidebar{background:var(--surface);border-top-color:var(--glass-line)}
+  .sidebar{background:var(--surface);border-color:var(--glass-line)}
   @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
-    .sidebar{background:var(--glass);-webkit-backdrop-filter:blur(50px) saturate(190%);backdrop-filter:blur(50px) saturate(190%);box-shadow:0 -1px 0 var(--glass-line),0 -8px 24px #0000000d}
+    .sidebar{background:var(--glass);-webkit-backdrop-filter:blur(72px) saturate(190%);backdrop-filter:blur(72px) saturate(190%);box-shadow:inset 0 1px 0 var(--glass-hi),0 10px 30px #1d273033,0 2px 8px #1d27301a}
   }
 }
 
