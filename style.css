@@ -856,7 +856,6 @@ dialog::backdrop{background:var(--scrim)}
 /* "Thêm món" / "Thêm bài tập": a soft halo in the button's own colour so it stands out from content. */
 .floating-log-button{--glow:var(--accent);box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 40%,transparent),0 6px 18px color-mix(in srgb,var(--glow) 38%,transparent),0 0 34px color-mix(in srgb,var(--glow) 30%,transparent)}
 .workout-log-button.floating-log-button{--glow:var(--gym)}
-.floating-log-button:hover{box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 55%,transparent),0 8px 22px color-mix(in srgb,var(--glow) 48%,transparent),0 0 44px color-mix(in srgb,var(--glow) 40%,transparent)}
 @supports not (color:color-mix(in srgb,red 50%,transparent)){.floating-log-button{box-shadow:0 0 22px #2f5fa766,var(--shadow)}.workout-log-button.floating-log-button{box-shadow:0 0 22px #e3a82b66,var(--shadow)}}
 
 /* ============================================================================
@@ -905,11 +904,6 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .workout-log-button,.workout-log-button:hover,.workout-log-button:active{background:linear-gradient(180deg,color-mix(in srgb,var(--gym) 70%,#fff),var(--gym));border-color:color-mix(in srgb,var(--gym) 60%,#fff);color:var(--gym-ink)}
 .workout-log-button:hover{filter:brightness(1.05)}
 .button.danger{background:linear-gradient(180deg,var(--danger-soft),color-mix(in srgb,var(--danger-soft) 80%,var(--danger)))}
-/* The add buttons keep their halo; the rim is folded into the same shadow. */
-/* The accent is a pale blue in dark mode, so the add-food halo uses a saturated blue and a bit more strength to match the amber one. */
-.floating-log-button.primary{--glow:#3d84f5}
-.floating-log-button.primary,.floating-log-button.primary:hover{box-shadow:inset 0 1px 0 #ffffff99,inset 0 -1px 0 #0000001f,0 0 0 1px color-mix(in srgb,var(--glow) 55%,transparent),0 6px 20px color-mix(in srgb,var(--glow) 55%,transparent),0 0 38px color-mix(in srgb,var(--glow) 48%,transparent)}
-.floating-log-button{box-shadow:inset 0 1px 0 #ffffff99,inset 0 -1px 0 #0000001f,0 0 0 1px color-mix(in srgb,var(--glow) 40%,transparent),0 6px 18px color-mix(in srgb,var(--glow) 38%,transparent),0 0 34px color-mix(in srgb,var(--glow) 30%,transparent)}
 
 /* Barbell hero: glass plates and a polished bar */
 .plate{background-image:var(--gloss);box-shadow:inset 0 1px 0 #ffffffb3,inset 0 0 0 1px #ffffff33,0 6px 18px color-mix(in srgb,var(--accent) 28%,transparent)}
@@ -937,4 +931,11 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
   body{background:var(--bg)}
   .card,.sidebar{background:var(--surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 }
+
+/* "Thêm món" / "Thêm bài tập" (Hôm nay, Ăn uống, Tập luyện): the #31 design, kept as is.
+   Solid colour, a static halo in the button's own colour, no hover/press change, no animation.
+   Selectors are specific enough that the app-wide glass button rules never apply to them. */
+.button.floating-log-button.primary,.button.floating-log-button.primary:hover,.button.floating-log-button.primary:active{--glow:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.button.floating-log-button.workout-log-button,.button.floating-log-button.workout-log-button:hover,.button.floating-log-button.workout-log-button:active{--glow:var(--gym);background:var(--gym);color:var(--gym-ink)}
+.button.floating-log-button,.button.floating-log-button:hover,.button.floating-log-button:active{border:0;filter:none;animation:none;transition:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 40%,transparent),0 6px 18px color-mix(in srgb,var(--glow) 38%,transparent),0 0 34px color-mix(in srgb,var(--glow) 30%,transparent)}
 
