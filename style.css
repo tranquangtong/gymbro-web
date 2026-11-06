@@ -1033,3 +1033,15 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .inapp-steps li{margin:6px 0}
 .inapp-steps code{overflow-wrap:anywhere;font-size:13px;color:var(--ink)}
 
+/* Profile & goals sheet (first sign-in and later edits): same compact sheet as the log forms -
+   header and Save fixed, one scroll area, notes and the optional sections full width. */
+#editor.profile-editor .editor-fields>:is(p,details,.button,.field-row),#editor.profile-editor .editor-fields>.field:has([name=training_goal]){grid-column:1/-1}
+#editor.profile-editor .editor-fields>.field:has([name=date]){grid-column:1/-1}
+#editor.profile-editor .form-note{font-size:13px;line-height:1.5;margin:0 0 10px}
+#editor.profile-editor .field-row{gap:0 12px}
+#editor.profile-editor .settings-details{padding:10px 2px;margin-bottom:6px}
+#editor.profile-editor .settings-details[open]{padding-bottom:4px}
+#editor.profile-editor .settings-details .field-row,#editor.profile-editor .settings-details>.field{margin-top:10px}
+#editor.profile-editor .settings-details>.button{margin:4px 0 10px;min-height:40px}
+#editor.profile-editor .editor-fields>.field:has(textarea) textarea{min-height:56px}
+
