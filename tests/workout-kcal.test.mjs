@@ -38,3 +38,11 @@ test('Prompt permits labeled duration assumptions and local results use the same
  const applied=parseEstimate(JSON.stringify(output),q,r,q.scope);assert.equal(applied[0].kcal_burned_est,calculated[0].kcal_burned_est);assert.match(applied[0].kcal_estimation_notes,/^GymBro/);assert.throws(()=>parseEstimate(JSON.stringify(output),q,[{...r[0],exercise:'Edited'}],q.scope));
  assert.equal(workoutWeight([{date:'2026-10-30',weight_kg:85}],date),85);
 });
+
+test('Archery is a timed activity at 3.5 MET (recreational, earlier Compendium 15010 value)',()=>{
+ const base={id:'a',date:'2026-11-06',kind:'cardio',duration_min:60,sets_json:'[]',created_at:'',updated_at:'',deleted:false};
+ for(const exercise of ['Bắn cung','archery','Bắn cung giải trí']){
+  const [r]=estimateWorkoutBatch([{...base,exercise}],{weight:70,overwrite:true});
+  assert.equal(r.kcal_burned_est,257.3,exercise);
+ }
+});
