@@ -151,14 +151,21 @@ export function renderEnergyChartCompact(days,{currentDate=today(),target=null,p
   const intakeX=i=>x(i)-(hasProtein?bw+1:bw/2),proteinX=i=>x(i)+1;
   const selected=days.some(d=>d.date===selectedDate)?selectedDate:energyFocusDate(days,currentDate),sel=days.find(d=>d.date===selected);
   const every=n<=7?1:n<=14?2:7,showDate=i=>(n-1-i)%every===0;
-  const slot=(i,cls,pad=1)=>`<rect class="${cls}" x="${x(i)-step/2+pad}" y="${top-6}" width="${Math.max(1,step-pad*2)}" height="${bottom-top+40}" rx="${Math.min(8,step/3)}"/>`;
+  // Columns end 3 units above the viewBox bottom so the rounded corners and rim are never clipped.
+  const colY=top-6,colH=height-colY-3,colR=Math.min(10,step/2.4);
+  const slot=(i,cls,pad=1)=>`<rect class="${cls}" x="${x(i)-step/2+pad}" y="${colY}" width="${Math.max(1,step-pad*2)}" height="${colH}" rx="${colR}"/>`;
+  // Liquid Glass: the selected day is a glass capsule (tinted body, diagonal sheen, bright top rim).
+  const glass=i=>{const gx=x(i)-step/2+1.5,gw=Math.max(1,step-3),r=`x="${gx}" y="${colY+.5}" width="${gw}" height="${colH-1}" rx="${colR}"`;return `<g class="glass-col"><rect class="glass-body" ${r}/><rect class="glass-sheen" ${r}/><rect class="glass-rim" ${r}/></g>`;};
+  const defs=`<defs><linearGradient id="cg-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="cg-body-a"/><stop offset="1" class="cg-body-b"/></linearGradient><linearGradient id="cg-rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="cg-rim-a"/><stop offset=".35" class="cg-rim-b"/><stop offset="1" class="cg-rim-c"/></linearGradient><linearGradient id="cg-sheen" x1="0" y1="0" x2="1" y2=".55"><stop offset="0" class="cg-sheen-a"/><stop offset=".5" class="cg-sheen-b"/></linearGradient><linearGradient id="cg-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="cg-gloss-a"/><stop offset=".6" class="cg-gloss-b"/></linearGradient></defs>`;
+  const gloss=(gx,gy,gw,gh)=>gh>2?`<rect class="bar-gloss" x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="${Math.min(3,gw/3)}"/>`:'';
   const segments=[];let seg=[];days.forEach((d,i)=>{if(num(d.burned)===null){if(seg.length)segments.push(seg);seg=[];}else seg.push(`${x(i)},${yBurn(d.burned)}`);});if(seg.length)segments.push(seg);
   const describe=d=>`${dateLabel(d.date)} · Ăn vào: ${format(num(d.intake))} kcal · Protein: ${format(num(d.protein),1)} g · Tập luyện: ${format(num(d.burned))} kcal`;
   const svg=`<svg class="energy-chart compact-chart" viewBox="0 0 ${width} ${height}" role="group" aria-label="Biểu đồ ${n} ngày: kcal ăn vào theo trục trái; protein và kcal tập luyện dùng thang riêng. Chạm vào một ngày để xem số liệu.">`
-    +days.map((d,i)=>d.date===currentDate?slot(i,'today-highlight'):'').join('')
-    +days.map((d,i)=>d.date===selected?slot(i,'chart-selected',.5):'').join('')
+    +defs
+    +days.map((d,i)=>d.date===currentDate&&d.date!==selected?slot(i,'today-highlight'):'').join('')
+    +days.map((d,i)=>d.date===selected?glass(i):'').join('')
     +[0,.5,1].map(f=>`<line class="energy-grid" x1="${left}" x2="${right}" y1="${yKcal(f*maxKcal)}" y2="${yKcal(f*maxKcal)}"/><text class="intake-axis" x="${left-5}" y="${yKcal(f*maxKcal)+4}" text-anchor="end">${shortKcal(f*maxKcal)}</text>`).join('')
-    +days.map((d,i)=>`${num(d.intake)!==null?`<rect class="intake-bar${d.date===selected?' today':''}${d.intakeIncomplete?' partial':''}" x="${intakeX(i)}" y="${yKcal(d.intake)}" width="${bw}" height="${Math.max(d.intake===0?1.5:0,bottom-yKcal(d.intake))}" rx="${Math.min(3,bw/3)}"/>`:''}${num(d.protein)!==null?`<rect class="protein-bar${d.proteinIncomplete?' partial':''}" x="${proteinX(i)}" y="${yProtein(d.protein)}" width="${bw}" height="${Math.max(d.protein===0?1.5:0,bottom-yProtein(d.protein))}" rx="${Math.min(3,bw/3)}"/>`:''}`).join('')
+    +days.map((d,i)=>`${num(d.intake)!==null?`<rect class="intake-bar${d.date===selected?' today':''}${d.intakeIncomplete?' partial':''}" x="${intakeX(i)}" y="${yKcal(d.intake)}" width="${bw}" height="${Math.max(d.intake===0?1.5:0,bottom-yKcal(d.intake))}" rx="${Math.min(3,bw/3)}"/>${gloss(intakeX(i),yKcal(d.intake),bw,bottom-yKcal(d.intake))}`:''}${num(d.protein)!==null?`<rect class="protein-bar${d.proteinIncomplete?' partial':''}" x="${proteinX(i)}" y="${yProtein(d.protein)}" width="${bw}" height="${Math.max(d.protein===0?1.5:0,bottom-yProtein(d.protein))}" rx="${Math.min(3,bw/3)}"/>${gloss(proteinX(i),yProtein(d.protein),bw,bottom-yProtein(d.protein))}`:''}`).join('')
     +(goal?`<line class="energy-target" x1="${left}" x2="${right}" y1="${yKcal(goal)}" y2="${yKcal(goal)}"/>`:'')
     +(proteinGoal?`<line class="protein-target" x1="${left}" x2="${right}" y1="${yProtein(proteinGoal)}" y2="${yProtein(proteinGoal)}"/>`:'')
     // Same as the desktop chart: the line joins every known value (0 on rest days) and breaks on missing days.

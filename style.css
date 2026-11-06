@@ -694,7 +694,23 @@ dialog::backdrop{background:var(--scrim)}
 .energy-chart.compact-chart text{font-size:11px}
 .energy-chart.compact-chart .chart-date.today{font-weight:700}
 .compact-chart .chart-hit{fill:transparent;cursor:pointer}
-.compact-chart .chart-selected{fill:none;stroke:var(--ink);stroke-width:1.25;opacity:.45}
+/* Liquid Glass in the phone chart: the selected day is a glass capsule; bars get a gloss and a light rim. */
+.compact-chart .glass-body{fill:url(#cg-body)}
+.compact-chart .glass-sheen{fill:url(#cg-sheen)}
+.compact-chart .glass-rim{fill:none;stroke:url(#cg-rim);stroke-width:1.2}
+.compact-chart .cg-body-a{stop-color:var(--accent);stop-opacity:.14}.compact-chart .cg-body-b{stop-color:var(--accent);stop-opacity:.05}
+.compact-chart .cg-rim-a{stop-color:#fff;stop-opacity:1}.compact-chart .cg-rim-b{stop-color:var(--line-strong);stop-opacity:.55}.compact-chart .cg-rim-c{stop-color:var(--line-strong);stop-opacity:.35}
+.compact-chart .cg-sheen-a{stop-color:#fff;stop-opacity:.7}.compact-chart .cg-sheen-b{stop-color:#fff;stop-opacity:0}
+.compact-chart .bar-gloss{fill:url(#cg-gloss);pointer-events:none}
+.compact-chart .cg-gloss-a{stop-color:#fff;stop-opacity:.42}.compact-chart .cg-gloss-b{stop-color:#fff;stop-opacity:0}
+.compact-chart .intake-bar,.compact-chart .protein-bar{stroke:#ffffff8c;stroke-width:.6}
+@media (prefers-color-scheme:dark){
+  .compact-chart .cg-body-a{stop-color:#fff;stop-opacity:.13}.compact-chart .cg-body-b{stop-color:#fff;stop-opacity:.03}
+  .compact-chart .cg-rim-a{stop-color:#fff;stop-opacity:.75}.compact-chart .cg-rim-b{stop-color:#fff;stop-opacity:.22}.compact-chart .cg-rim-c{stop-color:#fff;stop-opacity:.1}
+  .compact-chart .cg-sheen-a{stop-color:#fff;stop-opacity:.16}
+  .compact-chart .cg-gloss-a{stop-color:#fff;stop-opacity:.26}
+  .compact-chart .intake-bar,.compact-chart .protein-bar{stroke:#ffffff33}
+}
 .compact-chart .burn-line{stroke-width:2}
 .compact-chart .burn-point{stroke-width:1.75}
 .compact-chart .energy-target,.compact-chart .protein-target{stroke-width:1.5;stroke-dasharray:4 4}

@@ -175,3 +175,12 @@ test('Phone chart axis ticks are not rounded to a misleading value',()=>{
  assert.match(html,/>1,75k<\/text>/);assert.match(html,/>3,5k<\/text>/);
 });
 
+test('Phone chart day columns stay inside the viewBox, and the selected day is a glass capsule',()=>{
+ for(const n of [7,10,28]){
+  const days=energyDays({WebMeals:[meal()],WebWorkouts:[workout()]},day,n),html=renderEnergyChartCompact(days,{currentDate:day,selectedDate:days[0].date});
+  const cols=[...html.matchAll(/<rect class="(?:today-highlight|glass-(?:body|sheen|rim))" x="[\d.]+" y="([\d.]+)" width="[\d.]+" height="([\d.]+)"/g)];
+  assert.ok(cols.length>=4,'today column plus the three glass layers');
+  for(const [,y,h] of cols)assert.ok(Number(y)>=0&&Number(y)+Number(h)<=192-2,`column ends at ${Number(y)+Number(h)}`);
+  assert.equal((html.match(/class="glass-col"/g)||[]).length,1);assert.match(html,/<linearGradient id="cg-rim"/);assert.match(html,/class="bar-gloss"/);
+ }
+});
