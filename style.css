@@ -6,6 +6,7 @@
   --accent:#2f5fa7;--accent-2:#6c8fca;--accent-ink:#ffffff;--accent-soft:#b9c7dd;--accent-tint:#e3e9f2;
   --gym:#e3a82b;--gym-ink:#1d2730;--gym-text:#8a5a00;--gym-tint:#f7e7c2;
   --danger:#b3261e;--danger-soft:#fbe9e7;--warn-bg:#fbf1dc;--warn-text:#7a5a00;
+  --ok:#2e7d4f;--ok-tint:#e2f1e7;
   --logo-bar:#1d2730;--logo-gym-stroke:#1d2730;
   --scrim:#1d273080;--shadow:0 18px 60px #1d27302e;
   --font-body:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
@@ -21,6 +22,7 @@
     --accent:#8fb3ec;--accent-2:#5577ae;--accent-ink:#0f1a2a;--accent-soft:#3a4f6e;--accent-tint:#22303f;
     --gym:#e3a82b;--gym-ink:#1d2730;--gym-text:#e8b64a;--gym-tint:#3d3218;
     --danger:#f08a80;--danger-soft:#3a2222;--warn-bg:#3a2f17;--warn-text:#f1cf88;
+    --ok:#7fcf9f;--ok-tint:#1d3327;
     --logo-bar:#a9b0b5;--logo-gym-stroke:transparent;
     --scrim:#000000a6;--shadow:0 18px 60px #00000066;
   }
@@ -709,4 +711,90 @@ dialog::backdrop{background:var(--scrim)}
 .chart-readout .protein{color:var(--protein-chart)}
 .chart-readout .burn{color:var(--gym-text)}
 .compact-legend{justify-content:flex-start;gap:6px 14px;font-size:12px;margin:8px 0}
+
+/* Nhật ký: month calendar. Cell colour = intake vs kcal target; bar = protein vs target. */
+.cal-search{display:block;max-width:420px;margin:0 0 16px;font-size:14px;color:var(--muted)}
+.cal-search input{margin-top:4px;width:100%}
+.cal-card{padding-bottom:18px}
+.cal-nav{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.cal-month{position:relative;display:flex;align-items:center;min-height:40px;padding:0 6px;font-family:var(--font-display);font-size:26px;font-weight:700;cursor:pointer}
+.cal-month input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.cal-nav .icon-button:disabled{opacity:.35}
+.cal-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.cal-stats .chart-stat strong em{font-family:var(--font-body);font-style:normal;font-size:14px;font-weight:500;color:var(--muted)}
+.chart-stat.logged strong{color:var(--ink)}
+.cal-notes{margin:4px 0 16px;padding:12px 14px;border-radius:12px;background:var(--surface-2)}
+.cal-notes h3{margin:0 0 6px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.cal-insights{margin:0;padding:0;list-style:none;display:grid;gap:6px;font-size:14px;line-height:1.5}
+.cal-insights li{position:relative;padding-left:16px}
+.cal-insights li::before{content:'';position:absolute;left:0;top:.55em;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.cal-insights li.ok::before{background:var(--ok)}
+.cal-insights li.warn::before{background:var(--gym)}
+.cal-insights li.muted::before{background:var(--line-strong)}
+.cal-insights li.muted{color:var(--muted)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal-weekday{font-size:12px;font-weight:600;color:var(--muted);text-align:center;padding-bottom:2px}
+.cal-day{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0;min-height:92px;padding:8px 8px 7px;border:1px solid var(--line);border-top:4px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.cal-day:hover{border-color:var(--line-strong)}
+.cal-day.k-under{border-top-color:var(--gym)}
+.cal-day.k-on{border-top-color:var(--ok)}
+.cal-day.k-over{border-top-color:var(--danger)}
+.cal-day.k-logged{border-top-color:var(--accent-soft)}
+.cal-day.today{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.cal-day.selected{border-color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.cal-day.future{opacity:.38;cursor:default;border-top-color:var(--line)}
+.cal-day.missing{border-style:dashed;border-top-style:solid;background:transparent}
+.cal-missing{font-size:12px;color:var(--muted)}
+.cal-num{font-family:var(--font-display);font-size:18px;font-weight:700;line-height:1}
+.cal-day.today .cal-num{color:var(--accent)}
+.cal-kcal{font-size:14px;font-weight:600;white-space:nowrap}
+.cal-day.k-under .cal-kcal{color:var(--warn-text)}
+.cal-day.k-on .cal-kcal{color:var(--ok)}
+.cal-day.k-over .cal-kcal{color:var(--danger)}
+.cal-kcal .short{display:none;font-weight:600}
+.cal-kcal .full{font-weight:600}
+.cal-protein{display:block;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.cal-protein i{display:block;height:100%;background:var(--protein-chart)}
+.cal-day.p-hit .cal-protein i{background:var(--ok)}
+.cal-protein-pct{font-size:11px;color:var(--muted);white-space:nowrap}
+.cal-day.p-hit .cal-protein-pct{color:var(--ok);font-weight:600}
+.cal-burn{margin-top:auto;font-size:11px;font-weight:600;color:var(--gym-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-burn.rest{color:var(--muted);font-weight:500}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:12px;color:var(--muted)}
+.cal-legend span{display:flex;align-items:center;gap:6px}
+.cal-legend i{display:inline-block;width:14px;height:4px;border-radius:2px}
+.cal-legend .k-under{background:var(--gym)}.cal-legend .k-on{background:var(--ok)}.cal-legend .k-over{background:var(--danger)}
+.cal-legend .p-key{height:6px;background:linear-gradient(90deg,var(--protein-chart) 60%,var(--surface-2) 60%)}
+.cal-legend .b-key{width:8px;height:8px;border-radius:50%;background:var(--gym-text)}
+.cal-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:4px 0 12px}
+.cal-figure{display:flex;flex-direction:column;padding:10px 12px;border-radius:12px;background:var(--surface-2);min-width:0}
+.cal-figure small{font-size:12px;color:var(--muted)}
+.cal-figure strong{font-family:var(--font-display);font-size:26px;line-height:1.15}
+.cal-figure span{font-size:12px;color:var(--muted)}
+.cal-figure.k-under strong{color:var(--warn-text)}.cal-figure.k-on strong{color:var(--ok)}.cal-figure.k-over strong{color:var(--danger)}
+.cal-figure.protein strong{color:var(--protein-chart)}.cal-figure.protein.p-hit strong{color:var(--ok)}
+.cal-figure.burn strong{color:var(--gym-text)}
+.cal-day-items{border-top:1px solid var(--line)}
+@media (max-width:620px){
+  .cal-month{font-size:22px}
+  .cal-card{display:flex;flex-direction:column}
+  .cal-card .cal-notes{order:5;margin:16px 0 0}
+  .cal-missing{font-size:0}.cal-missing::after{content:'–';font-size:12px}
+  .cal-day-panel .page-tools{display:flex;flex-wrap:nowrap;gap:8px;width:100%}
+  .cal-day-panel .page-tools .button{flex:1;min-height:40px;padding:8px 10px;font-size:14px}
+  .cal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cal-grid{gap:3px}
+  .cal-day{min-height:62px;padding:5px 3px 4px;gap:2px;border-radius:7px;border-top-width:3px;align-items:center;text-align:center}
+  .cal-num{font-size:14px}
+  .cal-kcal{font-size:10.5px;letter-spacing:-.01em}
+  .cal-kcal .full{display:none}.cal-kcal .short{display:inline}
+  .cal-protein{width:100%;height:4px}
+  .cal-protein-pct{display:none}
+  .cal-burn{width:7px;height:7px;padding:0;border-radius:50%;background:var(--gym-text);font-size:0;margin-top:auto}
+  .cal-burn.rest{background:var(--line-strong)}
+  .cal-figures{grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .cal-figure{padding:8px}
+  .cal-figure strong{font-size:20px}
+  .cal-day-panel .card-head{flex-wrap:wrap}
+}
 
