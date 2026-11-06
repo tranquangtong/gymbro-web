@@ -35,6 +35,8 @@ function cardioMet(row){
   if(watts>0)return [[30,3.5],[50,4],[60,5],[80,5.8],[100,6],[125,6.8],[150,8],[199,10.3],[229,10.8],[250,12.5],[305,13.8],[Infinity,16.3]].find(([max])=>watts<=max)[1];
   return /very light|rat nhe/.test(t)?3.5:/light|nhe/.test(t)?4:/vigorous|hard|nang/.test(t)?8:5.8;
  }
+ // Archery (non-hunting): 4.3 MET, 2024 Adult Compendium code 15010.
+ if(/archery|ban cung/.test(t))return 4.3;
  return /run|jog|chay/.test(t)?7:/elliptical/.test(t)?5:3.5;
 }
 export function estimateWorkoutBatch(rows,{weight,sessionMinutes=null,overwrite=false}={}){

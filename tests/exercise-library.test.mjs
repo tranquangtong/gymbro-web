@@ -30,3 +30,8 @@ test('Same-name variants retain their exercise kind, while initial selection nev
  }
  assert.equal(exerciseChoices().find(x=>x.name==='Kneeling easy chin-up').kind,'assisted');
 });
+
+test('Bắn cung is offered as a timed (cardio) exercise for quick entry',()=>{
+ const choice=exerciseChoices([]).find(x=>x.name==='Bắn cung');
+ assert.ok(choice);assert.equal(choice.kind,'cardio');
+});
