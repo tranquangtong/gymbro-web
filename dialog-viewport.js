@@ -24,7 +24,8 @@ export function installDialogViewport(win=window,doc=document){
     root.style.setProperty('--dialog-viewport-top',bounds.top+'px');
     root.classList.toggle('keyboard-open',bounds.keyboard);
     const field=doc.activeElement;
-    if(!field?.matches?.('input:not([type=file]):not([type=hidden]),textarea,select')||!field.closest('dialog[open]'))return;
+    // Only fields that bring up the keyboard; a <select> opens a picker, scrolling for it only made the sheet jump.
+    if(!field?.matches?.('input:not([type=file]):not([type=hidden]):not([type=date]),textarea')||!field.closest('dialog[open]'))return;
     const container=field.closest('.quick-content,.editor-fields');
     if(!container)return;
     const suggestion=field.closest('.name-field-group')?.querySelector('.inline-suggestions:not([hidden]) .suggestion-button');

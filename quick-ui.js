@@ -22,7 +22,8 @@ export function createQuickUI(env){
     dialog.classList.toggle('compose-dialog',compose);
     const split=compose?body.lastIndexOf('<div class="form-actions">'):-1,content=split<0?body:body.slice(0,split),footer=split<0?'':body.slice(split);
     dialog.innerHTML=`<div class="dialog-inner"><div class="dialog-header"><div><h2 id="quick-title">${title}</h2>${subtitle?`<p>${subtitle}</p>`:''}</div><button class="close-button" data-quick="close" aria-label="Đóng">${icon('close')}</button></div><div class="quick-content">${content}</div>${footer}<div id="quick-error" class="form-error" role="alert"></div></div>`;
-    if(!dialog.open){dialog.showModal();dialog.scrollTop=0;}else{const content=$('#quick-dialog .quick-content');if(content)content.scrollTop=scroll;if(focusId&&/^[-a-zA-Z0-9_]+$/.test(focusId)){const field=$('#'+focusId);field?.focus?.({preventScroll:true});if(selection)try{field?.setSelectionRange?.(...selection);}catch{}}}
+    if(!dialog.open){dialog.showModal();dialog.scrollTop=0;}else{const content=$('#quick-dialog .quick-content');if(content)content.scrollTop=scroll;// Restore focus only to text fields: re-focusing a <select> on iOS reopens its picker (it popped up twice).
+      if(focusId&&/^[-a-zA-Z0-9_]+$/.test(focusId)&&focused.matches?.('input,textarea')){const field=$('#'+focusId);field?.focus?.({preventScroll:true});if(selection)try{field?.setSelectionRange?.(...selection);}catch{}}}
   };
   const table=type=>type==='meals'?'WebMeals':'WebWorkouts';
   async function foods(seed=false){const repo=getState().repo;if(!repo)return DEFAULT_FOODS;library=seed?await repo.seedFoods():await repo.loadFoods();if(!library.length&&(getState().mode!=='firebase'||repo.ownerUid===repo.uid))library=await repo.seedFoods();return library.length?library:DEFAULT_FOODS;}
