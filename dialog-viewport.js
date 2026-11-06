@@ -3,7 +3,9 @@
 export function viewportBounds(win){
   const view=win.visualViewport;
   return {height:view?.height||win.innerHeight,top:view?.offsetTop||0,
-    keyboard:!!view&&view.scale===1&&win.innerHeight-view.height>120};
+    // visualViewport.height shrinks both with the keyboard and with zoom; multiplying by scale undoes
+    // the zoom, so a keyboard is still detected when Safari has zoomed in (it used to require scale 1).
+    keyboard:!!view&&win.innerHeight-view.height*(view.scale||1)>120};
 }
 export function fieldScrollDelta(field,container,viewport,suggestionBottom=field.bottom){
   const top=Math.max(container.top,viewport.top)+10;
