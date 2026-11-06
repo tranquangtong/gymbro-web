@@ -1047,3 +1047,16 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 #editor.profile-editor .settings-details>.button{margin:4px 0 10px;min-height:40px}
 #editor.profile-editor .editor-fields>.field:has(textarea) textarea{min-height:56px}
 
+/* Ước tính bằng AI: while the keyboard is up for the paste box, show only the paste step so the sheet
+   fits above the keyboard instead of scrolling the long instructions and photos around. */
+.estimate-paste{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.estimate-paste>.button{align-self:flex-start}
+.estimate-paste .field{margin-bottom:0}
+.keyboard-open #quick-dialog:has(#estimate-output:focus) .quick-content>:not(.exchange-steps),
+.keyboard-open #quick-dialog:has(#estimate-output:focus) .exchange-steps>:not(.estimate-paste){display:none}
+.keyboard-open #quick-dialog:has(#estimate-output:focus) .estimate-paste>:is(.form-note,[data-quick=paste-estimate],strong){display:none}
+.keyboard-open #quick-dialog #estimate-output{max-height:22vh;scroll-margin-block:12px}
+.keyboard-open #quick-dialog:has(#estimate-output:focus) .exchange-steps:not(:has(#estimate-output)){display:none}
+.keyboard-open #quick-dialog:has(#estimate-output:focus) .exchange-steps:has(#estimate-output){border-top:0;margin-top:0;padding-top:0}
+.keyboard-open #quick-dialog:has(#estimate-output:focus) .estimate-paste .field{margin-top:0}
+
