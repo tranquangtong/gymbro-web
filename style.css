@@ -695,21 +695,21 @@ dialog::backdrop{background:var(--scrim)}
 .energy-chart.compact-chart .chart-date.today{font-weight:700}
 .compact-chart .chart-hit{fill:transparent;cursor:pointer}
 /* Liquid Glass in the phone chart: the selected day is a glass capsule; bars get a gloss and a light rim. */
-.compact-chart .glass-body{fill:url(#cg-body)}
-.compact-chart .glass-sheen{fill:url(#cg-sheen)}
-.compact-chart .glass-rim{fill:none;stroke:url(#cg-rim);stroke-width:1.2}
-.compact-chart .cg-body-a{stop-color:var(--accent);stop-opacity:.14}.compact-chart .cg-body-b{stop-color:var(--accent);stop-opacity:.05}
-.compact-chart .cg-rim-a{stop-color:#fff;stop-opacity:1}.compact-chart .cg-rim-b{stop-color:var(--line-strong);stop-opacity:.55}.compact-chart .cg-rim-c{stop-color:var(--line-strong);stop-opacity:.35}
-.compact-chart .cg-sheen-a{stop-color:#fff;stop-opacity:.7}.compact-chart .cg-sheen-b{stop-color:#fff;stop-opacity:0}
-.compact-chart .bar-gloss{fill:url(#cg-gloss);pointer-events:none}
-.compact-chart .cg-gloss-a{stop-color:#fff;stop-opacity:.42}.compact-chart .cg-gloss-b{stop-color:#fff;stop-opacity:0}
-.compact-chart .intake-bar,.compact-chart .protein-bar{stroke:#ffffff8c;stroke-width:.6}
+.energy-chart .glass-body{fill:url(#cg-body)}
+.energy-chart .glass-sheen{fill:url(#cg-sheen)}
+.energy-chart .glass-rim{fill:none;stroke:url(#cg-rim);stroke-width:1.2}
+.energy-chart .cg-body-a{stop-color:var(--accent);stop-opacity:.14}.energy-chart .cg-body-b{stop-color:var(--accent);stop-opacity:.05}
+.energy-chart .cg-rim-a{stop-color:#fff;stop-opacity:1}.energy-chart .cg-rim-b{stop-color:var(--line-strong);stop-opacity:.55}.energy-chart .cg-rim-c{stop-color:var(--line-strong);stop-opacity:.35}
+.energy-chart .cg-sheen-a{stop-color:#fff;stop-opacity:.7}.energy-chart .cg-sheen-b{stop-color:#fff;stop-opacity:0}
+.energy-chart .bar-gloss{fill:url(#cg-gloss);pointer-events:none}
+.energy-chart .cg-gloss-a{stop-color:#fff;stop-opacity:.42}.energy-chart .cg-gloss-b{stop-color:#fff;stop-opacity:0}
+.energy-chart .intake-bar,.energy-chart .protein-bar{stroke:#ffffff8c;stroke-width:.6}
 @media (prefers-color-scheme:dark){
-  .compact-chart .cg-body-a{stop-color:#fff;stop-opacity:.13}.compact-chart .cg-body-b{stop-color:#fff;stop-opacity:.03}
-  .compact-chart .cg-rim-a{stop-color:#fff;stop-opacity:.75}.compact-chart .cg-rim-b{stop-color:#fff;stop-opacity:.22}.compact-chart .cg-rim-c{stop-color:#fff;stop-opacity:.1}
-  .compact-chart .cg-sheen-a{stop-color:#fff;stop-opacity:.16}
-  .compact-chart .cg-gloss-a{stop-color:#fff;stop-opacity:.26}
-  .compact-chart .intake-bar,.compact-chart .protein-bar{stroke:#ffffff33}
+  .energy-chart .cg-body-a{stop-color:#fff;stop-opacity:.13}.energy-chart .cg-body-b{stop-color:#fff;stop-opacity:.03}
+  .energy-chart .cg-rim-a{stop-color:#fff;stop-opacity:.75}.energy-chart .cg-rim-b{stop-color:#fff;stop-opacity:.22}.energy-chart .cg-rim-c{stop-color:#fff;stop-opacity:.1}
+  .energy-chart .cg-sheen-a{stop-color:#fff;stop-opacity:.16}
+  .energy-chart .cg-gloss-a{stop-color:#fff;stop-opacity:.26}
+  .energy-chart .intake-bar,.energy-chart .protein-bar{stroke:#ffffff33}
 }
 .compact-chart .burn-line{stroke-width:2}
 .compact-chart .burn-point{stroke-width:1.75}
@@ -856,5 +856,78 @@ dialog::backdrop{background:var(--scrim)}
 @media (prefers-reduced-motion:no-preference){
   .floating-log-button{animation:log-glow 3.2s ease-in-out infinite}
   @keyframes log-glow{50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 50%,transparent),0 6px 20px color-mix(in srgb,var(--glow) 44%,transparent),0 0 42px color-mix(in srgb,var(--glow) 38%,transparent)}}
+}
+
+/* ============================================================================
+   Liquid Glass, app-wide (phone and desktop). Surfaces are translucent with a
+   bright top rim, an inner edge, a soft drop and, where it pays off, a backdrop
+   blur. A faint colour field behind the app gives the glass something to show.
+   ========================================================================== */
+:root{
+  --ambient:radial-gradient(900px 520px at 8% -8%,#2f5fa72e,transparent 62%),radial-gradient(760px 480px at 105% 18%,#e3a82b24,transparent 60%),radial-gradient(900px 620px at 45% 112%,#8661c524,transparent 62%);
+  --gs-bg:linear-gradient(160deg,#ffffffc7,#ffffff94);--gs-line:#ffffffcc;
+  --gs-rim:inset 0 1px 0 #ffffff,inset 0 0 0 1px #ffffff4d;--gs-drop:0 10px 30px #1d27301a,0 1px 3px #1d273012;
+  --gs-blur:blur(22px) saturate(170%);
+  --gi-bg:linear-gradient(160deg,#ffffff99,#ffffff59);--gi-rim:inset 0 1px 0 #ffffffe6,inset 0 0 0 1px #ffffff59;
+  --gb-bg:linear-gradient(180deg,#ffffffe6,#ffffffa6);--gb-rim:inset 0 1px 0 #ffffff,inset 0 -1px 0 #1d27300f,0 1px 2px #1d273014;
+  --gloss:linear-gradient(180deg,#ffffff6b 0%,#ffffff1f 42%,#ffffff00 60%,#0000000f 100%);
+}
+@media (prefers-color-scheme:dark){:root{
+  --ambient:radial-gradient(900px 520px at 8% -8%,#5577ae38,transparent 62%),radial-gradient(760px 480px at 105% 18%,#e3a82b1f,transparent 60%),radial-gradient(900px 620px at 45% 112%,#8661c52e,transparent 62%);
+  --gs-bg:linear-gradient(160deg,#2b3642b8,#1c252d94);--gs-line:#ffffff1f;
+  --gs-rim:inset 0 1px 0 #ffffff26,inset 0 0 0 1px #ffffff0a;--gs-drop:0 12px 32px #00000059,0 1px 3px #00000040;
+  --gs-blur:blur(22px) saturate(160%);
+  --gi-bg:linear-gradient(160deg,#ffffff14,#ffffff08);--gi-rim:inset 0 1px 0 #ffffff1f,inset 0 0 0 1px #ffffff0d;
+  --gb-bg:linear-gradient(180deg,#ffffff1f,#ffffff0a);--gb-rim:inset 0 1px 0 #ffffff2e,inset 0 -1px 0 #0000002e,0 1px 2px #00000033;
+  --gloss:linear-gradient(180deg,#ffffff47 0%,#ffffff14 42%,#ffffff00 60%,#00000024 100%);
+}}
+body{background:var(--ambient),var(--bg);background-attachment:fixed}
+.topbar{background:transparent}
+
+/* Cards */
+.card{background:var(--gs-bg);border-color:var(--gs-line);box-shadow:var(--gs-rim),var(--gs-drop);-webkit-backdrop-filter:var(--gs-blur);backdrop-filter:var(--gs-blur)}
+/* backdrop-filter gives each card its own stacking context, so a card with an open menu or
+   macro popover is lifted above the cards after it; otherwise they would cover the overflow. */
+.card{position:relative}
+.card:has(.row-menu[open]),.card:has(.macro-dial.open),.card:has(.dial-trigger:focus-visible){z-index:20}
+@media (hover:hover){.card:has(.macro-dial:hover){z-index:20}}
+/* Small surfaces inside cards: glass tint and rim, no extra blur. */
+.chart-stat,.cal-notes,.cal-figure,.segmented{background:var(--gi-bg);box-shadow:var(--gi-rim)}
+.segmented button.selected{background:var(--gb-bg);box-shadow:var(--gb-rim)}
+
+/* Buttons */
+.button,.icon-button{background:var(--gb-bg);border-color:var(--gs-line);box-shadow:var(--gb-rim)}
+.button:hover,.icon-button:hover{background:var(--gb-bg);filter:brightness(1.04)}
+.button.primary{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 72%,#fff),var(--accent));border-color:color-mix(in srgb,var(--accent) 60%,#fff);box-shadow:inset 0 1px 0 #ffffff8c,inset 0 -1px 0 #0000001f,0 2px 8px color-mix(in srgb,var(--accent) 30%,transparent)}
+.workout-log-button{background:linear-gradient(180deg,color-mix(in srgb,var(--gym) 70%,#fff),var(--gym));border-color:color-mix(in srgb,var(--gym) 60%,#fff)}
+.button.danger{background:linear-gradient(180deg,var(--danger-soft),color-mix(in srgb,var(--danger-soft) 80%,var(--danger)))}
+/* The add buttons keep their halo; the rim is folded into the same shadow. */
+.floating-log-button{box-shadow:inset 0 1px 0 #ffffff99,inset 0 -1px 0 #0000001f,0 0 0 1px color-mix(in srgb,var(--glow) 40%,transparent),0 6px 18px color-mix(in srgb,var(--glow) 38%,transparent),0 0 34px color-mix(in srgb,var(--glow) 30%,transparent)}
+
+/* Barbell hero: glass plates and a polished bar */
+.plate{background-image:var(--gloss);box-shadow:inset 0 1px 0 #ffffffb3,inset 0 0 0 1px #ffffff33,0 6px 18px color-mix(in srgb,var(--accent) 28%,transparent)}
+.plate.empty{background:var(--gi-bg);box-shadow:var(--gi-rim)}
+.barbell-bar,.barbell-collar{background-image:linear-gradient(180deg,#ffffff73,#ffffff00 55%,#00000026);box-shadow:inset 0 1px 0 #ffffff66}
+
+/* Macro dials: a glass lens behind each ring, rounded glowing arc */
+.dial-circle::before{content:'';position:absolute;inset:11%;border-radius:50%;background:radial-gradient(circle at 32% 24%,#ffffffd9,#ffffff40 48%,#ffffff14 100%);box-shadow:inset 0 1px 1px #ffffffe6,inset 0 0 0 1px #ffffff59,0 6px 18px #1d27301a}
+.dial-circle svg{position:relative;z-index:1}
+.dial-value{z-index:2}
+.dial-circle .dial-fill{stroke-linecap:round;filter:drop-shadow(0 0 3px color-mix(in srgb,var(--dial-color) 55%,transparent))}
+@media (prefers-color-scheme:dark){.dial-circle::before{background:radial-gradient(circle at 32% 24%,#ffffff2e,#ffffff0d 50%,#ffffff05 100%);box-shadow:inset 0 1px 1px #ffffff33,inset 0 0 0 1px #ffffff12,0 8px 20px #00000059}}
+
+/* Charts: glass gradients come from GLASS_DEFS; the desktop today column becomes a glass capsule too. */
+.energy-chart:not(.compact-chart) .today-highlight{fill:url(#cg-body);stroke:url(#cg-rim);stroke-width:1.2}
+
+/* Desktop and tablet sidebar */
+@media (min-width:621px){
+  .sidebar{background:var(--gs-bg);border-right-color:var(--gs-line);box-shadow:var(--gs-rim),var(--gs-drop);-webkit-backdrop-filter:var(--gs-blur);backdrop-filter:var(--gs-blur)}
+  .nav-link.active,.nav-link.active:hover{background:var(--glass-pill);box-shadow:var(--glass-pill-rim)}
+}
+
+/* Accessibility: users who ask for less transparency get solid surfaces. */
+@media (prefers-reduced-transparency:reduce){
+  body{background:var(--bg)}
+  .card,.sidebar{background:var(--surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 }
 
