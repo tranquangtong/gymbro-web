@@ -8,10 +8,11 @@ export const SNAPSHOT_KEY='gymbro.snapshot.v1';
 export const SNAPSHOT_MAX_BYTES=2_500_000;
 const TABLES=[...Object.keys(SCHEMAS),'Archive'];
 
-export function writeSnapshot(storage,{uid,sessionExpiresAt,data},now=Date.now()){
+export function writeSnapshot(storage,{uid,sessionExpiresAt,data,user=null},now=Date.now()){
   if(!storage||!uid||!sessionValid(sessionExpiresAt,now))return false;
   try{
-    const text=JSON.stringify({v:1,uid,sessionExpiresAt,savedAt:now,data});
+    const face=user&&typeof user==='object'?{name:String(user.name||'').slice(0,200),email:String(user.email||'').slice(0,320),photo:/^https:\/\//.test(user.photo||'')?String(user.photo).slice(0,2000):''}:null;
+    const text=JSON.stringify({v:1,uid,sessionExpiresAt,savedAt:now,data,user:face});
     if(text.length>SNAPSHOT_MAX_BYTES){storage.removeItem(SNAPSHOT_KEY);return false;}
     storage.setItem(SNAPSHOT_KEY,text);return true;
   }catch{try{storage.removeItem(SNAPSHOT_KEY);}catch{}return false;}

@@ -36,3 +36,12 @@ test('Saved data shows as a view-only "cached" stage until the server load finis
   assert.equal(accessStage({mode:'firebase',authRestoring:true,cached:null},now),'restoring');
   assert.equal(accessStage({mode:'firebase',connected:true,initialized:true,cached,repo:{s:{sessionExpiresAt:later}},accountProfile:{}},now),'profile','once loaded, the live state wins');
 });
+
+test('Snapshot keeps the account face for an instant avatar, with only https photos',()=>{
+  const s=memory();
+  writeSnapshot(s,{uid:'u1',sessionExpiresAt:later,data,user:{name:'Trần Tống',email:'a@b.c',photo:'https://lh3.googleusercontent.com/x'}},now);
+  assert.deepEqual(readSnapshot(s,now).user,{name:'Trần Tống',email:'a@b.c',photo:'https://lh3.googleusercontent.com/x'});
+  writeSnapshot(s,{uid:'u1',sessionExpiresAt:later,data,user:{name:'X',photo:'javascript:alert(1)'}},now);
+  assert.equal(readSnapshot(s,now).user.photo,'');
+  writeSnapshot(s,{uid:'u1',sessionExpiresAt:later,data},now);assert.equal(readSnapshot(s,now).user,null);
+});
