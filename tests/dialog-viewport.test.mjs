@@ -6,6 +6,9 @@ test('iOS keyboard tracks both visible height and Safari pan without treating pi
  assert.deepEqual(viewportBounds(win),{height:340,top:96,keyboard:true});
  win.visualViewport.scale=2;assert.equal(viewportBounds(win).keyboard,false);
  assert.deepEqual(viewportBounds({innerHeight:700}),{height:700,top:0,keyboard:false});
+ // Pinch zoom alone (no keyboard) is not a keyboard; a keyboard while Safari has zoomed in still is.
+ assert.equal(viewportBounds({innerHeight:800,visualViewport:{height:400,offsetTop:0,scale:2}}).keyboard,false);
+ assert.equal(viewportBounds({innerHeight:800,visualViewport:{height:(800-330)/1.1,offsetTop:120,scale:1.1}}).keyboard,true);
 });
 test('Focused field and first suggestion scroll above keyboard without moving the page',()=>{
  const view={top:100,height:340},container={top:170,bottom:380};
