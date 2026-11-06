@@ -803,9 +803,9 @@ dialog::backdrop{background:var(--scrim)}
 
 /* Phone bottom bar: matte glass. Content scrolls underneath (.shell runs to the bottom edge);
    the bar is a separate layer above the scroller, so taps on it are never taken by scrolling. */
-/* iOS 18-style frosted material: heavy blur, a fairly dense tint and boosted colour; behind shows as colour, not detail. */
-:root{--glass:#ffffffad;--glass-line:#1d27301f;--glass-hi:#ffffffb3}
-@media (prefers-color-scheme:dark){:root{--glass:#1c252dad;--glass-line:#ffffff1f;--glass-hi:#ffffff1f}}
+/* Frosted material: heavy blur and boosted colour with a light (~48%) tint, so colour behind shows clearly but detail does not. */
+:root{--glass:#ffffff7a;--glass-line:#1d27301f;--glass-hi:#ffffffb3}
+@media (prefers-color-scheme:dark){:root{--glass:#1c252d7a;--glass-line:#ffffff1f;--glass-hi:#ffffff1f}}
 @media (max-width:620px){
   .sidebar{background:var(--surface);border-color:var(--glass-line)}
   @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
