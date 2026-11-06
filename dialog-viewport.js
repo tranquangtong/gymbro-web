@@ -17,6 +17,14 @@ export function fieldScrollDelta(field,container,viewport,suggestionBottom=field
   if(end>bottom)return Math.min(end-bottom,Math.max(0,field.top-top));
   return 0;
 }
+// Top-anchored sheets: when a field low on the screen is tapped, lift it to the top of its scroll area
+// before the keyboard opens, so the keyboard never covers it and iOS has no reason to pan the page.
+// Returns how far to scroll the container (0 when the field already sits in the upper part).
+export function focusLiftDelta(field,container,viewHeight,gap=12){
+  if(field.bottom<=viewHeight*0.42)return 0;
+  return Math.max(0,field.top-(container.top+gap));
+}
+const EDITABLE='input:not([type=file]):not([type=hidden]):not([type=date]):not([type=checkbox]):not([type=radio]),textarea';
 export function installDialogViewport(win=window,doc=document){
   let scheduled=false;
   const update=()=>{
@@ -27,7 +35,7 @@ export function installDialogViewport(win=window,doc=document){
     root.classList.toggle('keyboard-open',bounds.keyboard);
     const field=doc.activeElement;
     // Only fields that bring up the keyboard; a <select> opens a picker, scrolling for it only made the sheet jump.
-    if(!field?.matches?.('input:not([type=file]):not([type=hidden]):not([type=date]),textarea')||!field.closest('dialog[open]'))return;
+    if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
     const container=field.closest('.quick-content,.editor-fields');
     if(!container)return;
     const suggestion=field.closest('.name-field-group')?.querySelector('.inline-suggestions:not([hidden]) .suggestion-button');
@@ -40,5 +48,15 @@ export function installDialogViewport(win=window,doc=document){
   win.addEventListener('resize',schedule);
   doc.addEventListener('focusin',schedule);
   doc.addEventListener('input',schedule);
+  // Synchronously on focus (before the keyboard animates): mark the page as editing, which gives the
+  // sheet's scroll area room below its content, then lift the field into the upper part of the sheet.
+  doc.addEventListener('focusin',e=>{
+    const field=e.target;if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
+    const container=field.closest('.quick-content,.editor-fields');if(!container)return;
+    doc.documentElement.classList.add('field-focus');
+    const delta=focusLiftDelta(field.getBoundingClientRect(),container.getBoundingClientRect(),win.visualViewport?.height||win.innerHeight);
+    if(delta)container.scrollTop+=delta;
+  });
+  doc.addEventListener('focusout',()=>{win.setTimeout(()=>{const f=doc.activeElement;if(!(f?.matches?.(EDITABLE)&&f.closest('dialog[open]')))doc.documentElement.classList.remove('field-focus');},150);});
   update();
 }

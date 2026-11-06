@@ -683,8 +683,6 @@ dialog::backdrop{background:var(--scrim)}
 
 /* Anchor the sheet above the iOS keyboard, including Safari's viewport pan. */
 @media(max-width:700px){
- .keyboard-open #quick-dialog[open],.keyboard-open #editor.log-editor[open]{position:fixed;inset:auto 0 auto;top:calc(var(--dialog-viewport-top,0px) + 6px);margin:0 auto;width:100%;max-height:calc(var(--dialog-viewport) - 12px);border-radius:16px}
- .keyboard-open #quick-dialog .dialog-inner,.keyboard-open #quick-dialog.compose-dialog .dialog-inner,.keyboard-open #editor.log-editor .dialog-inner{max-height:calc(var(--dialog-viewport) - 14px);padding:10px 12px}
  .keyboard-open #quick-dialog .dialog-header,.keyboard-open #quick-dialog.compose-dialog .dialog-header,.keyboard-open #editor.log-editor .dialog-header{margin-bottom:6px}
  .keyboard-open #quick-dialog .dialog-header h2,.keyboard-open #quick-dialog.compose-dialog .dialog-header h2,.keyboard-open #editor.log-editor .dialog-header h2{font-size:21px}
  .keyboard-open #quick-dialog .close-button,.keyboard-open #editor.log-editor .close-button{width:36px;height:36px;min-height:36px}
@@ -1047,22 +1045,37 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 #editor.profile-editor .settings-details>.button{margin:4px 0 10px;min-height:40px}
 #editor.profile-editor .editor-fields>.field:has(textarea) textarea{min-height:56px}
 
-/* Ước tính bằng AI: while the keyboard is up for the paste box, show only the paste step so the sheet
-   fits above the keyboard instead of scrolling the long instructions and photos around. */
+/* Ước tính bằng AI: paste step layout. */
 .estimate-paste{display:flex;flex-direction:column;gap:8px;margin-top:4px}
 .estimate-paste>.button{align-self:flex-start}
 .estimate-paste .field{margin-bottom:0}
-.keyboard-open #quick-dialog:has(#estimate-output:focus) .quick-content>:not(.exchange-steps),
-.keyboard-open #quick-dialog:has(#estimate-output:focus) .exchange-steps>:not(.estimate-paste){display:none}
-.keyboard-open #quick-dialog:has(#estimate-output:focus) .estimate-paste>:is(.form-note,[data-quick=paste-estimate],strong){display:none}
-.keyboard-open #quick-dialog #estimate-output{max-height:22vh;scroll-margin-block:12px}
-.keyboard-open #quick-dialog:has(#estimate-output:focus) .exchange-steps:not(:has(#estimate-output)){display:none}
-.keyboard-open #quick-dialog:has(#estimate-output:focus) .exchange-steps:has(#estimate-output){border-top:0;margin-top:0;padding-top:0}
-.keyboard-open #quick-dialog:has(#estimate-output:focus) .estimate-paste .field{margin-top:0}
+.keyboard-open #quick-dialog #estimate-output{max-height:30vh}
 
 /* iOS Safari zooms the whole page when a field under 16px gets focus, and does not zoom back out.
    Keep every text field, select and textarea at 16px or more on touch screens. */
 @media (max-width:850px),(pointer:coarse){
   input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{font-size:max(16px,1em)!important}
 }
+
+/* ============================================================================
+   Phones: input sheets drop down from the top instead of rising from the bottom.
+   The top edge stays put under the status bar; the sheet's height follows the
+   visible viewport, so when the keyboard opens the sheet shrinks above it and
+   only its content scrolls. dialog-viewport.js lifts the tapped field to the top
+   of that scroll area before the keyboard opens (no iOS page pan, no jumping).
+   Fields are 16px+ on touch screens, so iOS never zooms.
+   ========================================================================== */
+@media (max-width:620px){
+  dialog{position:fixed;inset:0 0 auto 0;top:calc(var(--dialog-viewport-top,0px) + env(safe-area-inset-top) + 8px);margin:0 auto;width:calc(100% - 16px);max-width:none;max-height:calc(var(--dialog-viewport,100dvh) - env(safe-area-inset-top) - 16px);border:1px solid var(--line);border-radius:22px;overflow:auto;overscroll-behavior:contain}
+  #quick-dialog,#editor.log-editor{overflow:hidden;max-height:calc(var(--dialog-viewport,100dvh) - env(safe-area-inset-top) - 16px)}
+  #quick-dialog .dialog-inner,#quick-dialog.compose-dialog .dialog-inner,#editor.log-editor .dialog-inner{max-height:calc(var(--dialog-viewport,100dvh) - env(safe-area-inset-top) - 18px);padding:16px 14px 14px}
+  .dialog-inner{padding:18px 16px 16px}
+  .form-actions{bottom:-16px;padding-bottom:8px}
+  #quick-dialog.compose-dialog .form-actions{bottom:auto;padding-bottom:0}
+  /* While a field is focused, leave room under the content so even the last field can be lifted. */
+  .field-focus #quick-dialog .quick-content,.field-focus #editor.log-editor .editor-fields{padding-bottom:45vh}
+  dialog[open]{animation:sheet-drop .24s cubic-bezier(.2,.8,.2,1)}
+}
+@keyframes sheet-drop{from{transform:translateY(-24px);opacity:0}}
+@media (prefers-reduced-motion:reduce){dialog[open]{animation:none}}
 
