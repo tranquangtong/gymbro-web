@@ -972,8 +972,8 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .storage-banner{max-width:1160px;margin:0 auto;border-radius:14px;overflow-wrap:anywhere}
 @media (min-width:621px){.storage-banner{margin:0 32px;margin-inline:max(32px,calc((100% - 1160px) / 2 + 32px))}}
 @media (max-width:620px){
-  main{padding-top:calc(env(safe-area-inset-top) + 66px)}
-  .storage-banner{margin:calc(env(safe-area-inset-top) + 62px) 16px 0;padding:10px 14px}
+  main{padding-top:calc(env(safe-area-inset-top) + 80px)}
+  .storage-banner{margin:calc(env(safe-area-inset-top) + 76px) 16px 0;padding:10px 14px}
   .storage-banner:not(:empty)+main{padding-top:16px}
 }
 
@@ -1007,5 +1007,22 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
   .day-row .floating-log-actions{position:static;max-width:none}
   main:has(.day-row .floating-log-actions){padding-bottom:56px}
   body:has(.day-row .floating-log-actions) .toast,body:has(.day-row .floating-log-actions) .update-banner{bottom:24px}
+}
+
+/* Brand text: Barlow Condensed sits ~3px low in its line box; lift it so its ink is centred with the mark. */
+.brand>span{line-height:1;transform:translateY(-3px)}
+
+/* Phones: brand pill top left and the avatar top right, both 24px below the safe area so the
+   iOS web-app status-bar blur never covers them. */
+.phone-brand{display:none}
+@media (max-width:620px){
+  .account-float{top:calc(env(safe-area-inset-top) + 24px)}
+  .phone-brand{position:fixed;z-index:40;top:calc(env(safe-area-inset-top) + 24px);left:calc(env(safe-area-inset-left) + 12px);display:flex;align-items:center;gap:8px;height:44px;padding:0 14px 0 10px;border:1px solid var(--glass-line);border-radius:22px;background:var(--surface);box-shadow:0 4px 14px #1d273029;color:var(--ink);font-family:var(--font-display);font-size:22px;font-weight:700;text-decoration:none;-webkit-tap-highlight-color:transparent}
+  .phone-brand .brand-mark{width:26px;height:26px}
+  .phone-brand span{line-height:1;transform:translateY(-2px)}
+  .access-locked .phone-brand{display:none}
+  @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+    .phone-brand{background:var(--glass);-webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);box-shadow:var(--glass-rim),var(--glass-drop)}
+  }
 }
 
