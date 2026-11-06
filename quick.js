@@ -160,7 +160,7 @@ export function requestPrompt(q){
 // Tolerate clipboard wrappers without inventing missing values or completing cut JSON.
 export function readEstimateJSON(text){
   const raw=String(text??'').replace(/[\uFEFF\u200B-\u200D\u2060]/g,'').trim();
-  if(!raw)throw Error('Chưa có kết quả. Dán JSON ChatGPT trả về.');
+  if(!raw)throw Error('Chưa có kết quả. Dán JSON AI trả về.');
   if(raw.length>200000)throw Error('Kết quả quá dài. Dùng prompt gọn mới.');
   const unfenced=raw.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
   const tidy=input=>{
@@ -182,7 +182,7 @@ export function readEstimateJSON(text){
   if(!broken&&blocks.length>1){const hits=blocks.map(b=>{try{return JSON.parse(b);}catch{return null;}}).filter(o=>o&&typeof o==='object'&&!Array.isArray(o)&&(('r' in o&&'m' in o)||o.app==='GymBro'));if(hits.length===1)return hits[0];}
   if(blocks.length>1)throw Error('Có nhiều khối JSON. Chỉ dán một kết quả đầy đủ.');
   if(begin>=0&&!broken)throw Error('JSON có vẻ bị cắt: thiếu dấu đóng ngoặc hoặc chuỗi chưa kết thúc. Copy lại khối kết quả; prompt mới dùng dạng gọn.');
-  throw Error('JSON sai cú pháp. Dùng nút Copy của khối kết quả ChatGPT; không cần chọn kèm phần giải thích.');
+  throw Error('JSON sai cú pháp. Dùng nút Copy của khối kết quả AI trả về; không cần chọn kèm phần giải thích.');
 }
 export function parseEstimate(text,q,currentRows,scope){
   if(!q||q.scope!==scope)throw Error('Tạo prompt trong tài khoản hiện tại trước.');
@@ -215,8 +215,8 @@ export function parseEstimate(text,q,currentRows,scope){
     const r={...current,updated_at:new Date().toISOString(),_originalUpdatedAt:current.updated_at};
     if(q.kind==='meals'){
       for(const [from,to] of [['kcal','kcal'],['protein_g','protein'],['carbs_g','carbs'],['fat_g','fat']]){const known=num(current[to]);if((!q.missingOnly&&current.nutrition_source!=='label')||known===null)r[to]=item[from]===null?(current[to]??''):round(item[from]);}
-      r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='ChatGPT: '+notes;
-    }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'ChatGPT · gross kcal: ')+notes;}
+      r.nutrition_source=current.nutrition_source==='label'?'label':'estimate';r.nutrition_notes='AI: '+notes;
+    }else{r.kcal_burned_est=item.kcal_burned===null?'':round(item.kcal_burned);r.kcal_estimation_notes=(q.method==='local'?'GymBro · gross kcal: ':'AI · gross kcal: ')+notes;}
     validateRecord(q.kind==='meals'?'WebMeals':'WebWorkouts',r);if(q.kind==='meals'){const w=macroWarnings(r);if(w.length)r._warnings=w;}return r;
   });
 }

@@ -64,9 +64,9 @@ test('Compact rows may carry a short assumption note, and kcal that disagrees wi
  const date='2026-10-30',scope='firebase:test',rows=[{id:'a',date,meal:'lunch',food:'Cơm tấm',portion:'1 đĩa',kcal:'',protein:'',carbs:'',fat:'',created_at:'c',updated_at:'u',deleted:false}];
  const q=makeRequest('meals',date,rows,{scope,missingOnly:true});
  const ok=parseEstimate(JSON.stringify({r:estimateToken(q),m:[[1,650,30,80,22,'250 g cơm, 120 g sườn, 10 g mỡ hành']]}),q,rows,scope)[0];
- assert.equal(ok.nutrition_notes,'ChatGPT: 250 g cơm, 120 g sườn, 10 g mỡ hành');assert.equal(ok._warnings,undefined);
+ assert.equal(ok.nutrition_notes,'AI: 250 g cơm, 120 g sườn, 10 g mỡ hành');assert.equal(ok._warnings,undefined);
  const off=parseEstimate(JSON.stringify({r:estimateToken(q),m:[[1,300,30,80,22,'giả định']]}),q,rows,scope)[0];
- assert.match(off._warnings[0],/lệch với macro/);assert.equal(off.nutrition_notes,'ChatGPT: Ước tính từ mô tả/ảnh');
+ assert.match(off._warnings[0],/lệch với macro/);assert.equal(off.nutrition_notes,'AI: Ước tính từ mô tả/ảnh');
  assert.match(requestPrompt(q),/Món 1: Cơm tấm — lượng: 1 đĩa — không có ảnh/);
 });
 
