@@ -999,3 +999,13 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
   .sidebar{padding-left:14px}
 }
 
+/* Ăn uống / Tập luyện: on desktop and tablet the add button sits at the right of the date row,
+   near the top where it is easy to reach. Phones keep the floating button above the bottom bar. */
+.day-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.day-row .day-toolbar{margin-bottom:0}
+@media (min-width:621px){
+  .day-row .floating-log-actions{position:static;max-width:none}
+  main:has(.day-row .floating-log-actions){padding-bottom:56px}
+  body:has(.day-row .floating-log-actions) .toast,body:has(.day-row .floating-log-actions) .update-banner{bottom:24px}
+}
+
