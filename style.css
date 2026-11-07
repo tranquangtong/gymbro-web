@@ -142,7 +142,9 @@ main:focus{outline:none}
 .barbell-bar{position:absolute;left:0;right:0;top:70px;height:10px;border-radius:5px;background:var(--line-strong)}
 .barbell-collar{position:absolute;top:51px;width:12px;height:48px;border-radius:3px;background:var(--ink)}
 .barbell-collar.start{left:0}
-.barbell-collar.target{top:43px;height:64px;transform:translateX(-50%);left:calc(18px + (100% - 36px) * var(--target,1))}
+.barbell-collar.end{right:0}
+/* Both ends are identical collars; the target only gets its own marker when intake has passed it. */
+.barbell-target{position:absolute;top:43px;height:64px;width:4px;border-radius:2px;background:var(--danger);transform:translateX(-50%);left:calc(18px + (100% - 36px) * var(--target,1));box-shadow:0 0 0 2px var(--surface)}
 .barbell-plates,.plate-labels{position:absolute;left:18px;right:18px;display:flex;gap:4px}
 .barbell-plates{top:5px;height:140px;align-items:center}
 .plate{flex:var(--kcal) 1 0;min-width:6px;height:140px;border-radius:8px;background:var(--accent)}
@@ -442,7 +444,7 @@ dialog::backdrop{background:var(--scrim)}
   .barbell{height:124px;margin-top:16px}
   .barbell-bar{top:57px}
   .barbell-collar{top:42px;height:40px}
-  .barbell-collar.target{top:36px;height:52px}
+  .barbell-target{top:36px;height:52px}
   .barbell-plates{height:116px}
   .plate{height:116px;border-radius:6px}
   .plate-labels{font-size:12px}
