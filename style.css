@@ -1100,9 +1100,9 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .day-zone>.card-sub{margin:12px 0}
 @media (max-width:900px){.day-log{grid-template-columns:1fr}}
 
-/* Kcal barbell: one brand colour per meal (sáng sky, trưa gold, tối navy, phụ violet). */
-:root{--meal-breakfast:#5b8fd6;--meal-lunch:#e3a82b;--meal-dinner:#2f5fa7;--meal-snack:#8661c5;--meal-other:#9aabc4}
-@media (prefers-color-scheme:dark){:root{--meal-breakfast:#6fa0e6;--meal-lunch:#e3a82b;--meal-dinner:#4a76c0;--meal-snack:#a585e0;--meal-other:#6d7f99}}
+/* Kcal barbell: one brand colour per meal (sáng navy, trưa gold, tối sky, phụ violet). */
+:root{--meal-breakfast:#2f5fa7;--meal-lunch:#e3a82b;--meal-dinner:#5b8fd6;--meal-snack:#8661c5;--meal-other:#9aabc4}
+@media (prefers-color-scheme:dark){:root{--meal-breakfast:#4a76c0;--meal-lunch:#e3a82b;--meal-dinner:#6fa0e6;--meal-snack:#a585e0;--meal-other:#6d7f99}}
 .plate{--plate:var(--accent)}
 .plate.meal-breakfast{--plate:var(--meal-breakfast)}
 .plate.meal-lunch{--plate:var(--meal-lunch)}
