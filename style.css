@@ -1081,3 +1081,22 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 @keyframes sheet-drop{from{transform:translateY(-24px);opacity:0}}
 @media (prefers-reduced-motion:reduce){dialog[open]{animation:none}}
 
+/* A day's log (Hôm nay → Trong ngày, Nhật ký → day panel): meals grouped by meal, workouts in
+   their own zone; two columns on wide screens, one on phones. */
+.day-log{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
+.day-zone{min-width:0;padding:12px 14px 4px;border-radius:16px;background:var(--gi-bg);box-shadow:var(--gi-rim)}
+.day-zone-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:2px 0 8px;border-bottom:1px solid var(--line)}
+.day-zone-head h3{display:flex;align-items:center;gap:8px;margin:0;font-family:var(--font-display);font-size:22px;font-weight:700}
+.day-zone-head h3 svg{width:18px;height:18px;color:var(--accent)}
+.workouts-zone .day-zone-head h3 svg{color:var(--gym-text)}
+.day-zone-head span{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.meal-block{padding-top:8px}
+.meal-block+.meal-block{margin-top:4px;border-top:1px dashed var(--line)}
+.meal-block-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:4px 0 2px}
+.meal-block-head strong{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.meal-block-head span{font-size:12px;color:var(--muted);white-space:nowrap}
+.profile-block .meal-block-head strong{color:var(--muted)}
+.day-zone .log-row:last-child{border-bottom:0}
+.day-zone>.card-sub{margin:12px 0}
+@media (max-width:900px){.day-log{grid-template-columns:1fr}}
+
