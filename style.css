@@ -1100,3 +1100,25 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .day-zone>.card-sub{margin:12px 0}
 @media (max-width:900px){.day-log{grid-template-columns:1fr}}
 
+/* Kcal barbell: one brand colour per meal (sáng gold, trưa sky, tối navy, phụ violet). */
+:root{--meal-breakfast:#e3a82b;--meal-lunch:#5b8fd6;--meal-dinner:#2f5fa7;--meal-snack:#8661c5;--meal-other:#9aabc4}
+@media (prefers-color-scheme:dark){:root{--meal-breakfast:#e3a82b;--meal-lunch:#6fa0e6;--meal-dinner:#4a76c0;--meal-snack:#a585e0;--meal-other:#6d7f99}}
+.plate{--plate:var(--accent)}
+.plate.meal-breakfast{--plate:var(--meal-breakfast)}
+.plate.meal-lunch{--plate:var(--meal-lunch)}
+.plate.meal-dinner{--plate:var(--meal-dinner)}
+.plate.meal-snack{--plate:var(--meal-snack)}
+.plate.meal-other{--plate:var(--meal-other)}
+.plate:not(.empty),.plate:not(.empty):nth-child(even){background-color:var(--plate);background-image:var(--gloss);box-shadow:inset 0 1px 0 #ffffffb3,inset 0 0 0 1px #ffffff33,0 6px 18px color-mix(in srgb,var(--plate) 30%,transparent)}
+
+/* Protein reached: a gold achievement halo instead of the red "over" warning. */
+.macro-dial.achieved{--dial-color:var(--gym)}
+.macro-dial.achieved .dial-circle::after{content:'';position:absolute;inset:-9%;z-index:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,transparent 52%,color-mix(in srgb,var(--gym) 38%,transparent) 60%,color-mix(in srgb,var(--gym) 14%,transparent) 70%,transparent 74%),
+    repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--gym) 22%,transparent) 0 4deg,transparent 4deg 22.5deg);
+  -webkit-mask:radial-gradient(circle,transparent 50%,#000 58%,#000 66%,transparent 74%);mask:radial-gradient(circle,transparent 50%,#000 58%,#000 66%,transparent 74%)}
+.macro-dial.achieved .dial-circle .dial-fill{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--gym) 75%,transparent))}
+.macro-dial.achieved .dial-value strong,.macro-dial.achieved .dial-status{color:var(--gym-text)}
+.macro-dial.achieved .dial-status{font-weight:600}
+.macro-dial.achieved .dial-status::before{content:'★ '}
+
