@@ -72,3 +72,14 @@ test('Compact food names starting with numbers or unit text are matched literall
  const selected=parseMeals('1 yến mạch trộn sữa tươi',{date,foods,servings:2})[0];assert.equal(selected.food_id,'custom');assert.equal(selected.kcal,648);assert.equal(selected.portion,'2 × bát');
  const surimi=parseMeals('thanh cua',{date,foods,servings:6})[0];assert.equal(surimi.kcal,120);assert.equal(surimi.protein,12);
 });
+
+test('Quick add keeps the chosen portion unit in the output',()=>{
+  const date='2026-11-09';
+  const free=parseMeals('Bánh mì ốp la',{date,servings:2,unit:'cái'})[0];assert.equal(free.portion,'2 cái');assert.equal(free.kcal,'');
+  assert.equal(parseMeals('Phở bò',{date,servings:1})[0].portion,'1 khẩu phần','no unit picked → khẩu phần');
+  assert.equal(parseMeals('Cơm tấm',{date,servings:1,unit:'dĩa'})[0].portion,'1 dĩa');
+  const serving=parseMeals('Trứng luộc',{date,servings:2,unit:'serving'})[0];assert.equal(serving.portion,'2 × quả 50 g');assert.equal(serving.kcal,155);
+  const word=parseMeals('Trứng luộc',{date,servings:2,unit:'quả'})[0];assert.equal(word.kcal,155,'the serving word counts servings');
+  const grams=parseMeals('Trứng luộc',{date,servings:100,unit:'g'})[0];assert.equal(grams.portion,'100 g');assert.equal(grams.kcal,155);
+  const mismatch=parseMeals('Trứng luộc',{date,servings:1,unit:'tô'})[0];assert.equal(mismatch.portion,'1 tô');assert.equal(mismatch.kcal,'');assert.ok(mismatch._warnings[0].includes('quả 50 g'));
+});

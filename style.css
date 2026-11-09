@@ -1122,3 +1122,12 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 .macro-dial.achieved .dial-status{font-weight:600}
 .macro-dial.achieved .dial-status::before{content:'★ '}
 
+/* Quick add meal: food name on its own row, then amount + unit side by side. */
+#quick-dialog .meal-fields,#quick-dialog.compose-dialog .meal-fields{grid-template-columns:minmax(0,1fr) minmax(200px,240px)}
+#quick-dialog .amount-row{display:grid;grid-template-columns:minmax(64px,88px) minmax(0,1fr);gap:8px}
+#quick-dialog .amount-row>input,#quick-dialog .amount-row>select{min-width:0;width:100%;box-sizing:border-box}
+@media(max-width:620px){
+ #quick-dialog .meal-fields,#quick-dialog.compose-dialog .meal-fields{grid-template-columns:minmax(0,1fr)}
+ #quick-dialog .amount-row{grid-template-columns:96px minmax(0,1fr)}
+}
+
