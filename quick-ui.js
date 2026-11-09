@@ -147,6 +147,15 @@ export function createQuickUI(env){
   }
   async function parseOutput(){
     const e=estimate;e.text=$('#estimate-output').value;rememberEstimate();scopeGuard(e.scope);const data=await getState().repo.load();scopeGuard(e.scope);e.result=parseEstimate(e.text,e.q,data[table(e.type)],e.scope);drawEstimate();
+    // Show what was read: the preview can sit below the fold on a phone, and an identical re-read looks like nothing happened.
+    if(estimate===e&&e.result){dialog.querySelector('.parse-preview')?.scrollIntoView({block:'nearest',behavior:'smooth'});toast(`Đã đọc kết quả cho ${e.result.length} món. Kiểm tra rồi bấm Áp dụng.`);}
+  }
+  // A paste into the result box replaces what was there (one AI answer at a time; appending breaks
+  // the JSON) and is read at once, so pasting from the iOS menu works like the paste button.
+  async function pasteResult(text){
+    const box=$('#estimate-output');if(!box||!estimate)return;
+    box.value=text;estimate.text=text;estimate.result=null;rememberEstimate();box.blur();
+    return parseOutput();
   }
   async function applyOutput(){
     const e=estimate;scopeGuard(e.scope);if(!writable()||!e.result)return;const repo=getState().repo;busy=true;lock(true);
@@ -226,8 +235,8 @@ export function createQuickUI(env){
     if(a==='copy-prompt'){if(!estimate.q)throw Error('Tạo prompt trước.');await copyText(requestPrompt(estimate.q));return toast(estimate.photos.length?'Đã copy prompt. Tiếp theo đính kèm ảnh ở bước 1.2.':'Đã copy prompt. Dán vào app AI rồi gửi.');}
     // Reading the clipboard avoids focusing the textarea, so no keyboard opens and the sheet stays put.
     if(a==='paste-estimate'){let text='';try{text=await navigator.clipboard.readText();}catch{}
-      if(!text.trim()){const box=$('#estimate-output');box?.focus();return toast('Không đọc được nội dung đã copy. Chạm vào ô bên dưới rồi chọn Dán.',true);}
-      $('#estimate-output').value=text;estimate.text=text;rememberEstimate();return parseOutput();}
+      if(!text.trim())return toast('Không đọc được nội dung đã copy. Chạm giữ ô kết quả bên dưới rồi chọn Dán, app sẽ tự đọc.',true);
+      return pasteResult(text);}
     if(a==='parse-estimate')return parseOutput();if(a==='apply-estimate')return applyOutput();
     if(a==='download-photo'){const i=Number(el.dataset.index);return downloadFile(estimate.files?.[i]||await estimatePhotoFile(estimate.photos[i]));}
     if(a==='share-estimate'){
@@ -247,6 +256,11 @@ export function createQuickUI(env){
   }
   document.addEventListener('click',e=>{const el=e.target.closest('[data-quick]');if(el){e.preventDefault();if(busy)return;Promise.resolve(action(el)).catch(error);}});
   dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
+  dialog.addEventListener('paste',e=>{
+    if(e.target.id!=='estimate-output'||ctx?.view!=='estimate'||busy)return;
+    const text=e.clipboardData?.getData('text/plain')||e.clipboardData?.getData('text')||'';if(!text.trim())return;
+    e.preventDefault();Promise.resolve(pasteResult(text)).catch(error);
+  });
   dialog.addEventListener('input',e=>{
     if(ctx?.view==='compose'){rememberCompose();if(['compact-food','compact-exercise'].includes(e.target.id))renderNameSuggestions(e.target.id);if(e.target.id==='compact-food')syncUnits();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
     if(e.target.id==='estimate-output'){estimate.text=e.target.value;rememberEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
