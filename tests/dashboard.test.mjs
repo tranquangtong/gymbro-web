@@ -61,7 +61,7 @@ test('Optional carb/fat targets persist with profile goals and do not become onb
 
 test('Chart marks exactly today and focuses today or the last date of a historical range',()=>{
  const days=energyDays({WebMeals:[meal()]},day,28),html=renderEnergyChart(days,{currentDate:day});
- assert.equal(energyFocusDate(days,day),day);assert.equal((html.match(/class="today-highlight"/g)||[]).length,1);assert.match(html,/class="intake-bar today"/);assert.match(html,/class="chart-today-label"/);assert.match(html,/data-focus-date="2026-10-30"/);assert.ok(Number(html.match(/min-width:(\d+)px/)[1])>=28*70);
+ assert.equal(energyFocusDate(days,day),day);assert.equal((html.match(/class="today-highlight"/g)||[]).length,1);assert.match(html,/class="intake-bar today"/);assert.match(html,/class="chart-today-label"/);assert.match(html,/data-focus-date="2026-10-30"/);assert.match(html,/class="energy-chart combined-chart" style="min-width:0;max-width:100%"/);
  const past=energyDays({WebMeals:[meal({date:'2026-10-29'})]},'2026-10-29',7),pastHtml=renderEnergyChart(past,{currentDate:day});
  assert.equal(energyFocusDate(past,day),'2026-10-29');assert.doesNotMatch(pastHtml,/class="today-highlight"/);assert.doesNotMatch(pastHtml,/class="chart-today-label"/);assert.match(pastHtml,/data-focus-date="2026-10-29"/);
  // Today can still be highlighted with missing actual values, without fabricating a bar.
