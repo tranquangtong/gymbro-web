@@ -1,6 +1,6 @@
 import {currentNutritionTargets} from './access.js';
 import {active,num,shiftDate,dateLabel,today,workoutSummary,norm,setsOf} from './core.js';
-export const DASHBOARD_RANGES=[7,10,28];
+export const DASHBOARD_DAYS=14;
 const skipped=r=>String(r.skipped).toLowerCase()==='true';
 const valid=v=>num(v)!==null&&num(v)>=0;
 export function macroProgress(rows,profile={}){
@@ -19,8 +19,8 @@ export function macroProgress(rows,profile={}){
   for(const m of items)if(factor[m.key]&&kcal>0&&m.value!==null)m.energyShare=m.value*factor[m.key]/kcal*100;
   return items;
 }
-export function energyDays(data,end,range=10){
-  if(!DASHBOARD_RANGES.includes(range))throw Error('Khoảng biểu đồ không hợp lệ.');
+export function energyDays(data,end,range=DASHBOARD_DAYS){
+  if(!Number.isInteger(range)||range<1||range>28)throw Error('Khoảng biểu đồ không hợp lệ.');
   const meals=active(data.WebMeals||[]).filter(r=>!skipped(r)),workouts=active(data.WebWorkouts||[]);
   return Array.from({length:range},(_,i)=>dayEnergy(meals,workouts,shiftDate(end,i-range+1)));
 }

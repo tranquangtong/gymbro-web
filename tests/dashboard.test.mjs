@@ -36,11 +36,11 @@ test('Unknown macros stay unknown, genuine zero is shown, and TDEE is never sile
  assert.equal(values[0].value,null);assert.equal(values[0].target,null);assert.equal(values[0].over,false);assert.equal(values[2].value,0);assert.equal(values[2].known,1);assert.equal(values[2].count,2);assert.equal(values[2].incomplete,true);
  assert.match(renderMacroDials(values),/Chưa đặt mục tiêu/);assert.match(renderMacroDials(values),/Chưa đủ số liệu/);
 });
-test('Energy chart defaults to exactly 10 consecutive dates, includes today, and supports the retained date filters',()=>{
+test('Energy chart defaults to 14 consecutive dates ending on the dashboard date',()=>{
  const data={WebMeals:[meal()],WebWorkouts:[workout()]};const days=energyDays(data,day);
- assert.equal(days.length,10);assert.equal(days[0].date,'2026-10-21');assert.equal(days.at(-1).date,day);assert.equal(days.at(-1).intake,500);assert.equal(days.at(-1).burned,100);
+ assert.equal(days.length,14);assert.equal(days[0].date,'2026-10-17');assert.equal(days.at(-1).date,day);assert.equal(days.at(-1).intake,500);assert.equal(days.at(-1).burned,100);
  assert.equal(energyDays(data,day,7).length,7);assert.equal(energyDays(data,day,28).length,28);assert.throws(()=>energyDays(data,day,100));
- assert.equal(energyDays(data,'2027-01-03')[0].date,'2026-12-25');
+ assert.equal(energyDays(data,'2027-01-03')[0].date,'2026-12-21');
 });
 test('Day totals exclude skipped/deleted/rest activity estimates and distinguish missing, partial, and known zero',()=>{
  const days=energyDays({WebMeals:[meal(),meal({id:'unknown',kcal:''}),meal({id:'skip',skipped:true,kcal:900}),meal({id:'deleted',deleted:true,kcal:900})],WebWorkouts:[workout(),workout({id:'unknown',kcal_burned_est:''}),workout({id:'deleted',deleted:true,kcal_burned_est:900}),workout({id:'rest',date:'2026-10-29',kind:'rest',kcal_burned_est:900})]},day);
@@ -50,8 +50,8 @@ test('Day totals exclude skipped/deleted/rest activity estimates and distinguish
 test('The rendered chart exposes both series and a readable daily table, with gaps in burned estimates',()=>{
  const days=energyDays({WebMeals:[meal()],WebWorkouts:[workout({date:'2026-10-28'}),workout()]},day),html=renderEnergyChart(days);
  assert.match(html,/Kcal ăn vào/);assert.match(html,/Kcal tập luyện \(ước tính\)/);assert.match(html,/Xem số liệu từng ngày/);assert.match(html,/không phải tổng tiêu hao cả ngày/);
- assert.equal((html.match(/class="burn-point/g)||[]).length,2);assert.equal((html.match(/class="burn-line"/g)||[]).length,0,'must not connect across an unknown day');assert.equal((html.match(/<tr>/g)||[]).length,11);
- assert.match(renderEnergyChart(energyDays({WebMeals:[],WebWorkouts:[]},day)),/Chưa có số liệu dinh dưỡng hoặc tập luyện trong 10 ngày/);
+ assert.equal((html.match(/class="burn-point/g)||[]).length,2);assert.equal((html.match(/class="burn-line"/g)||[]).length,0,'must not connect across an unknown day');assert.equal((html.match(/<tr>/g)||[]).length,15);
+ assert.match(renderEnergyChart(energyDays({WebMeals:[],WebWorkouts:[]},day)),/Chưa có số liệu dinh dưỡng hoặc tập luyện trong 14 ngày/);
 });
 test('Optional carb/fat targets persist with profile goals and do not become onboarding requirements',()=>{
  const p={id:'p',weight_kg:85,height_cm:175,TDEE:2500,goal:{bmr_kcal:1800,target_weight_kg:78,training_goal:'Tăng sức mạnh'}};

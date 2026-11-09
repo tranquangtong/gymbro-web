@@ -1,7 +1,7 @@
 import {installDialogViewport} from './dialog-viewport.js';
 import {walkingSettings,applyWalkingSettings,isWalking} from './walking.js';
 import {estimateWorkoutBatch,workoutWeight} from './workout-kcal.js';
-import {DASHBOARD_RANGES,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './dashboard.js';
+import {DASHBOARD_DAYS,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './dashboard.js';
 import {accessStage,sessionValid,verifySession,profileDetails,profileComplete,validatePersonalProfile,estimateEnergy,estimateMacroTargets,suggestMacroGoal,currentNutritionTargets} from './access.js';
 import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from './sync.js';
 import './local-extras.js';
@@ -27,7 +27,7 @@ const $=s=>document.querySelector(s);
 const nav=[['dashboard','dashboard','Hôm nay'],['eat','food','Ăn uống'],['gym','gym','Tập luyện'],['history','history','Nhật ký'],['archive','history','Tư liệu'],['settings','settings','Thêm']];
 const STORE='gymbro.v1.preferences';
 let preferences={};try{preferences=JSON.parse(localStorage.getItem(STORE)||'{}');}catch{}
-const state={mode:startupMode(preferences),data:emptyData(),repo:null,connected:false,range:10,dashboardDate:null,date:today(),historyFrom:shiftDate(today(),-6),historyTo:today(),historyType:'all',historyOpen:new Set(),historyTouched:new Set(),search:'',exercise:'',busy:false,connectionError:'',initialized:false,authRestoring:true,localPending:0,accountProfile:{}};
+const state={mode:startupMode(preferences),data:emptyData(),repo:null,connected:false,dashboardDate:null,date:today(),historyFrom:shiftDate(today(),-6),historyTo:today(),historyType:'all',historyOpen:new Set(),historyTouched:new Set(),search:'',exercise:'',busy:false,connectionError:'',initialized:false,authRestoring:true,localPending:0,accountProfile:{}};
 // Phones get a chart that fits the card; re-render when crossing the breakpoint (rotation, resize).
 const phoneChart=matchMedia('(max-width:620px)');phoneChart.addEventListener?.('change',()=>render());
 function dropCache(){state.cached=null;clearSnapshot(localStorage);}
@@ -123,7 +123,7 @@ function dashboard(){
   renderEnergyHero(energyHero(meals,p),{isToday})+
   `<div class="dashboard-quick-actions" role="group" aria-label="Thêm nhật ký">${button('Thêm món','new-meal','primary floating-log-button','plus','type="button"')}${button('Thêm bài tập','new-workout','workout-log-button floating-log-button','plus','type="button"')}</div>`+
   `<div class="dashboard-overview">${card('Macro '+dayName,'So với mục tiêu hiện tại, dùng chung cho mọi ngày.',renderMacroDials(dials),button('Mục tiêu','new-profile','small','settings','data-targets="true"'),'nutrition-dashboard')}${card('Buổi tập','',`${renderWorkoutInsight(workouts)}${workouts.some(r=>r.kind!=='rest')?`<p class="form-note">${burned.length?fmt(burn)+' kcal tập luyện ước tính'+(burned.length<workouts.filter(r=>r.kind!=='rest').length?', chưa đủ số liệu':''):'Chưa ước tính kcal tập luyện'}</p>`:''}`,button('Chi tiết','view-workout-day','small','gym',`data-date="${t}"`))}</div>`+
-  card('Năng lượng & protein theo ngày',`${state.range} ngày, từ ${dateLabel(shiftDate(t,1-state.range))} đến ${dateLabel(t)}.`,(phoneChart.matches?renderEnergyChartCompact:renderEnergyChart)(energyDays(state.data,t,state.range),{target:num(p.kcal_target),proteinTarget:num(p.protein_target),selectedDate:state.chartDay}),`<div class="segmented" aria-label="Khoảng ngày biểu đồ">${DASHBOARD_RANGES.map(d=>`<button data-action="range" data-days="${d}" class="${state.range===d?'selected':''}" aria-pressed="${state.range===d}">${d} ngày</button>`).join('')}</div>`,'energy-dashboard')+
+  card('Năng lượng & protein theo ngày',`${DASHBOARD_DAYS} ngày, từ ${dateLabel(shiftDate(t,1-DASHBOARD_DAYS))} đến ${dateLabel(t)}.`,(phoneChart.matches?renderEnergyChartCompact:renderEnergyChart)(energyDays(state.data,t),{target:num(p.kcal_target),proteinTarget:num(p.protein_target),selectedDate:state.chartDay}),'','energy-dashboard')+
   card('Trong ngày','',dayLog([...meals.map(r=>({table:'WebMeals',r})),...workouts.map(r=>({table:'WebWorkouts',r}))]),'','day-log-card');
 }
 function insightBody(n,week,p){const items=[];if(n.count&&n.knownKcal<n.count)items.push('Còn '+(n.count-n.knownKcal)+' món chưa có kcal. Tổng năng lượng hiện tại chỉ là phần đã ghi nhận.');if(week.sessions)items.push('Bạn đã ghi '+week.sessions+' ngày tập trong 7 ngày gần nhất. Dùng lịch sử từng bài để so sánh các buổi có cùng điều kiện.');if(!num(p.weight_kg))items.push('Thêm cân nặng theo ngày để có thêm bối cảnh khi theo dõi chin-up trợ lực.');if(!items.length)items.push('Ghi nhật ký đều trong vài buổi để dashboard có đủ dữ liệu phản ánh thói quen của bạn.');return items.map(text=>`<div class="insight">${icon('leaf')}<div><strong>Ghi chú cho hành trình</strong><p>${text}</p></div></div>`).join('');}
@@ -254,7 +254,7 @@ async function selectImport(file){pendingImport=null;const target=$('#migration-
 
 // Cloudflare loads a recent window; older dates are paged in only when a view needs them.
 async function ensureRange(from){const repo=state.repo;if(!repo?.ensureRange)return;try{const data=await repo.ensureRange(from);if(data&&state.repo===repo){state.data=data;render();}}catch(e){toast(e.message,true);}}
-function ensureDashboardRange(){const t=state.dashboardDate||today();return ensureRange(shiftDate(t,-Math.max(state.range,7)));}
+function ensureDashboardRange(){const t=state.dashboardDate||today();return ensureRange(shiftDate(t,1-DASHBOARD_DAYS));}
 async function exportData(){if(state.repo?.loadAll){const repo=state.repo,all=await repo.loadAll();if(state.repo===repo)state.data=all;}const data=Object.fromEntries(Object.keys(SCHEMAS).map(t=>[t,state.data[t].map(r=>cleanRecord(t,r))]));data.Archive=(state.data.Archive||[]).map(r=>cleanRecord('Archive',r));const blob=new Blob([JSON.stringify({app:'GymBro Web',version:2,mode:state.mode,exported_at:new Date().toISOString(),timezone:'Asia/Ho_Chi_Minh',data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gymbro-'+state.mode+'-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 async function action(el){const a=el.dataset.action;if(el.closest('.account-menu'))state.accountOpen=false;if(state.busy&&a!=='cancel-confirm')return;if(['local','demo'].includes(a))throw Error('Cần đăng nhập Firebase để sử dụng.');if(!['firebase-login','firebase-login-anyway','copy-link','disconnect','close-editor','cancel-confirm','chart-day','cal-prev','cal-next','cal-today','cal-day','cal-log','account-view','account-settings','account-admin','account-refresh'].includes(a)){if(!writable({profile:['new-profile','estimate-energy'].includes(a)||el.closest('#entry-form')&&editorContext?.table==='WebProfile'}))return;}
@@ -272,7 +272,7 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   if(a==='cal-day'){state.calDay=el.dataset.date;render();$('#cal-day-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
   if(a==='cal-log'){state.date=el.dataset.date||today();location.hash=el.dataset.target==='gym'?'gym':'eat';return;}
   if(a==='chart-day'){state.chartDay=el.dataset.date;return render();}
-  if(a==='range'){const days=Number(el.dataset.days);if(DASHBOARD_RANGES.includes(days))state.range=days;render();return ensureDashboardRange();}
+
   if(a==='edit'){const r=state.data[el.dataset.table].find(x=>x.id===el.dataset.id);if(r)return el.dataset.table==='Archive'?openArchiveEditor(r):openEditor(el.dataset.table,r);return;}
   if(a==='delete'){
     if(!writable())return;const table=el.dataset.table,r=state.data[table].find(x=>x.id===el.dataset.id);if(!r)return;
