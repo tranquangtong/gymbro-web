@@ -24,7 +24,12 @@ export function validateFood(f){
 export function cleanFood(f){return Object.fromEntries(['id','name','aliases','serving_label','serving_g','kcal','protein','carbs','fat','source','source_note','source_url','updated_at'].map(k=>[k,f[k]??(['serving_g','kcal','protein','carbs','fat'].includes(k)?null:'')]));}
 const number=s=>Number(String(s).replace(',','.'));
 const base=date=>({id:uid(),date,created_at:new Date().toISOString(),updated_at:new Date().toISOString(),deleted:false,notes:''});
-export function parseMeals(text,{date,meal='lunch',foods=DEFAULT_FOODS,servings=null}={}){
+// Units offered next to the amount in quick add. 'serving' means the library food's own serving.
+export const MEAL_UNITS=['khẩu phần','cái','trái','quả','bánh','tô','chén','dĩa','ly','hộp','gói','miếng','lát','muỗng','phần','g','ml'];
+export const findFood=(foods,n)=>foods.find(f=>[f.name,...(f.aliases||[])].some(alias=>norm(alias)===norm(n)));
+// The first word of a library serving ('quả 50 g' → 'quả'), so picking that unit still counts servings.
+const servingWord=f=>norm(String(f.serving_label||'').split(/\s+/)[0]);
+export function parseMeals(text,{date,meal='lunch',foods=DEFAULT_FOODS,servings=null,unit:pickedUnit=''}={}){
   const raw=String(text??'').trim();
   if(!raw||raw.length>10000)throw Error('Nhập món ăn, tối đa 10.000 ký tự.');
   // One submission is one diary entry. Punctuation and line breaks are food text,
@@ -36,15 +41,19 @@ export function parseMeals(text,{date,meal='lunch',foods=DEFAULT_FOODS,servings=
   const r={...base(date),meal,food:line,portion:'',kcal:'',protein:'',carbs:'',fat:'',nutrition_source:'',skipped:false,photo_ids:[]};
   if(['nhin','bo bua','khong an','skip','none'].includes(norm(line))){r.skipped=true;r.food='';return [validateRecord('WebMeals',r)];}
   const amount=structured?null:line.match(/^(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|khẩu phần|khau phan|phần|phan)?\s*/i);
-  let quantity=structured?num(servings):amount?number(amount[1]):1,unit=structured?'':norm(amount?.[2]),name=structured?line:amount?line.slice(amount[0].length).trim():line;
+  const picked=structured&&pickedUnit&&pickedUnit!=='serving'?String(pickedUnit).trim():'';
+  let quantity=structured?num(servings):amount?number(amount[1]):1,unit=structured?norm(picked):norm(amount?.[2]),name=structured?line:amount?line.slice(amount[0].length).trim():line;
   if(structured&&(quantity===null||quantity<=0||quantity>100000))throw Error('Số khẩu phần phải lớn hơn 0 và tối đa 100.000.');
   if(!structured&&!amount){const suffix=line.match(/\s+(\d+(?:[.,]\d+)?)\s*(kg|gram|gam|g|quả|qua|trái|trai|hộp|hop|cái|cai|thanh|muỗng|muong|scoop|phần|phan)?$/i);if(suffix){quantity=number(suffix[1]);unit=norm(suffix[2]);name=line.slice(0,suffix.index).trim();}}
-  const findFood=n=>foods.find(f=>[f.name,...(f.aliases||[])].some(alias=>norm(alias)===norm(n)));
   // Try the full food name after the numeric amount before consuming a unit:
   // 'thanh' is part of 'thanh cua', 'g' can be the first letter of a food name.
   const fullName=amount?line.slice(line.match(/^\d+(?:[.,]\d+)?\s*/)[0].length).trim():name;
-  const fullMatch=findFood(fullName),match=fullMatch||findFood(name);
+  let fullMatch=findFood(foods,fullName),match=fullMatch||findFood(foods,name);
   if(fullMatch&&amount)unit='';
+  // A unit the library food isn't measured in (2 tô of a food stored per chén) can't be scaled:
+  // keep the amount as written and leave nutrition unknown rather than guess.
+  if(match&&picked&&!['g','gam','gram','kg'].includes(unit)&&unit!==servingWord(match)){r._warnings=[`Thư viện tính ${match.name} theo “${match.serving_label}”, không quy đổi được sang ${picked}; dinh dưỡng để trống.`];match=null;}
+  if(structured&&!match)r.portion=quantity+' '+(picked||'khẩu phần');
   if(match){
     if(quantity<=0||quantity>100000)throw Error('Khẩu phần phải lớn hơn 0.');
     let factor=quantity;
