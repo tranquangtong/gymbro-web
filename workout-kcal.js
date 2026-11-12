@@ -11,7 +11,7 @@ export function strengthPreset(row){
   [/bench|chest press/,'upper_compound',4.8,2.7],[/shoulder press|overhead press|military press/,'upper_press',4.4,2.5],
   [/row|pull down|pulldown|pull up|pullup|chin up|chinup/,'upper_pull',4.6,2.6],
   [/leg curl/,'lower_isolation',4.2,2.3],[/leg extension/,'lower_isolation',4.8,2.5],
-  [/curl|extension|pushdown/,'upper_isolation',3.5,2],[/sit up|push up|pushup|plank|crunch|rotation|face pull/,'calisthenics',3.8,1.6],
+  [/curl|extension|pushdown/,'upper_isolation',3.5,2],[/sit up|push up|pushup|plank|crunch|rotation|face pull|roman chair|back extension|hyper ?extension|lung duoi/,'calisthenics',3.8,1.6],
   [/machine/,'machine_general',3.8,2.1]
  ])if(pattern.test(t))return {group,met,minutes};
  return {group:'strength_general',met:4.2,minutes:2.3};
@@ -48,7 +48,10 @@ export function estimateWorkoutBatch(rows,{weight,sessionMinutes=null,overwrite=
   if(row.kind==='cardio')return {row,minutes:num(row.duration_min),met:cardioMet(row),assumed:false};
   const p=strengthPreset(row),sets=setsOf(row);if(!sets.length||sets.some(s=>num(s.reps)===null||num(s.reps)<=0))return {row,minutes:null,met:p.met,assumed:true};
   const factors=sets.map(s=>loadFactor(row,s,p,w)),minutes=factors.reduce((n,f)=>n+p.minutes*f,0),met=factors.reduce((n,f)=>n+p.met*f*p.minutes*f,0)/minutes;
-  return {row,minutes:num(row.duration_min)>0?num(row.duration_min):minutes,met,assumed:!(num(row.duration_min)>0),preset:p};
+  // Bodyweight moves count the body plus any plate held or worn (Roman chair with a plate,
+  // weighted dips): the moved mass replaces body weight in the MET formula, weighted by set time.
+  const extra=row.kind==='bodyweight'?sets.reduce((n,s,i)=>n+(num(s.weight_kg)>0?num(s.weight_kg):0)*p.minutes*factors[i],0)/minutes:0;
+  return {row,minutes:num(row.duration_min)>0?num(row.duration_min):minutes,met,mass:w+extra,extra,assumed:!(num(row.duration_min)>0),preset:p};
  });
  const fixed=entries.filter(e=>!e.assumed).reduce((n,e)=>n+(e.minutes||0),0),inferred=entries.filter(e=>e.assumed&&e.minutes>0),sum=inferred.reduce((n,e)=>n+e.minutes,0);
  if(session!==null&&fixed>session+1e-8)throw Error('Tổng phút buổi tập nhỏ hơn thời lượng đã ghi của các bài. Kiểm tra lại.');
@@ -57,7 +60,7 @@ export function estimateWorkoutBatch(rows,{weight,sessionMinutes=null,overwrite=
   const r=e.row;if(!overwrite&&num(r.kcal_burned_est)!==null)return {...r};
   if(e.minutes===null||e.minutes<=0&&r.kind!=='rest')return {...r,kcal_burned_est:'',kcal_estimation_notes:'Chưa đủ sets/reps hoặc phút cardio để ước tính.'};
   const minutes=e.assumed&&remaining!==null&&sum>0?remaining*e.minutes/sum:e.minutes;
-  const kcal=round(e.met*3.5*w/200*minutes),basis=e.assumed?(session===null?`giả định ${round(minutes)} phút tập + nghỉ theo ${setsOf(r).length} set (preset GAS legacy)`:`phân bổ ${round(minutes)} phút từ tổng buổi ${session} phút, theo tỷ trọng các set`):`${round(minutes)} phút đã ghi`;
-  return {...r,kcal_burned_est:kcal,kcal_estimation_notes:r.kind==='rest'?'GymBro · ngày nghỉ · 0 kcal':`GymBro · gross kcal ≈ ${round(e.met)} MET × 3,5 × ${w} kg / 200 × ${round(minutes)} phút; ${basis}. ${r.kind==='cardio'?'MET theo tốc độ/độ dốc/watts nếu có, còn lại giả định mức vừa.':'MET và hệ số tải là heuristic GAS legacy.'} Độ tin cậy thấp khi dùng giả định; không gồm EPOC.${r.kind==='assisted'?' Kg máy là trợ lực, không tính như tạ nâng.':''}`};
+  const mass=e.mass??w,kcal=round(e.met*3.5*mass/200*minutes),basis=e.assumed?(session===null?`giả định ${round(minutes)} phút tập + nghỉ theo ${setsOf(r).length} set (preset GAS legacy)`:`phân bổ ${round(minutes)} phút từ tổng buổi ${session} phút, theo tỷ trọng các set`):`${round(minutes)} phút đã ghi`;
+  return {...r,kcal_burned_est:kcal,kcal_estimation_notes:r.kind==='rest'?'GymBro · ngày nghỉ · 0 kcal':`GymBro · gross kcal ≈ ${round(e.met)} MET × 3,5 × ${e.extra>0?`(${w} kg cơ thể + ${round(e.extra)} kg tạ)`:w+' kg'} / 200 × ${round(minutes)} phút; ${basis}. ${r.kind==='cardio'?'MET theo tốc độ/độ dốc/watts nếu có, còn lại giả định mức vừa.':'MET và hệ số tải là heuristic GAS legacy.'} Độ tin cậy thấp khi dùng giả định; không gồm EPOC.${r.kind==='assisted'?' Kg máy là trợ lực, không tính như tạ nâng.':''}`};
  });
 }

@@ -83,3 +83,16 @@ test('Quick add keeps the chosen portion unit in the output',()=>{
   const grams=parseMeals('Trứng luộc',{date,servings:100,unit:'g'})[0];assert.equal(grams.portion,'100 g');assert.equal(grams.kcal,155);
   const mismatch=parseMeals('Trứng luộc',{date,servings:1,unit:'tô'})[0];assert.equal(mismatch.portion,'1 tô');assert.equal(mismatch.kcal,'');assert.ok(mismatch._warnings[0].includes('quả 50 g'));
 });
+
+test('Roman chair is a bodyweight move whose kcal counts body weight plus any plate',async()=>{
+  const {estimateWorkoutBatch}=await import('../workout-kcal.js');const {exerciseChoices}=await import('../exercise-library.js');const {workoutInsight}=await import('../dashboard.js');
+  const date='2026-11-12',choice=exerciseChoices([]).find(c=>c.name==='Roman chair (lưng dưới)');assert.equal(choice.kind,'bodyweight');
+  const plain=compactWorkout({exercise:'Roman chair (lưng dưới)',kind:'bodyweight',count:3,reps:12,kg:''},{date});assert.equal(JSON.parse(plain.sets_json)[0].weight_kg,'');
+  const plate=compactWorkout({exercise:'Roman chair (lưng dưới)',kind:'bodyweight',count:3,reps:12,kg:10},{date});assert.equal(JSON.parse(plate.sets_json)[0].weight_kg,10);
+  const [a,b]=estimateWorkoutBatch([plain,plate],{weight:70});
+  assert.ok(Math.abs(b.kcal_burned_est/a.kcal_burned_est-80/70)<0.01,'kcal scales with 70 kg body + 10 kg plate');
+  assert.match(b.kcal_estimation_notes,/70 kg cơ thể \+ 10 kg tạ/);assert.doesNotMatch(a.kcal_estimation_notes,/kg tạ/);
+  const parsed=parseWorkouts('roman chair 10kg 3x12',{date})[0];assert.equal(parsed.kind,'bodyweight');assert.equal(JSON.parse(parsed.sets_json)[0].weight_kg,10);
+  assert.equal(JSON.parse(parseWorkouts('roman chair 3x15',{date})[0].sets_json)[0].weight_kg,'');
+  assert.deepEqual(workoutInsight([plain]).muscles,['Lưng dưới','Mông']);
+});
