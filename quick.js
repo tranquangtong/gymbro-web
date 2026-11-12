@@ -78,7 +78,7 @@ export function parseWorkouts(text,{date}={}){
     if(/^(off|nghi|ngay nghi|rest)$/.test(n)){r.exercise='Ngày nghỉ';r.kind='rest';return r;}
     const duration=line.match(/(\d+(?:\.\d+)?)\s*(phút|phut|minutes?|mins?)\b/i);
     if(/di bo|walking|chay bo|running|dap xe|cycling|bike|treadmill|cardio|boi|swim/.test(n)&&duration){r.kind='cardio';r.exercise=line.slice(0,duration.index).replace(/[,:\s]+$/,'')||'Cardio';r.duration_min=number(duration[1]);validateRecord('WebWorkouts',r);return r;}
-    const kg=line.match(/(\d+(?:\.\d+)?)\s*kg\b/i),body=/bodyweight|\bbw\b|push up|hit dat|chong day/.test(n);
+    const kg=line.match(/(\d+(?:\.\d+)?)\s*kg\b/i),body=/bodyweight|\bbw\b|push up|hit dat|chong day|roman chair|back extension|hyper ?extension|lung duoi/.test(n);
     r.kind=/tro luc|counterweight|assisted|kneeling|easy chin/.test(n)?'assisted':body?'bodyweight':'strength';
     if(!kg&&r.kind!=='bodyweight')throw Error('Chưa đọc được kg: '+raw+'. Ví dụ: chin-up trợ lực 27.2kg 3x12.');
     let count,reps,exerciseEnd;
@@ -100,7 +100,7 @@ export function parseWorkouts(text,{date}={}){
     const end=Math.min(exerciseEnd,kg?.index??Infinity);r.exercise=line.slice(0,end).replace(/(?:counterweight|trợ lực|tro luc)\s*$/i,'').replace(/[,:\s]+$/,'').replace(/\s*(bodyweight|bw)\s*$/i,'').trim();
     if(!r.exercise)throw Error('Hãy thêm tên bài tập.');
     if(count<1||count>50)throw Error('Mỗi bài từ 1 đến 50 set.');
-    r.sets_json=JSON.stringify(Array.from({length:count},()=>({weight_kg:r.kind==='bodyweight'?'':round(number(kg[1])*(dumbbell?number(dumbbell[1]):eachReps?2:1)),reps})));
+    r.sets_json=JSON.stringify(Array.from({length:count},()=>({weight_kg:r.kind==='bodyweight'&&!kg?'':round(number(kg[1])*(dumbbell?number(dumbbell[1]):eachReps?2:1)),reps})));
     validateRecord('WebWorkouts',r);return r;
   });
 }
@@ -109,7 +109,7 @@ export function compactWorkout(fields,{date}={}){
   if(['strength','assisted','bodyweight'].includes(kind)){
     const count=Number(fields.count);if(!Number.isInteger(count)||count<1||count>50)throw Error('Set phải là số nguyên từ 1 đến 50.');
     if(kind!=='bodyweight'&&String(fields.kg??'').trim()==='')throw Error('Nhập kg cho bài tập.');
-    r.sets_json=JSON.stringify(Array.from({length:count},()=>({weight_kg:kind==='bodyweight'?'':Number(fields.kg),reps:Number(fields.reps)})));
+    r.sets_json=JSON.stringify(Array.from({length:count},()=>({weight_kg:kind==='bodyweight'&&String(fields.kg??'').trim()===''?'':Number(fields.kg),reps:Number(fields.reps)})));
   }
   return validateRecord('WebWorkouts',applyWalkingSettings(r,fields));
 }

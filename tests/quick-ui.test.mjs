@@ -45,7 +45,7 @@ test('Compact workout kind controls preserve cardio, bodyweight and assistance e
   }else{
    assert.match(c.dialog.innerHTML,/id="compact-count"/);
    assert.match(c.dialog.innerHTML,/id="compact-reps"/);
-   if(kind==='bodyweight')assert.doesNotMatch(c.dialog.innerHTML,/id="compact-kg"/);
+   if(kind==='bodyweight')assert.match(c.dialog.innerHTML,/Kg tạ thêm<input id="compact-kg"[^>]*placeholder="Không có"/);
    else assert.match(c.dialog.innerHTML,/Kg trợ lực<input id="compact-kg"/);
   }
  }

@@ -193,6 +193,7 @@ export function classifyExercise(row){
  if(row.kind==='rest')return {area:'rest',muscles:[]};
  if(row.kind==='cardio')return {area:'cardio',muscles:['Tim mạch']};
  const rules=[
+  [/roman chair|back extension|hyper ?extension|lung duoi/,'support',['Lưng dưới','Mông']],
   [/face pull|reverse fly|rear delt|vai sau/,'support',['Vai sau','Lưng trên']],
   [/crunch|cable rotation|wood ?chop|russian twist|pallof|plank|sit up|leg raise|gap bung|xoay bung/,'support',['Core']],
   [/lateral raise|nang vai ngang/,'support',['Vai giữa']],
@@ -218,7 +219,7 @@ export function workoutInsight(rows){
 export function compactExercise(row){
  if(row.kind==='cardio')return `${format(num(row.duration_min),1)} phút`;
  const sets=setsOf(row);if(!sets.length)return 'Chưa ghi sets/reps';
- const groups=[];for(const s of sets){const load=row.kind==='bodyweight'?'Bodyweight':num(s.weight_kg)===null?'? kg':`${format(num(s.weight_kg),1)} kg${row.kind==='assisted'?' trợ lực':''}`,key=load+' × '+format(num(s.reps));const last=groups.at(-1);if(last?.key===key)last.count++;else groups.push({key,count:1});}
+ const groups=[];for(const s of sets){const load=row.kind==='bodyweight'?'Bodyweight'+(num(s.weight_kg)>0?` + ${format(num(s.weight_kg),1)} kg`:''):num(s.weight_kg)===null?'? kg':`${format(num(s.weight_kg),1)} kg${row.kind==='assisted'?' trợ lực':''}`,key=load+' × '+format(num(s.reps));const last=groups.at(-1);if(last?.key===key)last.count++;else groups.push({key,count:1});}
  return groups.map(g=>`${g.count} set · ${g.key} reps`).join(' / ');
 }
 export function renderWorkoutInsight(rows){
