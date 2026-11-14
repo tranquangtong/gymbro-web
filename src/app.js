@@ -4,7 +4,7 @@ import {estimateWorkoutBatch,workoutWeight} from './core/workout-kcal.js';
 import {DASHBOARD_DAYS,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './ui/dashboard.js';
 import {accessStage,sessionValid,verifySession,profileDetails,profileComplete,validatePersonalProfile,estimateEnergy,estimateMacroTargets,suggestMacroGoal,currentNutritionTargets} from './data/access.js';
 import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from './data/sync.js';
-import './local-extras.js';
+import './data/local-extras.js';
 import {createQuickUI} from './ui/quick-ui.js';
 import {MEALS,KINDS,EXERCISES,SCHEMAS,today,shiftDate,dateLabel,num,active,setsOf,norm,nutrition,workoutSummary,latestProfile,uid,emptyData,LocalRepository,validateRecord} from './core/core.js';
 import {createRepository,backendName,BACKEND} from './data/backend.js';
