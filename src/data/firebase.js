@@ -1,3 +1,4 @@
+import {withTimeout} from './timeout.js';
 import {quotaMessage} from './errors.js';
 import {photoExpired,photoExpiryError} from '../core/photo-retention.js';
 import {assertSession,verifySession} from './access.js';
@@ -12,18 +13,18 @@ export const ADMIN_EMAIL='tongquangtran@gmail.com';
 export const isAdmin = user => user?.emailVerified === true && user.email === ADMIN_EMAIL;
 let service;
 export async function firebaseService() {
-  if(!service) service=(async()=>{
+  if(!service) service=withTimeout(async()=>{
     const [appSDK,authSDK]=await Promise.all([
       import('https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js')
     ]);
-    const app=appSDK.initializeApp(firebaseConfig),auth=authSDK.getAuth(app);
+    const app=appSDK.getApps().length?appSDK.getApp():appSDK.initializeApp(firebaseConfig),auth=authSDK.getAuth(app);
     await auth.authStateReady();
     const s={app,auth,authSDK,db:null,dbSDK:null};
     // On the Cloudflare backend Firestore is only loaded for the migration tool.
     if(BACKEND.kind!=='cloudflare')await withFirestore(s);
     return s;
-  })().catch(e=>{service=null;throw e;});
+  }).catch(e=>{service=null;throw e;});
   return service;
 }
 export async function withFirestore(s){
@@ -35,7 +36,7 @@ export async function loginGoogle() {
   await s.authSDK.signInWithPopup(s.auth,provider);await verifySession(s);return s;
 }
 export async function logoutFirebase(){const s=await firebaseService();await s.authSDK.signOut(s.auth);}
-export function firebaseError(e){return quotaMessage(e)||({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':'Không kết nối được Firestore. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
+export function firebaseError(e){return quotaMessage(e)||({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/network-request-failed':'Không kết nối được máy chủ đăng nhập Google. Kiểm tra mạng rồi thử lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':e.message||'Không kết nối được máy chủ GymBro. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
 
 function firebaseFailure(e){const error=Error(firebaseError(e));if(e.code!==undefined)error.code=e.code;error.name=e.name||'Error';return error;}
 

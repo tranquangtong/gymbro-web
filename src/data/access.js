@@ -1,9 +1,10 @@
+import {withTimeout} from './timeout.js';
 import {num,norm,active} from '../core/core.js';
 export const SESSION_MS=14*24*60*60*1000;
 export function sessionExpiry(authTime){const started=Date.parse(authTime);if(!Number.isFinite(started))throw Error('Không xác minh được phiên đăng nhập. Hãy đăng nhập lại.');return started+SESSION_MS;}
 export function sessionValid(expiresAt,now=Date.now()){return typeof expiresAt==='number'&&Number.isFinite(expiresAt)&&now<expiresAt;}
 export function assertSession(expiresAt,now=Date.now()){if(!sessionValid(expiresAt,now)){const e=Error('Phiên đăng nhập đã hết hạn 14 ngày. Hãy đăng nhập Google lại.');e.code='auth/session-expired';throw e;}}
-export async function verifySession(service){const user=service.auth.currentUser;if(!user)throw Error('Hãy đăng nhập Google.');const result=await service.authSDK.getIdTokenResult(user);if(service.auth.currentUser?.uid!==user.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại.');const expires=sessionExpiry(result.authTime);assertSession(expires);service.sessionExpiresAt=expires;return expires;}
+export async function verifySession(service,{timeoutMs=15000}={}){const user=service.auth.currentUser;if(!user)throw Error('Hãy đăng nhập Google.');const result=await withTimeout(()=>service.authSDK.getIdTokenResult(user),timeoutMs);if(service.auth.currentUser?.uid!==user.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại.');const expires=sessionExpiry(result.authTime);assertSession(expires);service.sessionExpiresAt=expires;return expires;}
 export function profileDetails(profile={}){const goal=profile.goal&&typeof profile.goal==='object'&&!Array.isArray(profile.goal)?profile.goal:{};return {weight_kg:profile.weight_kg,height_cm:profile.height_cm,bmr_kcal:goal.bmr_kcal,tdee_kcal:profile.TDEE,target_weight_kg:goal.target_weight_kg,training_goal:goal.training_goal|| (typeof profile.goal==='string'?profile.goal:''),age:profile.age,gender:profile.gender,activity_factor:goal.activity_factor,carbs_target:goal.carbs_target,fat_target:goal.fat_target,macro_goal:goal.macro_goal};}
 export function validatePersonalProfile(profile){
   const p=profileDetails(profile);
@@ -26,6 +27,8 @@ export function estimateEnergy({weight_kg,height_cm,age,gender,activity_factor})
 export function accessStage(state,now=Date.now()){
   // A saved copy of this account's data is shown, view-only, until the server load finishes.
   if(state.cached&&!state.initialized&&sessionValid(state.cached.sessionExpiresAt,now))return 'cached';
+  // Signed in but the server/data could not be reached: show a retry card, not the login page.
+  if(state.mode==='firebase'&&!state.initialized&&state.connectionError&&(state.connected?sessionValid(state.repo?.s.sessionExpiresAt,now):sessionValid(state.retrySession?.expiresAt,now)))return 'error';
   if(state.authRestoring)return 'restoring';
   if(state.mode!=='firebase'||!state.connected||!sessionValid(state.repo?.s.sessionExpiresAt,now))return 'login';
   if(!state.initialized)return 'loading';

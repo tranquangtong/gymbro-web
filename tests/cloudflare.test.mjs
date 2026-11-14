@@ -99,3 +99,70 @@ test('photo upload retries temporary service failures but never retries denied p
     else{await assert.rejects(()=>repo.savePhoto(photo),e=>e.status===403&&e.operation==='photo');assert.equal(attempts,1);}
   }
 });
+
+const never=()=>new Promise(()=>{});
+const emptyPage=()=>new Response(JSON.stringify({rows:[],seq:0,next_cursor:''}));
+
+test('API deadline bounds a stalled fetch and aborts it even if fetch ignores the signal',{timeout:1000},async()=>{
+  let signal;
+  const repo=await repoFor(env(),{},null,{timeoutMs:15,fetchImpl:(_url,init)=>{signal=init.signal;return never();}});
+  await assert.rejects(()=>repo.api('/v1/records'),e=>e.code==='unavailable');
+  assert.equal(signal.aborted,true);
+});
+
+test('API deadline includes token refresh; late tokens do not send a timed-out request',{timeout:1000},async()=>{
+  let release,calls=0;
+  const repo=await repoFor(env(),{},null,{timeoutMs:15,fetchImpl:async()=>{calls++;return emptyPage();}});
+  repo.s.auth.currentUser.getIdToken=()=>new Promise(resolve=>{release=resolve;});
+  await assert.rejects(()=>repo.api('/v1/records'),e=>e.code==='unavailable');
+  release('late-token');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,0);
+  repo.s.auth.currentUser.getIdToken=async()=> 'fresh-token';
+  assert.deepEqual((await repo.load()).WebMeals,[]);
+});
+
+test('load releases its shared task after a stalled fetch or token refresh',{timeout:1000},async()=>{
+  for(const stall of ['fetch','token']){
+    const repo=await repoFor(env(),{},null,{timeoutMs:15,fetchImpl:stall==='fetch'?never:async()=>emptyPage()});
+    if(stall==='token')repo.s.auth.currentUser.getIdToken=never;
+    const first=repo.load(),second=repo.load();
+    await Promise.all([first,second].map(task=>assert.rejects(task,e=>e.code==='unavailable')));
+    assert.equal(repo._loadTask,null);
+    repo.fetchImpl=async()=>emptyPage();repo.s.auth.currentUser.getIdToken=async()=> 'fresh-token';
+    assert.deepEqual((await repo.load()).WebMeals,[]);
+    assert.equal(repo._loadTask,null);
+  }
+});
+
+test('API deadline covers response bodies, write defaults and explicit overrides',{timeout:1000},async()=>{
+  const repo=await repoFor(env(),{},null,{timeoutMs:1000,writeTimeoutMs:15,fetchImpl:async()=>({ok:true,json:never})});
+  await assert.rejects(()=>repo.api('/v1/records',{method:'POST',body:{}}),e=>e.code==='unavailable');
+  await assert.rejects(()=>repo.api('/v1/records',{timeoutMs:15}),e=>e.code==='unavailable');
+});
+
+test('a hung poll reports timeout and a restarted subscription can poll again',{timeout:1000},async()=>{
+  const repo=await repoFor(env(),{},null,{timeoutMs:15,pollMs:5,fetchImpl:async()=>emptyPage()});
+  await repo.load();repo.fetchImpl=never;
+  let stop;
+  try{
+    const error=await new Promise(resolve=>{stop=repo.subscribe(()=>assert.fail('stalled poll emitted rows'),resolve);});
+    assert.equal(error.code,'unavailable');stop();
+    repo.fetchImpl=async()=>new Response(JSON.stringify({changes:[{kind:'WebMeals',row:meal('after-sleep',today())}],seq:1,more:false}));
+    const rows=await new Promise((resolve,reject)=>{stop=repo.subscribe((table,rows)=>resolve(rows),reject);});
+    assert.equal(rows[0].id,'after-sleep');
+  }finally{stop?.();}
+});
+
+test('token refresh network failures become the Vietnamese unavailable error',{timeout:1000},async()=>{
+  const repo=await repoFor(env(),{},null,{timeoutMs:1000,fetchImpl:async()=>emptyPage()});
+  repo.s.auth.currentUser.getIdToken=async()=>{throw Object.assign(Error('Firebase: Error (auth/network-request-failed).'),{code:'auth/network-request-failed'});};
+  await assert.rejects(()=>repo.api('/v1/records'),e=>e.code==='unavailable'&&!/Firebase/.test(e.message));
+});
+
+test('a forced reload keeps months already paged in',async()=>{
+  const froms=[];
+  const repo=await repoFor(env(),{},null,{fetchImpl:async url=>{const f=new URL(url).searchParams.get('from');if(f)froms.push(f);return emptyPage();}});
+  await repo.load();repo.loadedFrom='2020-01-01';froms.length=0;
+  await repo.load({force:true});
+  assert.ok(froms.length>0);assert.ok(froms.every(f=>f==='2020-01-01'));
+});

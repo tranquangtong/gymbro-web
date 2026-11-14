@@ -37,3 +37,28 @@ test('Repository refuses any expired session before issuing a read or a write',a
  const repo=new FirebaseRepository(service);service.sessionExpiresAt=Date.now()-1;
  await assert.rejects(()=>repo.load(),/hết hạn/);await assert.rejects(()=>repo.saveMany('WebMeals',parseMeals('1 chuối',{date:'2026-10-30'})),/hết hạn/);await assert.rejects(()=>repo.saveFood({}),/hết hạn/);assert.throws(()=>new FirebaseRepository(service),/hết hạn/);
 });
+
+test('failed initial loads leave loading/restoring and keep cached data read-only',()=>{
+ const state={mode:'firebase',connected:true,initialized:false,repo:{s:{sessionExpiresAt:now+SESSION_MS}},connectionError:'Không kết nối được máy chủ.'};
+ assert.equal(accessStage(state,now),'error');
+ assert.equal(accessStage({...state,authRestoring:true},now),'error');
+ assert.equal(accessStage({...state,connectionError:''},now),'loading');
+ assert.equal(accessStage({...state,authRestoring:true,connectionError:''},now),'restoring');
+ assert.equal(accessStage({...state,cached:{sessionExpiresAt:now+SESSION_MS}},now),'cached');
+});
+
+test('session verification times out without mutating the session and can be retried',{timeout:1000},async()=>{
+ const user={uid:'owner'},service={auth:{currentUser:user},authSDK:{getIdTokenResult:()=>new Promise(()=>{})}};
+ await assert.rejects(()=>verifySession(service,{timeoutMs:15}),e=>e.code==='unavailable');
+ assert.equal(service.sessionExpiresAt,undefined);
+ service.authSDK.getIdTokenResult=async()=>({authTime:new Date().toISOString()});
+ await verifySession(service);assert.ok(sessionValid(service.sessionExpiresAt));
+});
+
+test('expired sessions and cancelled popups keep the login screen; network restore retains retry access',()=>{
+ const state={mode:'firebase',connected:true,initialized:false,connectionError:'Lỗi mạng',repo:{s:{sessionExpiresAt:now+SESSION_MS}}};
+ assert.equal(accessStage({...state,connected:false,repo:null},now),'login');
+ assert.equal(accessStage({...state,repo:{s:{sessionExpiresAt:now}}},now),'login');
+ assert.equal(accessStage({...state,connected:false,repo:null,retrySession:{expiresAt:now+SESSION_MS}},now),'error');
+ assert.equal(accessStage({...state,connected:false,repo:null,retrySession:{expiresAt:now}},now),'login');
+});

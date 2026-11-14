@@ -9,6 +9,7 @@ import {SCHEMAS,emptyData,today,shiftDate,LocalRepository} from '../core/core.js
 import {cleanRecord} from '../core/migration.js';
 import {DEFAULT_FOODS,cleanFood} from '../core/quick.js';
 import {assertSession} from './access.js';
+import {withTimeout,unavailable,TRANSIENT} from './timeout.js';
 import {isAdmin} from './firebase.js';
 import {listLocalPhotos} from './local-extras.js';
 import {validatePhoto} from '../core/media.js';
@@ -21,26 +22,31 @@ const clone=v=>structuredClone(v);
 const strip=r=>{const c={...r};delete c._revision;delete c._originalUpdatedAt;return c;};
 
 export class CloudflareRepository{
-  constructor(s,targetUid=null,{apiBase,windowDays=WINDOW_DAYS,fetchImpl=(...a)=>fetch(...a)}={}){
+  constructor(s,targetUid=null,{apiBase,windowDays=WINDOW_DAYS,fetchImpl=(...a)=>fetch(...a),timeoutMs=15000,writeTimeoutMs=20000,pollMs=POLL_MS}={}){
     if(!apiBase)throw Error('Chưa cấu hình địa chỉ API Cloudflare.');
     this.s=s;this.uid=s.auth.currentUser?.uid;if(!this.uid)throw Error('Hãy đăng nhập Google.');
     this.ownerUid=targetUid||this.uid;this.apiBase=apiBase.replace(/\/+$/,'');this.fetchImpl=fetchImpl;this.windowDays=windowDays;
+    this.timeoutMs=timeoutMs;this.writeTimeoutMs=writeTimeoutMs;this.pollMs=pollMs;
     this.backendName='Cloudflare';this._cache=null;this._loadTask=null;this.loadedFrom=null;this.seq=0;
     this.photos=new LocalRepository(globalThis.localStorage,'gymbro.cf.'+this.ownerUid);
     this.check();
     this.title=this.ownerUid===this.uid?'Cloudflare · '+s.auth.currentUser.email:'Quản trị · dữ liệu UID '+this.ownerUid;
   }
   check(){assertSession(this.s.sessionExpiresAt);if(this.s.auth.currentUser?.uid!==this.uid)throw Error('Tài khoản đã thay đổi. Đăng nhập lại trước khi ghi dữ liệu.');if(this.ownerUid!==this.uid&&!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được mở dữ liệu người khác.');}
-  async api(path,{method='GET',params={},body,timeoutMs=0}={}){
+  async api(path,{method='GET',params={},body,timeoutMs=method==='GET'?this.timeoutMs:this.writeTimeoutMs}={}){
     this.check();
     const url=new URL(this.apiBase+path);for(const [k,v] of Object.entries(params))if(v!==undefined&&v!==null&&v!=='')url.searchParams.set(k,v);
     if(this.ownerUid!==this.uid&&method==='GET')url.searchParams.set('owner',this.ownerUid);
-    const token=await this.s.auth.currentUser.getIdToken();let res;const controller=timeoutMs?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
-    try{res=await this.fetchImpl(url.toString(),{method,...(controller?{signal:controller.signal}:{}),headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(this.ownerUid!==this.uid?{...body,owner:this.ownerUid}:body):undefined});}
-    catch{const e=Error('Không kết nối được máy chủ GymBro (Cloudflare). Kiểm tra mạng; nội dung đang nhập vẫn được giữ.');e.code='unavailable';throw e;}finally{if(timer)clearTimeout(timer);}
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok){const e=Error(data.error||`Máy chủ GymBro trả lỗi ${res.status}.`);e.code=data.code||String(res.status);e.status=res.status;throw e;}
-    this.check();return data;
+    const controller=new AbortController();
+    return withTimeout(async()=>{
+      let token;try{token=await this.s.auth.currentUser.getIdToken();}catch(e){if(TRANSIENT.includes(e.code))throw unavailable();throw e;}if(controller.signal.aborted)throw unavailable();
+      let res;
+      try{res=await this.fetchImpl(url.toString(),{method,signal:controller.signal,headers:{authorization:'Bearer '+token,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(this.ownerUid!==this.uid?{...body,owner:this.ownerUid}:body):undefined});}
+      catch{throw unavailable();}
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok){const e=Error(data.error||`Máy chủ GymBro trả lỗi ${res.status}.`);e.code=data.code||String(res.status);e.status=res.status;throw e;}
+      this.check();return data;
+    },timeoutMs,()=>controller.abort());
   }
   async page(kind,{from='',to=''}={}){
     const rows=[];let cursor='',seq=null;
@@ -53,7 +59,7 @@ export class CloudflareRepository{
     if(this._cache&&!force)return clone(this._cache);
     if(this._loadTask)return clone(await this._loadTask);
     this._loadTask=(async()=>{try{
-      const from=this.loadedFrom&&!force?this.loadedFrom:shiftDate(today(),-this.windowDays),data=emptyData();data.Archive=[];
+      const recent=shiftDate(today(),-this.windowDays),from=this.loadedFrom&&(!force||this.loadedFrom<recent)?this.loadedFrom:recent,data=emptyData();data.Archive=[];
       const parts=await Promise.all([...DATED.map(k=>this.page(k,{from}).then(r=>[k,r])),...ALL.map(k=>this.page(k).then(r=>[k,r]))]);
       for(const [k,r] of parts)data[k]=r.rows;
       this.seq=Math.min(...parts.map(([,r])=>r.seq));this.loadedFrom=from;this._cache=data;this.uploadLocalPhotos().catch(()=>{});return data;
@@ -95,7 +101,7 @@ export class CloudflareRepository{
       catch(e){if(!stopped){stop();onError(e);}}
       finally{running=false;}
     };
-    const timer=setInterval(tick,POLL_MS),onVisible=()=>{if(document.visibilityState==='visible')tick();};
+    const timer=setInterval(tick,this.pollMs),onVisible=()=>{if(document.visibilityState==='visible')tick();};
     if(typeof document!=='undefined')document.addEventListener('visibilitychange',onVisible);
     function stop(){stopped=true;clearInterval(timer);if(typeof document!=='undefined')document.removeEventListener('visibilitychange',onVisible);}
     return stop;
