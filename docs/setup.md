@@ -4,7 +4,7 @@
 
 - Frontend: https://tranquangtong.github.io/gymbro-web/
 - Firebase project: gymbro-web
-- Web app config: firebase-config.js (cấu hình public; không phải credential Admin).
+- Web app config: src/config/firebase-config.js (cấu hình public; không phải credential Admin).
 - SDK: Firebase JavaScript 13.1.0, CDN Google, Auth + Firestore. Không bật Analytics.
 
 ## Firebase Console

@@ -5,14 +5,14 @@
 // - subscribe() polls /v1/changes instead of realtime listeners.
 // - Meal photos are stored by the API for 7 days so every device sees them; a copy is cached
 //   on this device (IndexedDB) for fast, repeat viewing.
-import {SCHEMAS,emptyData,today,shiftDate,LocalRepository} from './core.js';
-import {cleanRecord} from './migration.js';
-import {DEFAULT_FOODS,cleanFood} from './quick.js';
+import {SCHEMAS,emptyData,today,shiftDate,LocalRepository} from '../core/core.js';
+import {cleanRecord} from '../core/migration.js';
+import {DEFAULT_FOODS,cleanFood} from '../core/quick.js';
 import {assertSession} from './access.js';
 import {isAdmin} from './firebase.js';
 import {listLocalPhotos} from './local-extras.js';
-import {validatePhoto} from './media.js';
-import {photoExpired} from './photo-retention.js';
+import {validatePhoto} from '../core/media.js';
+import {photoExpired} from '../core/photo-retention.js';
 
 export const WINDOW_DAYS=120;
 export const POLL_MS=45000;

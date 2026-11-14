@@ -1,12 +1,12 @@
 import {quotaMessage} from './errors.js';
-import {photoExpired,photoExpiryError} from './photo-retention.js';
+import {photoExpired,photoExpiryError} from '../core/photo-retention.js';
 import {assertSession,verifySession} from './access.js';
-import {DEFAULT_FOODS,cleanFood,validateFood} from './quick.js';
-import {validatePhoto} from './media.js';
-import {firebaseConfig} from './firebase-config.js';
-import {BACKEND} from './backend-config.js';
-import {SCHEMAS,emptyData,validateRecord} from './core.js';
-import {cleanRecord,validateArchive} from './migration.js';
+import {DEFAULT_FOODS,cleanFood,validateFood} from '../core/quick.js';
+import {validatePhoto} from '../core/media.js';
+import {firebaseConfig} from '../config/firebase-config.js';
+import {BACKEND} from '../config/backend-config.js';
+import {SCHEMAS,emptyData,validateRecord} from '../core/core.js';
+import {cleanRecord,validateArchive} from '../core/migration.js';
 
 export const ADMIN_EMAIL='tongquangtran@gmail.com';
 export const isAdmin = user => user?.emailVerified === true && user.email === ADMIN_EMAIL;

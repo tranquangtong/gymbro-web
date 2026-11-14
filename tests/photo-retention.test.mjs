@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateKeyPairSync} from 'node:crypto';
-import {PHOTO_RETENTION_MS,photoExpired,photoExpiresAt,forgetExpiredPhotos} from '../photo-retention.js';
+import {PHOTO_RETENTION_MS,photoExpired,photoExpiresAt,forgetExpiredPhotos} from '../src/core/photo-retention.js';
 import {photoCleanupWrites,cleanupPhotos} from '../scripts/photo-cleanup.mjs';
-import {FirebaseRepository} from '../firebase.js';
+import {FirebaseRepository} from '../src/data/firebase.js';
 const now=Date.parse('2026-10-31T07:00:00Z'),old=new Date(now-PHOTO_RETENTION_MS).toISOString(),fresh=new Date(now-PHOTO_RETENTION_MS+1).toISOString();
 const root='projects/gymbro-web/databases/(default)/documents';
 const photo={name:root+'/users/u/MealPhotos/p',updateTime:'v1',fields:{created_at:{stringValue:old},meal_id:{stringValue:'m'}}};
@@ -46,7 +46,7 @@ test('Photo reads and uploads reject expired images, even before the server job 
 });
 
 test('Local cache cleanup physically deletes only expired image bytes and closes IndexedDB',async()=>{
- const {purgeLocalPhotoCache}=await import('../local-extras.js');
+ const {purgeLocalPhotoCache}=await import('../src/data/local-extras.js');
  const original=globalThis.indexedDB,removed=[];let closed=false;
  const records=[{key:'owner-a/old',value:{created_at:old}},{key:'owner-b/new',value:{created_at:fresh}}];
  globalThis.indexedDB={open:()=>{const opening={};queueMicrotask(()=>{opening.result={close:()=>{closed=true;},transaction:()=>{

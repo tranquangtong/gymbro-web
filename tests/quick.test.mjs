@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,makeRequest,parseEstimate,requestPrompt,validateFood,estimateToken} from '../quick.js';
-import {validatePhoto} from '../media.js';
-import {LocalRepository} from '../core.js';
-import {FirebaseRepository} from '../firebase.js';
+import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,makeRequest,parseEstimate,requestPrompt,validateFood,estimateToken} from '../src/core/quick.js';
+import {validatePhoto} from '../src/core/media.js';
+import {LocalRepository} from '../src/core/core.js';
+import {FirebaseRepository} from '../src/data/firebase.js';
 const date='2026-10-30';
 test('Food quantities scale portions and grams, handle decimal commas, and keep unknown complex foods unknown',()=>{
  const rows=['sáng nay: 2 quả chuối','1 whey Nuta','3 trứng luộc không lòng đỏ','200g đậu hũ','1,5 hộp sữa chua không đường','Bún gạo lứt trứng xào rau'].flatMap(text=>parseMeals(text,{date}));
@@ -85,7 +85,7 @@ test('Quick add keeps the chosen portion unit in the output',()=>{
 });
 
 test('Roman chair is a bodyweight move whose kcal counts body weight plus any plate',async()=>{
-  const {estimateWorkoutBatch}=await import('../workout-kcal.js');const {exerciseChoices}=await import('../exercise-library.js');const {workoutInsight}=await import('../dashboard.js');
+  const {estimateWorkoutBatch}=await import('../src/core/workout-kcal.js');const {exerciseChoices}=await import('../src/ui/exercise-library.js');const {workoutInsight}=await import('../src/ui/dashboard.js');
   const date='2026-11-12',choice=exerciseChoices([]).find(c=>c.name==='Roman chair (lưng dưới)');assert.equal(choice.kind,'bodyweight');
   const plain=compactWorkout({exercise:'Roman chair (lưng dưới)',kind:'bodyweight',count:3,reps:12,kg:''},{date});assert.equal(JSON.parse(plain.sets_json)[0].weight_kg,'');
   const plate=compactWorkout({exercise:'Roman chair (lưng dưới)',kind:'bodyweight',count:3,reps:12,kg:10},{date});assert.equal(JSON.parse(plate.sets_json)[0].weight_kg,10);
@@ -98,7 +98,7 @@ test('Roman chair is a bodyweight move whose kcal counts body weight plus any pl
 });
 
 test('Cable biceps curl is listed and uses the upper-isolation preset; back extension stays calisthenics',async()=>{
-  const {strengthPreset}=await import('../workout-kcal.js');const {exerciseChoices}=await import('../exercise-library.js');const {workoutInsight}=await import('../dashboard.js');
+  const {strengthPreset}=await import('../src/core/workout-kcal.js');const {exerciseChoices}=await import('../src/ui/exercise-library.js');const {workoutInsight}=await import('../src/ui/dashboard.js');
   assert.equal(exerciseChoices([]).find(c=>c.name==='Cable biceps curl').kind,'strength');
   assert.deepEqual(strengthPreset({exercise:'Cable biceps curl'}),{group:'upper_isolation',met:3.5,minutes:2});
   assert.equal(strengthPreset({exercise:'Back extension'}).group,'calisthenics');

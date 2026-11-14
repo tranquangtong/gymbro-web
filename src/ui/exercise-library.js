@@ -1,4 +1,4 @@
-import {active,EXERCISES,KINDS,norm} from './core.js';
+import {active,EXERCISES,KINDS,norm} from '../core/core.js';
 
 // Reuse the loaded diary: opening the picker never needs another database read.
 export function exerciseChoices(rows=[],date='9999-12-31'){

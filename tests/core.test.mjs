@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nutrition,workoutSummary,shiftDate,latestProfile,validateRecord,LocalRepository,emptyData,serialize,SCHEMAS} from '../core.js';
+import {nutrition,workoutSummary,shiftDate,latestProfile,validateRecord,LocalRepository,emptyData,serialize,SCHEMAS} from '../src/core/core.js';
 
 const base={id:'test-log',date:'2026-10-29',created_at:'2026-10-29T08:00:00Z',updated_at:'2026-10-29T08:00:00Z',deleted:false};
 const meal={...base,meal:'lunch',food:'Đậu hũ & rau',kcal:'',protein:'',carbs:'',fat:'',nutrition_source:'',skipped:false};

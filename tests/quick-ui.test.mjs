@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createQuickUI} from '../quick-ui.js';
+import {createQuickUI} from '../src/ui/quick-ui.js';
 
 // Exercise the real composer without a browser or a live database.
 function composer(t,saved={}){

@@ -4,12 +4,12 @@
 // - Re-runnable: rows already in D1 are kept unless Firestore has a later updated_at.
 // - Ends with a reconcile: per-type count + SHA-256 fingerprint on both sides,
 //   and a row-level diff only when they disagree.
-import {SCHEMAS} from './core.js';
-import {cleanRecord} from './migration.js';
-import {cleanFood} from './quick.js';
+import {SCHEMAS} from '../core/core.js';
+import {cleanRecord} from '../core/migration.js';
+import {cleanFood} from '../core/quick.js';
 import {FirebaseRepository,withFirestore,isAdmin} from './firebase.js';
 import {CloudflareRepository} from './cloudflare.js';
-import {summarize} from './reconcile.js';
+import {summarize} from '../core/reconcile.js';
 
 export const KINDS=[...Object.keys(SCHEMAS),'Archive','FoodLibrary'];
 export const KIND_LABELS={WebMeals:'Ăn uống',WebWorkouts:'Tập luyện',WebProfile:'Hồ sơ',Archive:'Tư liệu',FoodLibrary:'Thư viện món'};

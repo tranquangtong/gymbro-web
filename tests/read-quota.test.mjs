@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FirebaseRepository,firebaseError} from '../firebase.js';
-import {createLiveSync} from '../sync.js';
-import {quotaMessage} from '../errors.js';
-import {parseMeals} from '../quick.js';
+import {FirebaseRepository,firebaseError} from '../src/data/firebase.js';
+import {createLiveSync} from '../src/data/sync.js';
+import {quotaMessage} from '../src/data/errors.js';
+import {parseMeals} from '../src/core/quick.js';
 function service(){
  const storage=new Map(),streams=new Map(),stats={queries:0,reads:0,writes:0,stops:0};
  const s={sessionExpiresAt:Number.MAX_SAFE_INTEGER,auth:{currentUser:{uid:'owner',email:'owner@example.test'}},db:{},dbSDK:{

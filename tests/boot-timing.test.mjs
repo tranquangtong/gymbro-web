@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createBootTiming,describeBootTiming} from '../boot-timing.js';
+import {createBootTiming,describeBootTiming} from '../src/ui/boot-timing.js';
 
 test('Boot milestones keep their first time and read in start-up order',()=>{
   let t=0;const b=createBootTiming(()=>t);

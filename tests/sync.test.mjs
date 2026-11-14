@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FirebaseRepository} from '../firebase.js';
-import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from '../sync.js';
-import {emptyData} from '../core.js';
-import {parseMeals,DEFAULT_FOODS} from '../quick.js';
+import {FirebaseRepository} from '../src/data/firebase.js';
+import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from '../src/data/sync.js';
+import {emptyData} from '../src/core/core.js';
+import {parseMeals,DEFAULT_FOODS} from '../src/core/quick.js';
 
 test('A persisted local/demo preference cannot silently disable Firebase after a mobile reload',()=>{
  for(const preferences of [{},{mode:'local'},{mode:'demo'},{mode:'firebase'}])assert.equal(startupMode(preferences),'firebase');

@@ -1,4 +1,4 @@
-import {profileDetails,profileComplete} from './access.js';
+import {profileDetails,profileComplete} from '../data/access.js';
 import {describeBootTiming} from './boot-timing.js';
 export function firebaseSettings({state,bootTiming={},profile,fmt,esc,card,button,heading}) {
   const admin=state.connected&&state.repo?.s.auth.currentUser?.emailVerified&&state.repo.s.auth.currentUser.email==='tongquangtran@gmail.com',p=profileDetails(profile);

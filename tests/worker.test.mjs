@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { env, call, token, otherKeys, ADMIN, ORIGIN, T } from './worker-env.mjs';
-import { fingerprint } from '../reconcile.js';
+import { fingerprint } from '../src/core/reconcile.js';
 
 const meal = (id, date, extra = {}) => ({ id, date, meal: 'lunch', food: 'Phở bò', portion: '1 tô', kcal: 500, protein: 30, carbs: 60, fat: 15, nutrition_source: 'estimate', created_at: date + 'T05:00:00Z', updated_at: date + 'T05:00:00Z', deleted: false, ...extra });
 

@@ -1,6 +1,6 @@
 import {createSign} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
-import {PHOTO_RETENTION_MS,photoExpired} from '../photo-retention.js';
+import {PHOTO_RETENTION_MS,photoExpired} from '../src/core/photo-retention.js';
 export const PROJECT='gymbro-web';
 const ROOT=`projects/${PROJECT}/databases/(default)/documents`;
 export function photoCleanupWrites(photo,meal,now){

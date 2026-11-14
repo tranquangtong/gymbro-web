@@ -1,5 +1,5 @@
-import {currentNutritionTargets} from './access.js';
-import {active,num,shiftDate,dateLabel,today,workoutSummary,norm,setsOf} from './core.js';
+import {currentNutritionTargets} from '../data/access.js';
+import {active,num,shiftDate,dateLabel,today,workoutSummary,norm,setsOf} from '../core/core.js';
 export const DASHBOARD_DAYS=12;
 const skipped=r=>String(r.skipped).toLowerCase()==='true';
 const valid=v=>num(v)!==null&&num(v)>=0;

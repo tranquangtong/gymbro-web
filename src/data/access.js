@@ -1,4 +1,4 @@
-import {num,norm,active} from './core.js';
+import {num,norm,active} from '../core/core.js';
 export const SESSION_MS=14*24*60*60*1000;
 export function sessionExpiry(authTime){const started=Date.parse(authTime);if(!Number.isFinite(started))throw Error('Không xác minh được phiên đăng nhập. Hãy đăng nhập lại.');return started+SESSION_MS;}
 export function sessionValid(expiresAt,now=Date.now()){return typeof expiresAt==='number'&&Number.isFinite(expiresAt)&&now<expiresAt;}

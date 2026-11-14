@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {estimateWorkoutBatch,workoutWeight} from '../workout-kcal.js';
-import {parseWorkouts,makeRequest,requestPrompt,parseEstimate} from '../quick.js';
+import {estimateWorkoutBatch,workoutWeight} from '../src/core/workout-kcal.js';
+import {parseWorkouts,makeRequest,requestPrompt,parseEstimate} from '../src/core/quick.js';
 const date='2026-10-29',rows=text=>parseWorkouts(text,{date});
 test('Legacy single-set logs and grouped sets have the same total, without requiring minutes',()=>{
  const one=rows('Incline chest press machine 50kg 1x13')[0],three=rows('Incline chest press machine 50kg 3x13')[0];

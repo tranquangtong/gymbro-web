@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {writeSnapshot,readSnapshot,clearSnapshot,SNAPSHOT_KEY,SNAPSHOT_MAX_BYTES} from '../snapshot.js';
-import {accessStage} from '../access.js';
+import {writeSnapshot,readSnapshot,clearSnapshot,SNAPSHOT_KEY,SNAPSHOT_MAX_BYTES} from '../src/data/snapshot.js';
+import {accessStage} from '../src/data/access.js';
 
 const memory=()=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),m};};
 const now=1_800_000_000_000,later=now+3600_000;

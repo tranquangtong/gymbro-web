@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { env, token, workerFetch, ADMIN } from './worker-env.mjs';
-import { CloudflareRepository } from '../cloudflare.js';
-import { diffRows } from '../migrate-cloudflare.js';
-import { shiftDate, today } from '../core.js';
+import { CloudflareRepository } from '../src/data/cloudflare.js';
+import { diffRows } from '../src/data/migrate-cloudflare.js';
+import { shiftDate, today } from '../src/core/core.js';
 
 const meal = (id, date, extra = {}) => ({ id, date, meal: 'lunch', food: 'Phở', portion: '1 tô', kcal: 500, protein: 30, carbs: 60, fat: 15, nutrition_source: 'estimate', created_at: 'c', updated_at: 'u-' + id, deleted: false, ...extra });
 async function service(claims = {}) {

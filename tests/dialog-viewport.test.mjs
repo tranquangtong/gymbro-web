@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {viewportBounds,fieldScrollDelta,installDialogViewport,focusLiftDelta} from '../dialog-viewport.js';
+import {viewportBounds,fieldScrollDelta,installDialogViewport,focusLiftDelta} from '../src/ui/dialog-viewport.js';
 test('iOS keyboard tracks both visible height and Safari pan without treating pinch zoom as keyboard',()=>{
  const win={innerHeight:800,visualViewport:{height:340,offsetTop:96,scale:1}};
  assert.deepEqual(viewportBounds(win),{height:340,top:96,keyboard:true});

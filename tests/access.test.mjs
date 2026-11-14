@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SESSION_MS,sessionExpiry,sessionValid,assertSession,verifySession,profileDetails,profileComplete,validatePersonalProfile,estimateEnergy,accessStage} from '../access.js';
-import {FirebaseRepository} from '../firebase.js';
-import {cleanRecord} from '../migration.js';
-import {parseMeals} from '../quick.js';
+import {SESSION_MS,sessionExpiry,sessionValid,assertSession,verifySession,profileDetails,profileComplete,validatePersonalProfile,estimateEnergy,accessStage} from '../src/data/access.js';
+import {FirebaseRepository} from '../src/data/firebase.js';
+import {cleanRecord} from '../src/core/migration.js';
+import {parseMeals} from '../src/core/quick.js';
 const profile={weight_kg:85,height_cm:175,TDEE:2500,goal:{bmr_kcal:1800,target_weight_kg:78,training_goal:'Tăng sức mạnh để hít xà bodyweight',activity_factor:1.375}};
 const now=Date.parse('2026-10-30T05:00:00Z');
 test('Session lasts exactly 14 days from authentication, not the most recent token refresh',async()=>{

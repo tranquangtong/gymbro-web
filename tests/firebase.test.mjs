@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cleanRecord,convertSheets,validateBundle} from '../migration.js';
-import {FirebaseRepository,isAdmin} from '../firebase.js';
+import {cleanRecord,convertSheets,validateBundle} from '../src/core/migration.js';
+import {FirebaseRepository,isAdmin} from '../src/data/firebase.js';
 
 const meal={id:'meal1',date:'2026-10-29',meal:'lunch',food:'Đậu hũ',portion:'',kcal:200,protein:'',carbs:'',fat:'',nutrition_source:'manual',skipped:false,notes:'',created_at:'2026-10-29T01:00:00Z',updated_at:'v1',deleted:false};
 test('Firebase writes use an allowlist and strip all messaging and unknown fields',()=>{

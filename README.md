@@ -10,11 +10,27 @@ npm run check
 npm test
 ```
 
-Mở http://127.0.0.1:4173. Không có npm dependencies; Firebase SDK được nạp động từ CDN chính thức khi cần đăng nhập. Cấu hình web public nằm trong `firebase-config.js`; không có Admin SDK private key. Không bật Analytics.
+Mở http://127.0.0.1:4173. Không có npm dependencies; Firebase SDK được nạp động từ CDN chính thức khi cần đăng nhập. Cấu hình web public nằm trong `src/config/firebase-config.js`; không có Admin SDK private key. Không bật Analytics.
+
+## Cấu trúc thư mục
+
+```
+index.html, sw.js, manifest.webmanifest   # phải nằm ở gốc (GitHub Pages + phạm vi service worker)
+assets/            style.css, icons/
+src/app.js         điểm vào của app
+src/config/        cấu hình public: backend, Firebase web config
+src/core/          logic thuần dùng chung với Worker: schema, parser ghi nhanh, kcal, migration, ảnh
+src/data/          kho dữ liệu và phiên: Firebase, Cloudflare, local, đồng bộ, snapshot, quyền truy cập
+src/ui/            giao diện: ghi nhanh, dashboard, lịch, dialog, thông báo bản mới
+worker/            Cloudflare Worker + D1 migrations (import từ src/core/)
+scripts/, tests/, docs/
+```
+
+Sửa `src/core/` sẽ kích hoạt deploy Worker khi push lên main.
 
 ## Thiết lập
 
-Đang chuyển backend sang Cloudflare Workers + D1 (gói Free), vẫn dùng Firebase Authentication để đăng nhập: xem [docs/cloudflare.md](docs/cloudflare.md). Công tắc nằm ở `backend-config.js`.
+Đang chuyển backend sang Cloudflare Workers + D1 (gói Free), vẫn dùng Firebase Authentication để đăng nhập: xem [docs/cloudflare.md](docs/cloudflare.md). Công tắc nằm ở `src/config/backend-config.js`.
 
 Xem [hướng dẫn Firebase](docs/setup.md). Cần bật Google provider, thêm domain GitHub Pages và publish [firestore.rules](firestore.rules). Trước khi publish, database Production mode vẫn từ chối đọc/ghi. App không tự mở quyền.
 
@@ -30,7 +46,7 @@ Giao diện giữ bản nháp form mới trong sessionStorage. Phiên Firebase A
 
 Log tập hỗ trợ nhiều set, tạ ngoài, trợ lực, bodyweight, cardio, ngày nghỉ và preset chin-up. Volume tạ ngoài không bao gồm trợ lực/bodyweight. Kcal/macro trống nghĩa là chưa biết, khác với 0. Các bản ghi profile lưu cân nặng và mục tiêu theo ngày.
 
-Bộ chuyển đổi `migration.js` nhận bảng nguồn đã đọc theo header, tạo file JSON GymBro version 2. File riêng tư được chọn ở **Kết nối → Nhập lịch sử từ Sheets**. Có bước xem trước và xác nhận tài khoản. Toàn bộ file được kiểm tra trước khi bắt đầu ghi; mỗi bản ghi nhập qua transaction theo ID ổn định. ID đã tồn tại được bỏ qua, không ghi đè log đã sửa. Nếu ngắt mạng có thể chọn lại cùng file và chạy tiếp. Quá trình không atomic cho toàn bộ file; có thể đã nhập một phần khi bị gián đoạn.
+Bộ chuyển đổi `src/core/migration.js` nhận bảng nguồn đã đọc theo header, tạo file JSON GymBro version 2. File riêng tư được chọn ở **Kết nối → Nhập lịch sử từ Sheets**. Có bước xem trước và xác nhận tài khoản. Toàn bộ file được kiểm tra trước khi bắt đầu ghi; mỗi bản ghi nhập qua transaction theo ID ổn định. ID đã tồn tại được bỏ qua, không ghi đè log đã sửa. Nếu ngắt mạng có thể chọn lại cùng file và chạy tiếp. Quá trình không atomic cho toàn bộ file; có thể đã nhập một phần khi bị gián đoạn.
 
 - `EatLog` → `WebMeals`: giữ kcal đã biết/ước tính, tổng kcal, buffer, macro gồm fiber, confidence và ghi chú dinh dưỡng. Ưu tiên kcal đã biết, sau đó tổng đã tính, rồi kcal ước tính.
 - `WorkoutLog` → `WebWorkouts`: giữ mỗi set gốc thành một mục riêng để không thay đổi số set lịch sử. Các buổi mới có thể lưu nhiều set trong một mục. Nhận diện chin-up trợ lực; cardio thiếu thời lượng được giữ trong Archive để rà lại.

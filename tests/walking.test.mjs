@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applyWalkingSettings,walkingSettings} from '../walking.js';
-import {compactWorkout} from '../quick.js';
-import {cleanRecord} from '../migration.js';
-import {estimateWorkoutBatch} from '../workout-kcal.js';
+import {applyWalkingSettings,walkingSettings} from '../src/core/walking.js';
+import {compactWorkout} from '../src/core/quick.js';
+import {cleanRecord} from '../src/core/migration.js';
+import {estimateWorkoutBatch} from '../src/core/workout-kcal.js';
 
 test('Walking settings survive compact save and edit through the existing notes schema',()=>{
  const r=compactWorkout({exercise:'steep walking',kind:'cardio',duration:15,incline:8,speed:5},{date:'2026-11-01'});

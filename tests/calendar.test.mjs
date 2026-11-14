@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {monthDates,shiftMonth,validMonth,monthLabel,kcalStatus,calendarMonth,monthStats,monthInsights,renderCalendar,renderDayHeadline} from '../calendar.js';
+import {monthDates,shiftMonth,validMonth,monthLabel,kcalStatus,calendarMonth,monthStats,monthInsights,renderCalendar,renderDayHeadline} from '../src/ui/calendar.js';
 
 const meal=(date,kcal,protein,extra={})=>({id:`m-${date}-${kcal}`,date,meal:'lunch',food:'x',kcal,protein,created_at:date,updated_at:date,deleted:false,...extra});
 const lift=(date,kcal,extra={})=>({id:`w-${date}`,date,kind:'strength',exercise:'Squat',sets_json:JSON.stringify([{weight_kg:60,reps:8},{weight_kg:60,reps:8}]),kcal_burned_est:kcal,created_at:date,updated_at:date,deleted:false,...extra});

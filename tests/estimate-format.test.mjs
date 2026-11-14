@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseMeals,makeRequest,requestPrompt,parseEstimate,estimateToken,readEstimateJSON,needsMealEstimate} from '../quick.js';
+import {parseMeals,makeRequest,requestPrompt,parseEstimate,estimateToken,readEstimateJSON,needsMealEstimate} from '../src/core/quick.js';
 const date='2026-10-30',scope='firebase:owner';
 function setup(n=2){const rows=['Bún trứng rau','Kem bơ','Cơm đậu hũ','Yến mạch sữa'].slice(0,n).flatMap(s=>parseMeals(s,{date}));const q=makeRequest('meals',date,rows,{scope});const out={r:estimateToken(q),m:rows.map((_,i)=>[i+1,510+i,24,45,26])};return {rows,q,out};}
 test('Compact results map reordered short meal numbers back to exact IDs, without exposing IDs in prompt',()=>{

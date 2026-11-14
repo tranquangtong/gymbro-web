@@ -1,11 +1,11 @@
 // D1 queries. Every statement is scoped by owner_uid; callers decide which
 // owner the authenticated user may act for.
-import { cleanRecord, validateArchive } from '../../migration.js';
-import { validateRecord } from '../../core.js';
-import { cleanFood, validateFood } from '../../quick.js';
-import { fingerprint } from '../../reconcile.js';
-import { validatePhoto } from '../../media.js';
-import { PHOTO_RETENTION_MS } from '../../photo-retention.js';
+import { cleanRecord, validateArchive } from '../../src/core/migration.js';
+import { validateRecord } from '../../src/core/core.js';
+import { cleanFood, validateFood } from '../../src/core/quick.js';
+import { fingerprint } from '../../src/core/reconcile.js';
+import { validatePhoto } from '../../src/core/media.js';
+import { PHOTO_RETENTION_MS } from '../../src/core/photo-retention.js';
 
 export const DATED_KINDS = ['WebMeals', 'WebWorkouts', 'WebProfile', 'Archive'];
 export const KINDS = [...DATED_KINDS, 'FoodLibrary'];

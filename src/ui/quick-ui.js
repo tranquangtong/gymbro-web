@@ -1,12 +1,12 @@
-import {isWalking,walkingSettings,applyWalkingSettings} from './walking.js';
+import {isWalking,walkingSettings,applyWalkingSettings} from '../core/walking.js';
 import {exerciseChoices,exerciseForm} from './exercise-library.js';
-import {quotaMessage} from './errors.js';
-import {forgetExpiredPhotos} from './photo-retention.js';
-import {purgeLocalPhotoCache} from './local-extras.js';
-import {estimateWorkoutBatch,workoutWeight} from './workout-kcal.js';
-import {today,dateLabel,uid,active,latestProfile,num,norm,MEALS,KINDS,setsOf} from './core.js';
-import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,MEAL_UNITS,findFood,validateFood,makeRequest,requestPrompt,parseEstimate,needsMealEstimate} from './quick.js';
-import {compressPhoto,copyText,photoFile,downloadFile,labeledPhotoBlob,labeledPhotoFile,canCopyImages,canShareFiles,collageBlob} from './media.js';
+import {quotaMessage} from '../data/errors.js';
+import {forgetExpiredPhotos} from '../core/photo-retention.js';
+import {purgeLocalPhotoCache} from '../data/local-extras.js';
+import {estimateWorkoutBatch,workoutWeight} from '../core/workout-kcal.js';
+import {today,dateLabel,uid,active,latestProfile,num,norm,MEALS,KINDS,setsOf} from '../core/core.js';
+import {DEFAULT_FOODS,parseMeals,parseWorkouts,compactWorkout,ensureWorkoutDay,MEAL_UNITS,findFood,validateFood,makeRequest,requestPrompt,parseEstimate,needsMealEstimate} from '../core/quick.js';
+import {compressPhoto,copyText,photoFile,downloadFile,labeledPhotoBlob,labeledPhotoFile,canCopyImages,canShareFiles,collageBlob} from '../core/media.js';
 
 export function createQuickUI(env){
   const {getState,esc,fmt,icon,toast,writable,reload,render,saveMessage}=env,$=s=>document.querySelector(s);

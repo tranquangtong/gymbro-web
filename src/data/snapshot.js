@@ -2,7 +2,7 @@
 // dashboard at once while sign-in and the server load run in the background.
 // View-only until the server answers; removed on sign-out, session expiry or account change.
 import {sessionValid} from './access.js';
-import {SCHEMAS} from './core.js';
+import {SCHEMAS} from '../core/core.js';
 
 export const SNAPSHOT_KEY='gymbro.snapshot.v1';
 export const SNAPSHOT_MAX_BYTES=2_500_000;

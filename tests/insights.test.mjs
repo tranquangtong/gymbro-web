@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {estimateMacroTargets,suggestMacroGoal,profileDetails,currentNutritionTargets} from '../access.js';
-import {macroProgress,renderMacroDials,classifyExercise,workoutInsight,compactExercise,renderWorkoutInsight} from '../dashboard.js';
-import {cleanRecord} from '../migration.js';
+import {estimateMacroTargets,suggestMacroGoal,profileDetails,currentNutritionTargets} from '../src/data/access.js';
+import {macroProgress,renderMacroDials,classifyExercise,workoutInsight,compactExercise,renderWorkoutInsight} from '../src/ui/dashboard.js';
+import {cleanRecord} from '../src/core/migration.js';
 const row=(exercise,extra={})=>({exercise,kind:'strength',sets_json:JSON.stringify([{weight_kg:40,reps:12},{weight_kg:40,reps:12},{weight_kg:50,reps:10}]),...extra});
 const input={weight_kg:85,tdee_kcal:2600,bmr_kcal:1800,age:29};
 test('Macro helper adjusts calories by explicit goal, uses current weight and balances 4/4/9',()=>{

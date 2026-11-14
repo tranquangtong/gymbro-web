@@ -1,6 +1,6 @@
 // Month calendar for the Nhật ký page: per-day intake vs kcal target, workout kcal and
 // protein progress, plus month insights that compare patterns instead of listing numbers.
-import {active,num,today,workoutSummary} from './core.js';
+import {active,num,today,workoutSummary} from '../core/core.js';
 import {dayEnergy} from './dashboard.js';
 
 export const KCAL_BAND=0.10; // within ±10% of the kcal target counts as on target

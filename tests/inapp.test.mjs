@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {inAppBrowser,platformOf,externalOpenUrl} from '../inapp.js';
+import {inAppBrowser,platformOf,externalOpenUrl} from '../src/ui/inapp.js';
 
 const UA={
   zaloIos:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Zalo iOS/510 ZaloTheme/dark ZaloLanguage/vn',

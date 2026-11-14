@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {exerciseChoices,exerciseForm} from '../exercise-library.js';
+import {exerciseChoices,exerciseForm} from '../src/ui/exercise-library.js';
 
 test('Exercise shortcuts deduplicate repeated sets, prioritize recent history and exclude deleted, future and rest logs',()=>{
  const rows=[

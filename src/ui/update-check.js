@@ -1,7 +1,7 @@
 // Tells a long-open tab that a newer release is live. Compares the ETag/Last-Modified of
 // the app's main files with the ones seen at start-up; never reloads by itself, so
 // nothing being typed is lost.
-const FILES=['./index.html','./app.js','./quick-ui.js','./quick.js','./cloudflare.js','./dashboard.js','./style.css'];
+const FILES=['./index.html','./src/app.js','./src/ui/quick-ui.js','./src/core/quick.js','./src/data/cloudflare.js','./src/ui/dashboard.js','./assets/style.css'];
 const stamp=async f=>{try{const r=await fetch(f,{method:'HEAD',cache:'no-store'});return r.ok?(r.headers.get('etag')||r.headers.get('last-modified')||''):'';}catch{return '';}};
 export function watchForUpdates({interval=5*60*1000}={}){
   if(typeof document==='undefined'||location.protocol==='file:')return;

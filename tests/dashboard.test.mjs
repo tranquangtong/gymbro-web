@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../dashboard.js';
-import {validatePersonalProfile} from '../access.js';
-import {cleanRecord} from '../migration.js';
+import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../src/ui/dashboard.js';
+import {validatePersonalProfile} from '../src/data/access.js';
+import {cleanRecord} from '../src/core/migration.js';
 const day='2026-10-30';
 const meal=(fields={})=>({id:'meal',date:day,kcal:500,protein:30,carbs:70,fat:10,deleted:false,skipped:false,...fields});
 const workout=(fields={})=>({id:'gym',date:day,kind:'strength',kcal_burned_est:100,deleted:false,...fields});

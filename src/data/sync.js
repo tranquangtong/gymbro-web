@@ -1,5 +1,5 @@
-import {SCHEMAS} from './core.js';
-import {validateBundle} from './migration.js';
+import {SCHEMAS} from '../core/core.js';
+import {validateBundle} from '../core/migration.js';
 
 // Old releases persisted "local" indefinitely, even with a restored Google login.
 // Device-only/demo are now explicit choices for this page session, never a boot default.

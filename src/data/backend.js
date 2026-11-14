@@ -1,4 +1,4 @@
-import {BACKEND} from './backend-config.js';
+import {BACKEND} from '../config/backend-config.js';
 import {FirebaseRepository} from './firebase.js';
 import {CloudflareRepository} from './cloudflare.js';
 export {BACKEND};
