@@ -11,7 +11,11 @@ export function strengthPreset(row){
   [/bench|chest press/,'upper_compound',4.8,2.7],[/shoulder press|overhead press|military press/,'upper_press',4.4,2.5],
   [/row|pull down|pulldown|pull up|pullup|chin up|chinup/,'upper_pull',4.6,2.6],
   [/leg curl/,'lower_isolation',4.2,2.3],[/leg extension/,'lower_isolation',4.8,2.5],
-  [/curl|extension|pushdown/,'upper_isolation',3.5,2],[/sit up|push up|pushup|plank|crunch|rotation|face pull|roman chair|back extension|hyper ?extension|lung duoi/,'calisthenics',3.8,1.6],
+  // Back extensions are bodyweight work, checked before the generic 'extension' isolation rule.
+  [/roman chair|back extension|hyper ?extension|lung duoi/,'calisthenics',3.8,1.6],
+  // Curls on dumbbells, barbell or cable share one preset: the Compendium has no cable-specific code
+  // (2024 code 02054, resistance training 8-15 reps, is 3.5 MET). Cable kg is the stack number as shown.
+  [/curl|extension|pushdown/,'upper_isolation',3.5,2],[/sit up|push up|pushup|plank|crunch|rotation|face pull/,'calisthenics',3.8,1.6],
   [/machine/,'machine_general',3.8,2.1]
  ])if(pattern.test(t))return {group,met,minutes};
  return {group:'strength_general',met:4.2,minutes:2.3};

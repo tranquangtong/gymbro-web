@@ -96,3 +96,11 @@ test('Roman chair is a bodyweight move whose kcal counts body weight plus any pl
   assert.equal(JSON.parse(parseWorkouts('roman chair 3x15',{date})[0].sets_json)[0].weight_kg,'');
   assert.deepEqual(workoutInsight([plain]).muscles,['Lưng dưới','Mông']);
 });
+
+test('Cable biceps curl is listed and uses the upper-isolation preset; back extension stays calisthenics',async()=>{
+  const {strengthPreset}=await import('../workout-kcal.js');const {exerciseChoices}=await import('../exercise-library.js');const {workoutInsight}=await import('../dashboard.js');
+  assert.equal(exerciseChoices([]).find(c=>c.name==='Cable biceps curl').kind,'strength');
+  assert.deepEqual(strengthPreset({exercise:'Cable biceps curl'}),{group:'upper_isolation',met:3.5,minutes:2});
+  assert.equal(strengthPreset({exercise:'Back extension'}).group,'calisthenics');
+  assert.deepEqual(workoutInsight([{id:'c',date:'2026-11-14',kind:'strength',exercise:'Cable biceps curl',sets_json:'[{"weight_kg":20,"reps":12}]'}]).muscles,['Tay trước']);
+});
