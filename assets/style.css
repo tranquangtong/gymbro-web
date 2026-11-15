@@ -1131,3 +1131,25 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
  #quick-dialog .amount-row{grid-template-columns:96px minmax(0,1fr)}
 }
 
+/* Estimate AI tutorial and top link */
+.estimate-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:4px 12px;flex-wrap:wrap;margin-bottom:4px}
+.estimate-intro .form-note{margin:0;flex:1;min-width:200px}
+.estimate-intro .text-button{min-height:36px;padding:4px 2px;font-size:14px;white-space:nowrap}
+.help-flow{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:10px 0 14px;padding:10px;border-radius:12px;background:var(--surface-2)}
+.help-flow-node{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px;font-weight:600;white-space:nowrap}
+.help-flow-node svg,.help-flow-arrow svg{width:15px;height:15px;flex-shrink:0}
+.help-flow-node.accent{background:var(--accent-tint);border-color:var(--accent-soft);color:var(--accent)}
+.help-flow-node.ok{background:var(--ok-tint);border-color:color-mix(in srgb,var(--ok) 35%,transparent);color:var(--ok)}
+.help-flow-arrow{color:var(--muted)}
+.help-steps{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:10px}
+.help-step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.help-step-num{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-family:var(--font-display);font-size:17px;font-weight:700;line-height:1}
+.help-step-body{min-width:0;font-size:14px;line-height:1.5}
+.help-step-body .help-step-title{display:block;font-size:15px;margin-bottom:3px;color:var(--ink)}
+.help-step-body p{margin:0;color:var(--muted)}
+.help-step-body p+p{margin-top:4px}
+.help-step-body strong{color:var(--ink)}
+.help-tips{padding:12px 14px;border-radius:12px;background:var(--accent-tint);font-size:13.5px;line-height:1.55;color:var(--ink)}
+.help-tips strong{display:block;margin-bottom:4px}
+.help-tips ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--muted)}
+

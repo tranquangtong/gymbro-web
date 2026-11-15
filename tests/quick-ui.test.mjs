@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createQuickUI} from '../src/ui/quick-ui.js';
+import {createQuickUI,ESTIMATE_HELP_KEY,shouldAutoShowHelp} from '../src/ui/quick-ui.js';
 
 // Exercise the real composer without a browser or a live database.
 function composer(t,saved={}){
@@ -116,4 +116,82 @@ test('Meal and exercise name suggestions stay inline with no native datalist pop
  c.click('insert-exercise',{exercise:'assisted pull up|assisted'});
  assert.match(c.dialog.innerHTML,/value="assisted" selected/);
  for(const id of ['count','reps','kg'])assert.match(c.dialog.innerHTML,new RegExp('id="compact-'+id+'"'));
+});
+
+test('shouldAutoShowHelp checks gymbro.estimateHelpSeen safely across storage states',()=>{
+ assert.equal(shouldAutoShowHelp(null),false);
+ assert.equal(shouldAutoShowHelp({}),false);
+ assert.equal(shouldAutoShowHelp({getItem:()=>null}),true);
+ assert.equal(shouldAutoShowHelp({getItem:()=>''}),true);
+ assert.equal(shouldAutoShowHelp({getItem:()=>'1'}),false);
+ assert.equal(shouldAutoShowHelp({getItem:()=>{throw Error('blocked');}}),false);
+});
+
+test('Estimate tutorial renders 4 steps without API or token wording and preserves estimate state on back',async t=>{
+ const local=new Map();
+ const oldLs=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,writable:true,value:{getItem:k=>local.get(k)??null,setItem:(k,v)=>local.set(k,v)}});
+ t.after(()=>oldLs?Object.defineProperty(globalThis,'localStorage',oldLs):delete globalThis.localStorage);
+ const c=composer(t);
+ c.state.data.WebMeals=[{id:'m1',date:'2026-11-01',food:'Phở bò',meal:'lunch'}];
+ c.state.repo.load=async()=>c.state.data;
+ c.click('estimate-help');
+ assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);
+ assert.match(c.dialog.innerHTML,/Bấm Tạo prompt/);
+ assert.match(c.dialog.innerHTML,/Gửi sang app AI của bạn/);
+ assert.match(c.dialog.innerHTML,/Copy câu trả lời của AI/);
+ assert.match(c.dialog.innerHTML,/Dán &amp; đọc kết quả/);
+ assert.match(c.dialog.innerHTML,/Áp dụng kết quả/);
+ assert.match(c.dialog.innerHTML,/Chia sẻ ảnh \+ prompt/);
+ assert.match(c.dialog.innerHTML,/Copy ảnh ghép/);
+ assert.match(c.dialog.innerHTML,/data-quick="start-estimate"[^>]*>Bắt đầu ước tính/);
+ assert.doesNotMatch(c.dialog.innerHTML,/api|token/i);
+ c.click('start-estimate');
+ await new Promise(setImmediate);
+ assert.equal(local.get(ESTIMATE_HELP_KEY),'1');
+ assert.match(c.dialog.innerHTML,/Ước tính bữa ăn/);
+ assert.match(c.dialog.innerHTML,/data-quick="estimate-help"[^>]*>Xem hướng dẫn/);
+ c.click('generate-prompt');
+ await new Promise(setImmediate);
+ assert.match(c.dialog.innerHTML,/Copy prompt/);
+ c.values.set('#estimate-output',{value:'{"r":"keep"}'});
+ c.click('estimate-help',{from:'estimate'});
+ assert.match(c.dialog.innerHTML,/data-quick="estimate-back"[^>]*>Quay lại/);
+ assert.doesNotMatch(c.dialog.innerHTML,/data-quick="start-estimate"/);
+ c.click('estimate-back');
+ assert.match(c.dialog.innerHTML,/Ước tính bữa ăn/);
+ assert.match(c.dialog.innerHTML,/Copy prompt/);
+ assert.match(c.dialog.innerHTML,/\{"r":"keep"\}/);
+});
+
+test('First estimate-meals open auto-shows tutorial once even if localStorage fails',async t=>{
+ const local=new Map();
+ const oldLs=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,writable:true,value:{getItem:k=>local.get(k)??null,setItem:()=>{throw Error('quota');}}});
+ t.after(()=>oldLs?Object.defineProperty(globalThis,'localStorage',oldLs):delete globalThis.localStorage);
+ const c=composer(t);
+ c.state.data.WebMeals=[{id:'m1',date:'2026-11-01',food:'Bún chả',meal:'lunch'}];
+ await c.ui.openEstimate('meals');
+ assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);
+ assert.match(c.dialog.innerHTML,/Bắt đầu ước tính/);
+ await c.ui.openEstimate('meals');
+ assert.match(c.dialog.innerHTML,/Ước tính bữa ăn/);
+});
+
+test('A prompt finishing while the tutorial is open does not replace it; back shows the new prompt',async t=>{
+ const local=new Map([[ESTIMATE_HELP_KEY,'1']]);
+ const oldLs=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,writable:true,value:{getItem:k=>local.get(k)??null,setItem:(k,v)=>local.set(k,v)}});
+ t.after(()=>oldLs?Object.defineProperty(globalThis,'localStorage',oldLs):delete globalThis.localStorage);
+ const c=composer(t);
+ c.state.data.WebMeals=[{id:'m1',date:'2026-11-01',food:'Cơm tấm',meal:'lunch'}];
+ let release;c.state.repo.load=()=>new Promise(resolve=>{release=()=>resolve(c.state.data);});
+ await c.ui.openEstimate('meals');
+ c.click('generate-prompt');// pending: waits on repo.load
+ c.click('estimate-help',{from:'estimate'});
+ assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);
+ release();await new Promise(setImmediate);await new Promise(setImmediate);
+ assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);// tutorial still shown
+ c.click('estimate-back');
+ assert.match(c.dialog.innerHTML,/Ước tính bữa ăn/);assert.match(c.dialog.innerHTML,/Copy prompt/);
 });
