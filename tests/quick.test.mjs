@@ -104,3 +104,11 @@ test('Cable biceps curl is listed and uses the upper-isolation preset; back exte
   assert.equal(strengthPreset({exercise:'Back extension'}).group,'calisthenics');
   assert.deepEqual(workoutInsight([{id:'c',date:'2026-11-14',kind:'strength',exercise:'Cable biceps curl',sets_json:'[{"weight_kg":20,"reps":12}]'}]).muscles,['Tay trước']);
 });
+
+test('Cable shoulder press is listed and shares the shoulder-press preset and muscles',async()=>{
+  const {strengthPreset}=await import('../src/core/workout-kcal.js');const {exerciseChoices}=await import('../src/ui/exercise-library.js');const {workoutInsight}=await import('../src/ui/dashboard.js');
+  assert.equal(exerciseChoices([]).find(c=>c.name==='Cable shoulder press').kind,'strength');
+  assert.deepEqual(strengthPreset({exercise:'Cable shoulder press'}),strengthPreset({exercise:'Dumbbell shoulder press'}));
+  assert.equal(strengthPreset({exercise:'Cable shoulder press'}).group,'upper_press');
+  assert.deepEqual(workoutInsight([{id:'s',date:'2026-11-15',kind:'strength',exercise:'Cable shoulder press',sets_json:'[{"weight_kg":15,"reps":12}]'}]).muscles,['Vai','Tay sau']);
+});

@@ -8,7 +8,7 @@ export function strengthPreset(row){
  const t=norm(row.exercise);
  for(const [pattern,group,met,minutes] of [
   [/deadlift/,'lower_compound_heavy',6,3.4],[/squat|leg press|lunge/,'lower_compound',5.8,3.2],
-  [/bench|chest press/,'upper_compound',4.8,2.7],[/shoulder press|overhead press|military press/,'upper_press',4.4,2.5],
+  [/bench|chest press/,'upper_compound',4.8,2.7],[/shoulder press|overhead press|military press/,'upper_press',4.4,2.5], // dumbbell, machine or cable alike
   [/row|pull down|pulldown|pull up|pullup|chin up|chinup/,'upper_pull',4.6,2.6],
   [/leg curl/,'lower_isolation',4.2,2.3],[/leg extension/,'lower_isolation',4.8,2.5],
   // Back extensions are bodyweight work, checked before the generic 'extension' isolation rule.
