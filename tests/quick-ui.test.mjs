@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createQuickUI,ESTIMATE_HELP_KEY,shouldAutoShowHelp} from '../src/ui/quick-ui.js';
+import {createQuickUI,ESTIMATE_HELP_KEY,shouldAutoShowHelp,createDemoPlayer} from '../src/ui/quick-ui.js';
 
 // Exercise the real composer without a browser or a live database.
 function composer(t,saved={}){
@@ -194,4 +194,143 @@ test('A prompt finishing while the tutorial is open does not replace it; back sh
  assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);// tutorial still shown
  c.click('estimate-back');
  assert.match(c.dialog.innerHTML,/Ước tính bữa ăn/);assert.match(c.dialog.innerHTML,/Copy prompt/);
+});
+
+test('createDemoPlayer sequences scenes, supports pause/goTo/replay/stop, and respects reducedMotion',()=>{
+ let nextId=1;const timers=new Map(),scenes=[];let completed=0;
+ const setTimer=(fn,ms)=>{const id=nextId++;timers.set(id,{fn,ms});return id;};
+ const clearTimer=id=>{timers.delete(id);};
+ const fire=id=>{const t=timers.get(id);timers.delete(id);t?.fn();};
+ const player=createDemoPlayer({durations:[100,200,300,400],setTimer,clearTimer,onScene:n=>scenes.push(n),onComplete:()=>{completed+=1;}});
+ player.play();
+ assert.deepEqual(scenes,[1]);assert.equal(timers.size,1);assert.equal([...timers.values()][0].ms,100);
+ fire([...timers.keys()][0]);
+ assert.deepEqual(scenes,[1,2]);assert.equal([...timers.values()][0].ms,200);
+ player.pause();
+ assert.equal(timers.size,0);assert.equal(player.state().playing,false);assert.equal(player.state().scene,2);
+ player.play();
+ assert.equal(timers.size,1);assert.equal([...timers.values()][0].ms,200);
+ player.goTo(4);
+ assert.deepEqual(scenes,[1,2,4]);assert.equal(timers.size,1);assert.equal([...timers.values()][0].ms,400);
+ fire([...timers.keys()][0]);
+ assert.equal(timers.size,0);assert.equal(completed,1);assert.equal(player.state().playing,false);assert.equal(player.state().completed,true);
+ player.replay();
+ assert.deepEqual(scenes,[1,2,4,1]);assert.equal(timers.size,1);assert.equal(player.state().completed,false);
+ player.stop();
+ assert.equal(timers.size,0);assert.equal(player.state().playing,false);
+
+ const rmTimers=new Map(),rmScenes=[];
+ const rm=createDemoPlayer({reducedMotion:true,setTimer:(fn)=>{rmTimers.set(1,fn);return 1;},clearTimer:id=>rmTimers.delete(id),onScene:n=>rmScenes.push(n)});
+ rm.play();
+ assert.equal(rmTimers.size,0);assert.equal(rm.state().playing,false);assert.deepEqual(rmScenes,[1]);
+ rm.goTo(3);
+ assert.equal(rmTimers.size,0);assert.deepEqual(rmScenes,[1,3]);
+ rm.replay();
+ assert.equal(rmTimers.size,0);assert.deepEqual(rmScenes,[1,3,1]);
+});
+
+test('Estimate tutorial renders animated demo stage, 4 dots, caption, CTA and collapsed text fallback',t=>{
+ const c=composer(t);
+ c.click('estimate-help');
+ assert.match(c.dialog.innerHTML,/class="demo-stage" data-scene="1"/);
+ assert.match(c.dialog.innerHTML,/Phở bò<\/strong><span> · chưa có kcal/);
+ assert.match(c.dialog.innerHTML,/Prompt \+ 1 ảnh đã sẵn sàng/);
+ assert.match(c.dialog.innerHTML,/Copy prompt/);
+ assert.match(c.dialog.innerHTML,/Chia sẻ/);
+ assert.match(c.dialog.innerHTML,/Đã copy/);
+ assert.match(c.dialog.innerHTML,/App AI của bạn/);
+ assert.match(c.dialog.innerHTML,/Ước tính kcal cho các món…/);
+ assert.match(c.dialog.innerHTML,/\{"m":\[\[1,510,24,45,26\]\]\}/);
+ assert.match(c.dialog.innerHTML,/Dán &amp; đọc kết quả/);
+ assert.match(c.dialog.innerHTML,/510 kcal · P24 C45 F26/);
+ assert.match(c.dialog.innerHTML,/Áp dụng/);
+ assert.match(c.dialog.innerHTML,/Đã cập nhật/);
+ assert.match(c.dialog.innerHTML,/class="demo-caption"[^>]*><strong>Bước 1\/4<\/strong>/);
+ assert.equal((c.dialog.innerHTML.match(/data-quick="demo-step"/g)||[]).length,4);
+ assert.match(c.dialog.innerHTML,/data-quick="demo-toggle"/);
+ assert.match(c.dialog.innerHTML,/data-quick="demo-replay"[^>]*>.*Xem lại/);
+ assert.match(c.dialog.innerHTML,/<details class="help-text-details"><summary>Xem hướng dẫn dạng chữ<\/summary>/);
+ assert.doesNotMatch(c.dialog.innerHTML,/<details class="help-text-details" open/);
+ assert.match(c.dialog.innerHTML,/class="form-actions".*data-quick="start-estimate"[^>]*>Bắt đầu ước tính/);
+ assert.doesNotMatch(c.dialog.innerHTML,/api|token/i);
+});
+
+test('Tutorial demo player advances, highlights CTA, and stops timers on close, navigation, disconnect or reducedMotion',async t=>{
+ let nextId=1;const timers=new Map();
+ t.mock.method(globalThis,'setTimeout',(fn,ms)=>{const id=nextId++;timers.set(id,{fn,ms});return id;});
+ t.mock.method(globalThis,'clearTimeout',id=>{timers.delete(id);});
+ const fireNext=()=>{const [id,entry]=[...timers.entries()][0];timers.delete(id);entry.fn();};
+
+ const c=composer(t);
+ c.state.data.WebMeals=[{id:'m1',date:'2026-11-01',food:'Phở bò',meal:'lunch'}];
+ let stage,caption,dots,toggle,cta;
+ const resetDom=()=>{
+  stage={dataset:{scene:'1'},isConnected:true,offsetWidth:0,attrs:{},setAttribute(k,v){this.attrs[k]=v;}};
+  caption={innerHTML:''};
+  dots=[1,2,3,4].map(step=>({dataset:{step:String(step)},attrs:{},classes:new Set(),classList:{toggle(k,on){if(on)this.s.add(k);else this.s.delete(k);},s:null},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];}}));
+  dots.forEach(d=>{d.classList.s=d.classes;});
+  toggle={attrs:{},innerHTML:'',setAttribute(k,v){this.attrs[k]=v;}};
+  cta={classes:new Set(),classList:{add(k){cta.classes.add(k);},remove(k){cta.classes.delete(k);}}};
+ };
+ c.dialog.close=()=>{c.dialog.open=false;c.dialogEvents.close?.();};
+ c.dialog.querySelector=sel=>{
+  if(!c.dialog.innerHTML.includes('demo-stage'))return null;
+  if(sel==='.demo-stage')return stage;
+  if(sel==='.demo-caption')return caption;
+  if(sel==='.demo-toggle')return toggle;
+  if(sel.includes('start-estimate'))return cta;
+  return null;
+ };
+ c.dialog.querySelectorAll=sel=>c.dialog.innerHTML.includes('demo-stage')&&sel==='.demo-dot'?dots:[];
+
+ resetDom();
+ c.click('estimate-help');
+ assert.equal(timers.size,1);assert.equal(stage.dataset.scene,'1');
+ fireNext();assert.equal(stage.dataset.scene,'2');assert.match(caption.innerHTML,/Bước 2\/4/);
+ fireNext();assert.equal(stage.dataset.scene,'3');
+ fireNext();assert.equal(stage.dataset.scene,'4');assert.equal(dots[3].attrs['aria-current'],'step');
+ fireNext();
+ assert.equal(timers.size,0);
+ assert.equal(cta.classes.has('demo-cta-highlight'),true);
+
+ c.click('demo-replay');
+ assert.equal(stage.dataset.scene,'1');assert.equal(cta.classes.has('demo-cta-highlight'),false);assert.equal(timers.size,1);
+ c.click('demo-toggle');
+ assert.equal(timers.size,0);assert.equal(toggle.attrs['aria-label'],'Phát tiếp');
+ c.click('demo-toggle');
+ assert.equal(timers.size,1);assert.equal(toggle.attrs['aria-label'],'Tạm dừng');
+ c.click('close');
+ assert.equal(timers.size,0);
+
+ resetDom();
+ c.click('estimate-help');
+ assert.equal(timers.size,1);
+ await c.ui.open('meals');
+ assert.equal(timers.size,0);
+
+ resetDom();
+ c.click('estimate-help');
+ assert.equal(timers.size,1);
+ stage.isConnected=false;
+ fireNext();
+ assert.equal(timers.size,0);assert.equal(stage.dataset.scene,'1');
+
+ const oldMM=Object.getOwnPropertyDescriptor(globalThis,'matchMedia');
+ Object.defineProperty(globalThis,'matchMedia',{configurable:true,writable:true,value:q=>({matches:q==='(prefers-reduced-motion: reduce)'})});
+ t.after(()=>oldMM?Object.defineProperty(globalThis,'matchMedia',oldMM):delete globalThis.matchMedia);
+ resetDom();
+ c.click('estimate-help');
+ assert.equal(timers.size,0);assert.equal(stage.dataset.scene,'1');
+ c.click('demo-step',{step:'3'});
+ assert.equal(timers.size,0);assert.equal(stage.dataset.scene,'3');
+});
+
+test('Demo pause keeps the remaining scene time and a step jump plays from that step',()=>{
+ let t=0;const timers=[];
+ const player=createDemoPlayer({durations:[3000,3000,3000,3000],now:()=>t,setTimer:(fn,ms)=>{const x={fn,ms};timers.push(x);return x;},clearTimer:x=>{const i=timers.indexOf(x);if(i>=0)timers.splice(i,1);}});
+ player.play();assert.equal(timers.at(-1).ms,3000);
+ t=1000;player.pause();assert.equal(timers.length,0);
+ t=9000;player.play();assert.equal(timers.at(-1).ms,2000);// resumes with what was left, not a full scene
+ player.pause();player.goTo(3);
+ assert.equal(player.state().scene,3);assert.equal(player.state().playing,true);assert.equal(timers.at(-1).ms,3000);
 });

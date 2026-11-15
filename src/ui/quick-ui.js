@@ -11,16 +11,134 @@ import {compressPhoto,copyText,photoFile,downloadFile,labeledPhotoBlob,labeledPh
 export const ESTIMATE_HELP_KEY='gymbro.estimateHelpSeen';
 export function shouldAutoShowHelp(storage){if(!storage?.getItem)return false;try{return !storage.getItem(ESTIMATE_HELP_KEY);}catch{return false;}}
 
+export const DEMO_SCENE_DURATIONS=[3000,3000,3400,3600];
+export const DEMO_STEPS=[
+  {step:1,label:'Tạo prompt',caption:'Bấm Tạo prompt — GymBro soạn sẵn câu hỏi và ảnh món ăn'},
+  {step:2,label:'Copy hoặc Chia sẻ',caption:'Copy prompt (hoặc Chia sẻ trên điện thoại)'},
+  {step:3,label:'Gửi & copy từ app AI',caption:'Dán vào app AI bạn đang dùng, đợi trả lời rồi copy kết quả'},
+  {step:4,label:'Dán & áp dụng',caption:'Dán kết quả, xem trước rồi Áp dụng'}
+];
+
+export function createDemoPlayer({
+  count=DEMO_STEPS.length,
+  durations=DEMO_SCENE_DURATIONS,
+  setTimer=(fn,ms)=>setTimeout(fn,ms),
+  clearTimer=id=>clearTimeout(id),
+  onScene=()=>{},
+  onState=()=>{},
+  onComplete=()=>{},
+  reducedMotion=false,
+  now=()=>Date.now()
+}={}){
+  // remaining: time left in the current scene after a pause, so resuming does not restart the scene clock.
+  let scene=1,playing=false,completed=false,started=false,timer=null,startedAt=0,remaining=null;
+  const state=()=>({scene,playing,completed,count,reducedMotion});
+  const clear=()=>{if(timer!==null){clearTimer(timer);timer=null;}};
+  const stepMs=n=>Array.isArray(durations)?(durations[n-1]??durations[0]??3000):durations;
+  const schedule=(ms=stepMs(scene))=>{
+    clear();
+    if(!playing||reducedMotion)return;
+    startedAt=now();remaining=ms;
+    timer=setTimer(()=>{
+      timer=null;remaining=null;
+      if(!playing)return;
+      if(scene<count){
+        scene+=1;
+        onScene(scene);
+        onState(state());
+        schedule();
+      }else{
+        playing=false;
+        completed=true;
+        onState(state());
+        onComplete();
+      }
+    },ms);
+  };
+  const play=()=>{
+    if(reducedMotion){
+      playing=false;
+      if(!started){started=true;onScene(scene);}
+      onState(state());
+      return state();
+    }
+    if(completed){
+      scene=1;
+      completed=false;
+      started=true;
+      onScene(scene);
+    }else if(!started){
+      started=true;
+      onScene(scene);
+    }
+    playing=true;
+    onState(state());
+    schedule(remaining??stepMs(scene));
+    return state();
+  };
+  const pause=()=>{
+    if(timer!==null&&remaining!==null)remaining=Math.max(0,remaining-(now()-startedAt));
+    clear();
+    playing=false;
+    onState(state());
+    return state();
+  };
+  const goTo=n=>{
+    const next=Math.max(1,Math.min(count,Math.trunc(Number(n)||1)));
+    clear();
+    scene=next;remaining=null;
+    completed=false;
+    started=true;
+    onScene(scene);
+    if(!reducedMotion){playing=true;schedule();}
+    onState(state());
+    return state();
+  };
+  const replay=()=>{
+    clear();
+    scene=1;remaining=null;
+    completed=false;
+    started=true;
+    onScene(scene);
+    if(reducedMotion){
+      playing=false;
+      onState(state());
+      return state();
+    }
+    playing=true;
+    onState(state());
+    schedule();
+    return state();
+  };
+  const stop=()=>{
+    clear();
+    playing=false;
+    onState(state());
+    return state();
+  };
+  return {play,pause,goTo,replay,stop,state};
+}
+
+const PAUSE_SVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+const PLAY_SVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+const CHECK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+const COPY_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></svg>';
+const PHOTO_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-6 6-3-3-4 4"/></svg>';
+const CHAT_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></svg>';
+
 export function createQuickUI(env){
   const {getState,esc,fmt,icon,toast,writable,reload,render,saveMessage}=env,$=s=>document.querySelector(s);
-  let ctx=null,estimate=null,library=[],drafts=new Map(),pendingPhotoDrafts=new Map(),busy=false,helpSeenInSession=false;
+  let ctx=null,estimate=null,library=[],drafts=new Map(),pendingPhotoDrafts=new Map(),busy=false,helpSeenInSession=false,demoPlayer=null;
   const dialog=document.createElement('dialog');dialog.id='quick-dialog';dialog.setAttribute('aria-labelledby','quick-title');document.body.append(dialog);
+  const prefersReducedMotion=()=>{try{return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}catch{return false;}};
+  function stopDemo(){const p=demoPlayer;demoPlayer=null;p?.stop();}
   const scope=()=>{const s=getState();return s.mode+':'+(s.repo?.ownerUid||s.repo?.key||'none');};
   const error=e=>{const message=quotaMessage(e)||e.message||String(e),target=$('#quick-error');if(target)target.textContent=(e.operation==='photo'?'Tải ảnh: ':'')+message;else toast(message,true);};
   const btn=(text,action,cls='',extra='')=>`<button type="button" class="button ${cls}" data-quick="${action}" ${extra}>${text}</button>`;
   const field=(label,id,value='',type='text',extra='')=>`<label class="field">${label}<input id="${id}" type="${type}" value="${esc(value)}" ${extra}></label>`;
   const select=(label,id,values,value)=>`<label class="field">${label}<select id="${id}">${Object.entries(values).map(([k,v])=>`<option value="${esc(k)}" ${k===value?'selected':''}>${esc(v)}</option>`).join('')}</select></label>`;
   const frame=(title,body,subtitle='',compose=false)=>{
+    stopDemo();
     const focused=document.activeElement,focusId=focused?.id,selection=typeof focused?.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null,scroll=$('#quick-dialog .quick-content')?.scrollTop||0;
     dialog.classList.toggle('compose-dialog',compose);
     const split=compose?body.lastIndexOf('<div class="form-actions">'):-1,content=split<0?body:body.slice(0,split),footer=split<0?'':body.slice(split);
@@ -33,7 +151,7 @@ export function createQuickUI(env){
   function scopeGuard(expected){if(scope()!==expected)throw Error('Tài khoản hoặc chế độ đã thay đổi. Đóng và mở lại thao tác.');}
   const draftKey=type=>'gymbro.quick.'+scope()+'.'+type;
   function rememberCompose(){if(!ctx||ctx.view!=='compose')return;ctx.text=$('#quick-text')?.value??ctx.text;ctx.date=$('#quick-date')?.value||ctx.date;ctx.meal=$('#quick-meal')?.value||ctx.meal;for(const key of ['food','amount','unit','exercise','count','reps','kg','kind','duration','incline','speed'])ctx[key]=$('#compact-'+key)?.value??ctx[key];ctx.photoTarget=Number($('#photo-target')?.value??ctx.photoTarget??0);drafts.set(ctx.scope+ctx.type,ctx);try{sessionStorage.setItem(draftKey(ctx.type),JSON.stringify({text:ctx.text,date:ctx.date,meal:ctx.meal,method:ctx.method,food:ctx.food,amount:ctx.amount,exercise:ctx.exercise,count:ctx.count,reps:ctx.reps,kg:ctx.kg,kind:ctx.kind,duration:ctx.duration,incline:ctx.incline,speed:ctx.speed}));}catch{}}
-  function close(){if(busy)return;rememberCompose();dialog.close();}
+  function close(){if(busy)return;stopDemo();rememberCompose();dialog.close();}
   async function open(type,opts={}){
     if(!writable())return;const currentScope=scope();let draft={};try{draft=JSON.parse(sessionStorage.getItem(draftKey(type))||'{}');}catch{}
     ctx=drafts.get(currentScope+type)||{view:'compose',type,scope:currentScope,text:'',date:getState().date,meal:'lunch',photos:[],preview:null,amount:1,count:3,reps:12,kg:'',kind:'strength',duration:'',...draft,method:draft.method==='text'&&draft.text?.trim()?'text':'form'};
@@ -115,6 +233,50 @@ export function createQuickUI(env){
   async function loadEstimatePhotos(e,repo){const ids=e.q.items.flatMap(x=>x.record.photo_ids||[]);const results=await Promise.allSettled(ids.map(id=>repo.getPhoto(id)));const photos=[],missing=results.filter(r=>r.status!=='fulfilled').length;for(const r of results)if(r.status==='fulfilled')photos.push(r.value);const prev=estimate;estimate=e;const files=await Promise.all(photos.map(estimatePhotoFile));estimate=prev;return {photos,files,photoError:missing?missingPhotoNote(missing):''};}
   const readStorage=()=>{try{return globalThis.localStorage;}catch{return null;}};
   const markHelpSeen=()=>{helpSeenInSession=true;try{readStorage()?.setItem?.(ESTIMATE_HELP_KEY,'1');}catch{}};
+  function startDemo(){
+    stopDemo();
+    const stage=dialog.querySelector('.demo-stage');
+    if(!stage||stage.isConnected===false||ctx?.view!=='estimate-help'||!dialog.open)return;
+    let lastScene=0;
+    const alive=()=>{
+      if(ctx?.view!=='estimate-help'||!dialog.open||!stage||stage.isConnected===false){stopDemo();return false;}
+      return true;
+    };
+    const syncScene=n=>{
+      if(!alive())return;
+      const step=DEMO_STEPS[n-1]||DEMO_STEPS[0];
+      if(stage.dataset){
+        if(lastScene===n){delete stage.dataset.scene;void stage.offsetWidth;}
+        stage.dataset.scene=String(n);
+      }
+      lastScene=n;
+      stage.setAttribute?.('aria-label',`Minh họa bước ${n} trên ${DEMO_STEPS.length}: ${step.caption}`);
+      const caption=dialog.querySelector('.demo-caption');
+      if(caption)caption.innerHTML=`<strong>Bước ${n}/${DEMO_STEPS.length}</strong> · ${esc(step.caption)}`;
+      dialog.querySelectorAll('.demo-dot').forEach(dot=>{
+        const on=Number(dot.dataset.step)===n;
+        dot.classList?.toggle('active',on);
+        if(on)dot.setAttribute('aria-current','step');
+        else dot.removeAttribute('aria-current');
+      });
+      dialog.querySelector('[data-quick="start-estimate"],[data-quick="estimate-back"]')?.classList?.remove('demo-cta-highlight');
+    };
+    const syncState=st=>{
+      if(!alive())return;
+      stage.classList?.toggle('is-paused',!st.playing&&!st.completed);
+      const toggle=dialog.querySelector('.demo-toggle');
+      if(!toggle)return;
+      toggle.setAttribute('aria-label',st.playing?'Tạm dừng':'Phát tiếp');
+      toggle.setAttribute('aria-pressed',String(!st.playing));
+      toggle.innerHTML=st.playing?PAUSE_SVG:PLAY_SVG;
+    };
+    const highlightCta=()=>{
+      if(!alive())return;
+      dialog.querySelector('[data-quick="start-estimate"],[data-quick="estimate-back"]')?.classList?.add('demo-cta-highlight');
+    };
+    demoPlayer=createDemoPlayer({reducedMotion:prefersReducedMotion(),onScene:syncScene,onState:syncState,onComplete:highlightCta});
+    demoPlayer.play();
+  }
   function showEstimateHelp({from='start',onlyId=null}={}){
     ctx={view:'estimate-help',from,onlyId};
     const share=canShareFiles(),copyImg=canCopyImages(),both=share===copyImg;
@@ -123,8 +285,11 @@ export function createQuickUI(env){
     const flow=`<div class="help-flow" aria-label="Quy trình"><span class="help-flow-node">${icon('food')}<span>GymBro</span></span><span class="help-flow-arrow" aria-hidden="true">${icon('arrow')}</span><span class="help-flow-node accent">${icon('fire')}<span>App AI</span></span><span class="help-flow-arrow" aria-hidden="true">${icon('arrow')}</span><span class="help-flow-node ok">${icon('check')}<span>GymBro</span></span></div>`;
     const list=`<ol class="help-steps">${steps.map(([t,b],i)=>`<li class="help-step"><span class="help-step-num" aria-hidden="true">${i+1}</span><div class="help-step-body"><strong class="help-step-title">${t}</strong>${b}</div></li>`).join('')}</ol>`;
     const tips='<div class="help-tips"><strong>Mẹo nhỏ</strong><ul><li>Ảnh rõ kèm khối lượng (vd: 200g) giúp ước tính chính xác hơn.</li><li>Kết quả là ước tính, bạn vẫn sửa tay được sau khi áp dụng.</li><li>Chỉ những món còn thiếu kcal hoặc P/C/F mới được gửi.</li></ul></div>';
+    const demo=`<div class="demo-wrap"><div class="demo-stage" data-scene="1" role="img" aria-label="Minh họa bước 1 trên ${DEMO_STEPS.length}: ${esc(DEMO_STEPS[0].caption)}"><div class="demo-scene" data-for="1" aria-hidden="true"><div class="demo-card"><div class="demo-card-head"><span>GymBro · Bữa trưa</span><span class="demo-pill">1 ảnh</span></div><div class="demo-meal-row"><strong>Phở bò</strong><span> · chưa có kcal</span></div><span class="demo-btn primary demo-s1-btn">Tạo prompt</span></div><div class="demo-chip ok demo-s1-chip">${CHECK_SVG}<span>Prompt + 1 ảnh đã sẵn sàng</span></div><span class="demo-tap demo-tap-1"></span></div><div class="demo-scene" data-for="2" aria-hidden="true"><div class="demo-card"><div class="demo-card-head"><span>1. Gửi sang AI</span></div><div class="demo-btn-row"><span class="demo-btn primary demo-s2-btn">${COPY_SVG}<span>Copy prompt</span></span><span class="demo-btn">Chia sẻ</span></div></div><div class="demo-toast demo-s2-toast">${CHECK_SVG}<span>Đã copy</span></div><span class="demo-tap demo-tap-2"></span></div><div class="demo-scene" data-for="3" aria-hidden="true"><div class="demo-chat"><div class="demo-chat-head">${CHAT_SVG}<span>App AI của bạn</span></div><div class="demo-chat-body"><div class="demo-bubble user"><span class="demo-photo-thumb">${PHOTO_SVG}</span><span>Ước tính kcal cho các món…</span></div><div class="demo-typing"><i></i><i></i><i></i></div><div class="demo-bubble ai"><code>{"m":[[1,510,24,45,26]]}</code><span class="demo-copy-badge">${COPY_SVG}</span></div></div></div><span class="demo-tap demo-tap-3"></span></div><div class="demo-scene" data-for="4" aria-hidden="true"><div class="demo-card"><div class="demo-card-head"><span>2. Dán kết quả</span></div><span class="demo-btn demo-s4-paste">Dán &amp; đọc kết quả</span><div class="demo-preview-row"><strong>Phở bò</strong><span> · 510 kcal · P24 C45 F26</span></div><div class="demo-s4-foot"><span class="demo-btn primary demo-s4-apply">Áp dụng</span><span class="demo-done-badge">${CHECK_SVG}<span>Đã cập nhật</span></span></div></div><span class="demo-tap demo-tap-4"></span></div></div><p class="demo-caption" aria-live="polite"><strong>Bước 1/${DEMO_STEPS.length}</strong> · ${esc(DEMO_STEPS[0].caption)}</p><div class="demo-controls"><div class="demo-dots" role="group" aria-label="Các bước minh họa">${DEMO_STEPS.map((s,i)=>`<button type="button" class="demo-dot${i===0?' active':''}" data-quick="demo-step" data-step="${s.step}" aria-label="Bước ${s.step}: ${esc(s.label)}"${i===0?' aria-current="step"':''}></button>`).join('')}</div><div class="demo-actions"><button type="button" class="demo-control-btn demo-toggle" data-quick="demo-toggle" aria-label="Tạm dừng" aria-pressed="false">${PAUSE_SVG}</button><button type="button" class="demo-control-btn demo-replay" data-quick="demo-replay">${icon('refresh')}<span>Xem lại</span></button></div></div></div>`;
+    const details=`<details class="help-text-details"><summary>Xem hướng dẫn dạng chữ</summary><div class="help-text-body">${flow}${list}${tips}</div></details>`;
     const actions=`<div class="form-actions">${from==='estimate'?btn('Quay lại','estimate-back','primary'):btn('Bắt đầu ước tính','start-estimate','primary')}</div>`;
-    frame('Cách dùng Ước tính bằng AI',`<p class="form-note">GymBro soạn sẵn câu hỏi và ảnh món ăn để bạn gửi cho trợ lý AI bạn đang dùng (ChatGPT, Claude, Gemini…), rồi đọc lại kết quả kcal và P/C/F.</p>${flow}${list}${tips}${actions}`,'',true);
+    frame('Cách dùng Ước tính bằng AI',`${demo}${details}${actions}`,'',true);
+    startDemo();
   }
   async function openEstimate(type,onlyId=null,opts={}){
     if(!writable())return;rememberCompose();const s=getState(),rows=active(s.data[table(type)]).filter(r=>r.date===s.date&&(type==='meals'?needsMealEstimate(r):r.kind!=='rest')&&(!onlyId||r.id===onlyId));
@@ -271,6 +436,9 @@ export function createQuickUI(env){
     if(a==='download-entry-photo')return downloadFile(photoFile(ctx.photos[Number(el.dataset.index)]));
     if(a==='unlink-photo'){scopeGuard(ctx.scope);const id=ctx.photos[Number(el.dataset.index)].id,r={...ctx.record,photo_ids:ctx.record.photo_ids.filter(x=>x!==id),updated_at:new Date().toISOString(),_originalUpdatedAt:ctx.record.updated_at};await getState().repo.saveMany('WebMeals',[r]);await reload();render();ctx.record=getState().data.WebMeals.find(x=>x.id===r.id);ctx.photos=ctx.photos.filter(p=>p.id!==id);return drawPhotos();}
     if(a==='estimate-meals'||a==='estimate-workouts')return openEstimate(a==='estimate-meals'?'meals':'workouts',el.dataset.id||null);
+    if(a==='demo-step'){demoPlayer?.goTo(Number(el.dataset.step));return;}
+    if(a==='demo-toggle'){if(demoPlayer)demoPlayer.state().playing?demoPlayer.pause():demoPlayer.play();return;}
+    if(a==='demo-replay'){demoPlayer?.replay();return;}
     if(a==='estimate-help')return showEstimateHelp({from:el.dataset.from==='estimate'&&estimate?'estimate':'start'});
     if(a==='estimate-back'){if(estimate){ctx={view:'estimate'};return drawEstimate();}return openEstimate('meals',null,{skipHelp:true});}
     if(a==='start-estimate'){markHelpSeen();await openEstimate('meals',ctx?.onlyId||null,{skipHelp:true});if(ctx?.view==='estimate-help')close();return;}
@@ -278,6 +446,7 @@ export function createQuickUI(env){
   }
   document.addEventListener('click',e=>{const el=e.target.closest('[data-quick]');if(el){e.preventDefault();if(busy)return;Promise.resolve(action(el)).catch(error);}});
   dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
+  dialog.addEventListener('close',()=>{stopDemo();});
   dialog.addEventListener('paste',e=>{
     if(e.target.id!=='estimate-output'||ctx?.view!=='estimate'||busy)return;
     const text=e.clipboardData?.getData('text/plain')||e.clipboardData?.getData('text')||'';if(!text.trim())return;
