@@ -23,6 +23,7 @@
 - Never touch: `.migration/`, personal history/JSON exports, secrets/tokens/service-account keys
 - Do not edit existing `worker/migrations/*.sql`; add a new numbered file instead
 - Pushing to main deploys the Worker (.github/workflows/deploy-worker.yml): only the lead pushes
+- `scripts/photo-cleanup.mjs` runs hourly in CI and deletes photos: changes need codex review + a dry-run test
 
 ## Project rules
 - Done = `npm run check` and `npm test` both pass
@@ -30,7 +31,17 @@
 - User-facing change: bump `version` in package.json (semver) and mention it in the commit (e.g. "v2.18.0")
 - Keep the app dependency-free; Firebase SDK stays loaded from the official CDN
 - Only allowlisted fields are written/exported/imported; keep schema changes in sync across
-  src/core/core.js, firestore.rules and worker/src/store.js (?)
+  `SCHEMAS` (src/core/core.js), `cleanRecord` (src/core/migration.js), `cleanFood` (src/core/quick.js),
+  firestore.rules and `cleanForKind` (worker/src/store.js)
 - Unknown kcal/macro = empty, not 0
 - Lead commits on a branch and opens a PR (history uses squash-merged PRs)
 - Layout: see README "Cấu trúc thư mục"; `src/core/` must not import from data/ or ui/ (Worker bundles it)
+
+## Collaboration
+- Lead plans, routes, checks results; steps in only when really needed (both teammates blocked,
+  fix-up rounds used up, or tiny task) and says why.
+- Blocked teammate: give the cause + a workaround and try it; `NEEDS USER:` for steps only the
+  user can do (Firebase/Cloudflare console, secrets, deploys); `SUGGEST codex|agy:` when the other
+  teammate has a better tool.
+- agy edits UI → codex (or lead) runs `npm run check && npm test` before merge.
+- A change touching both UI and logic: codex does src/core|data|worker first, then agy wires UI.
