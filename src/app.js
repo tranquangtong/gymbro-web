@@ -36,6 +36,7 @@ function dropCache(){clearTimeout(persistTimer);state.cached=null;clearSnapshot(
 // Save the signed-in account's data shortly after it changes, for an instant next start.
 let persistTimer=null;
 function dataChanged(){
+  calCache=chartCache=null;
   const repo=state.repo,canPersist=()=>state.mode==='firebase'&&state.connected&&state.initialized&&state.repo===repo&&repo&&repo.ownerUid===repo.uid&&repo.s.auth.currentUser?.uid===repo.uid;
   if(!canPersist())return;
   clearTimeout(persistTimer);persistTimer=setTimeout(()=>{if(canPersist())writeSnapshot(localStorage,{uid:repo.uid,sessionExpiresAt:repo.s.sessionExpiresAt,data:state.data,user:accountUser()});},1500);
@@ -94,7 +95,7 @@ function loginPage(){
   return `<section class="access-card"><p class="eyebrow">GymBro</p><h1>Nhật ký riêng của bạn.</h1><p>Đăng nhập Google để bắt đầu. Nhật ký được lưu trên máy chủ GymBro theo tài khoản Google của bạn.</p>${button('Đăng nhập bằng Google','firebase-login','primary','cloud')}${note}<p class="form-note">Phiên ứng dụng được giữ tối đa 14 ngày kể từ lần đăng nhập, sau đó cần đăng nhập lại.</p></section>`;}
 function profileGate(){return `<section class="access-card"><p class="eyebrow">Bước đầu tiên</p><h1>Hoàn tất hồ sơ của bạn.</h1><p>Thêm cân nặng, chiều cao, BMR/TDEE, cân nặng mục tiêu và mục tiêu tập luyện trước khi ghi nhật ký.</p>${button('Nhập thông tin cá nhân','new-profile','primary','scale')}<p class="form-note">BMR/TDEE có thể nhập số đã biết hoặc ước tính rồi chỉnh lại. Bạn có thể cập nhật hồ sơ bất kỳ lúc nào.</p>${button('Đăng xuất','disconnect','text-button','')}</section>`;}
 function render({resetChart=false}={}){
-  clearTimeout(searchTimer);searchTimer=null;
+  clearTimeout(searchTimer);searchTimer=null;calCache=chartCache=null;
   const oldChart=$('.energy-chart-scroll'),previousChart=!resetChart&&oldChart?{key:oldChart.dataset.chartKey,left:oldChart.scrollLeft}:null;
   renderChrome();const stage=accessStage(state);document.body.classList.toggle('access-locked',['restoring','loading','login','error'].includes(stage));
   if(stage==='login'){$('#main').innerHTML=loginPage();return;}
@@ -138,7 +139,7 @@ function insightBody(n,week,p){const items=[];if(n.count&&n.knownKcal<n.count)it
 function workoutDescription(r){if(r.kind==='rest')return 'Ngày nghỉ';if(r.kind==='cardio'){const w=walkingSettings(r);return fmt(r.duration_min)+' phút'+(w.incline!==''?' · '+w.incline+'%':'')+(w.speed!==''?' · '+w.speed+' kph':'');}const sets=setsOf(r),same=sets.length&&sets.every(s=>s.reps===sets[0].reps&&num(s.weight_kg)===num(sets[0].weight_kg));if(same)return sets.length+' × '+sets[0].reps+' reps'+(r.kind==='bodyweight'?(num(sets[0].weight_kg)>0?' · +'+fmt(sets[0].weight_kg,1)+' kg':''):' · '+fmt(sets[0].weight_kg,1)+' kg'+(r.kind==='assisted'?' trợ lực':''));return sets.map(s=>r.kind==='bodyweight'?s.reps+' reps'+(num(s.weight_kg)>0?' +'+fmt(s.weight_kg,1)+' kg':''):fmt(s.weight_kg,1)+' kg'+(r.kind==='assisted'?' trợ lực':'')+' × '+s.reps).join(' · ');}
 function setLoad(r,s){return r.kind==='bodyweight'?'bodyweight'+(num(s.weight_kg)>0?' + '+fmt(s.weight_kg,1)+' kg':''):num(s.weight_kg)===null?'? kg':fmt(s.weight_kg,1)+' kg'+(r.kind==='assisted'?' trợ lực':'');}
 function latestByExercise(beforeDate){const map=new Map();for(const x of active(state.data.WebWorkouts)){if(!(x.date<beforeDate)||['rest','cardio'].includes(x.kind))continue;const key=x.kind+'\0'+norm(x.exercise),cur=map.get(key);if(!cur||(cur.date.localeCompare(x.date)||String(cur.created_at).localeCompare(String(x.created_at)))<0)map.set(key,x);}return map;}
-function previousSession(r,prevMap){if(prevMap)return prevMap.get(r.kind+'\0'+norm(r.exercise))||null;const key=norm(r.exercise);return active(state.data.WebWorkouts).filter(x=>x.id!==r.id&&x.kind===r.kind&&x.date<r.date&&norm(x.exercise)===key).sort((a,b)=>b.date.localeCompare(a.date)||String(b.created_at).localeCompare(String(a.created_at)))[0]||null;}
+function previousSession(r,prevMap){const key=norm(r.exercise);if(prevMap){const prev=prevMap.get(r.kind+'\0'+key);if(!prev||prev.id!==r.id)return prev||null;}return active(state.data.WebWorkouts).filter(x=>x.id!==r.id&&x.kind===r.kind&&x.date<r.date&&norm(x.exercise)===key).sort((a,b)=>b.date.localeCompare(a.date)||String(b.created_at).localeCompare(String(a.created_at)))[0]||null;}
 function workoutDetail(r,prevMap){if(['rest','cardio'].includes(r.kind))return '';const sets=setsOf(r);const chips=sets.length?`<div class="set-chips">${sets.map((x,i)=>`<span class="set-chip"><span>Set ${i+1}</span><b>${esc(x.reps)}</b>${esc(setLoad(r,x))}</span>`).join('')}</div>`:'';const prev=previousSession(r,prevMap);return chips+(prev?`<p class="log-trend">Lần trước ${dateLabel(prev.date)}: ${esc(workoutDescription(prev))}</p>`:'');}
 function rowMenu(table,r,title,meal,skipped){const photos=r.photo_ids?.length||0;return `<details class="row-menu"><summary aria-label="Tùy chọn cho ${esc(title)}">${icon('more')}</summary><div class="row-menu-list">${meal&&!skipped?`<button type="button" data-quick="entry-photos" data-id="${esc(r.id)}">${icon('camera')}Ảnh món${photos?`<span class="has-photos-count">${photos}</span>`:''}</button>`:''}<button type="button" data-action="edit" data-table="${table}" data-id="${esc(r.id)}">${icon('edit')}Sửa</button><button type="button" class="danger" data-action="delete" data-table="${table}" data-id="${esc(r.id)}">${icon('trash')}Xóa</button></div></details>`;}
 function logRow(table,r,actions=true,{detail=false,grouped=false,prevMap=null}={}){const meal=table==='WebMeals',profile=table==='WebProfile',skipped=String(r.skipped).toLowerCase()==='true';const title=meal?(skipped?'Đã bỏ '+(MEALS[r.meal]||'bữa ăn').toLowerCase():r.food):profile?'Cân nặng':r.kind==='rest'?'Ngày nghỉ':r.exercise;const photos=r.photo_ids?.length||0;const subtitle=meal?`${grouped?'':MEALS[r.meal]||''}${r.portion?' · '+r.portion:''}${r.nutrition_source==='estimate'?' · Ước tính':r.nutrition_source==='label'&&/^(ChatGPT|AI):/.test(String(r.nutrition_notes||''))?' · Nhãn + ước tính':''}${photos?' · '+photos+' ảnh':''}`.replace(/^ · /,''):profile?dateLabel(r.date):workoutDescription(r);const value=meal?(skipped?'':num(r.kcal)!==null?fmt(r.kcal)+' kcal':'Chưa có kcal'):profile?fmt(r.weight_kg,1)+' kg':r.kind==='rest'?'':r.kind==='cardio'?fmt(r.duration_min)+' phút':setsOf(r).length+' set';return `<div class="log-row"><span class="log-icon ${meal?'food':''}">${icon(meal?'food':profile?'scale':r.kind==='rest'?'moon':'gym')}</span><div class="log-info"><strong>${esc(title)}</strong><small>${esc(subtitle)}</small>${!meal&&r.kcal_estimation_notes?`<small>${num(r.kcal_burned_est)!==null?fmt(r.kcal_burned_est)+' kcal gross · ước tính':''}</small>`:''}${detail&&table==='WebWorkouts'?workoutDetail(r,prevMap):''}</div><span class="log-value">${value}</span>${actions?rowMenu(table,r,title,meal,skipped):''}</div>`;}
@@ -153,8 +154,9 @@ function renderCalDayPanel(day,targets){
   const items=tables.flatMap(table=>active(state.data[table]).filter(r=>r.date===selected).map(r=>({table,r}))).sort((a,b)=>tables.indexOf(a.table)-tables.indexOf(b.table)||String(a.r.created_at).localeCompare(String(b.r.created_at)));
   return `<section class="card cal-day-panel" id="cal-day-panel"><div class="card-head"><div><h2>${dateLabel(selected,true)}</h2><p class="card-sub">${items.length} mục đã ghi</p></div><div class="page-tools compact-tools">${button('Ghi ăn uống','cal-log','','plus',`data-date="${selected}" data-target="eat"`)}${button('Ghi tập luyện','cal-log','','plus',`data-date="${selected}" data-target="gym"`)}</div></div>${renderDayHeadline(day,targets)}${items.length?dayLog(items):'<p class="card-sub">Chưa ghi gì cho ngày này.</p>'}</section>`;
 }
+function canUpdatePage(page){return route()===page&&['cached','ready'].includes(accessStage(state));}
 function updateCalDay(date){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  if(!canUpdatePage('history')||state.search||calCache?.currentDate!==today()||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
   const grid=$('.cal-grid'),panel=$('#cal-day-panel'),day=calCache?.days.find(d=>d.date===date&&!d.future);
   if(!grid||!panel||!day)return false;
   const next=grid.querySelector(`.cal-day[data-date="${date}"]`);
@@ -179,12 +181,13 @@ function historyResults(){
   const open=days.filter(d=>!d.future),has=d=>d.intake!==null||d.session||d.rest||d.protein!==null;
   const selected=open.some(d=>d.date===state.calDay)?state.calDay:open.find(d=>d.today)?.date||[...open].reverse().find(has)?.date||open.at(-1)?.date||null;
   const day=days.find(d=>d.date===selected);
-  calCache={days,targets};
+  calCache={days,targets,currentDate:now};
   return `<section class="card cal-card">${renderCalendar({month,days,stats,insights,selected,current:now,...targets})}</section>`+renderCalDayPanel(day,targets);
 }
 function updateHistoryResults(){
   clearTimeout(searchTimer);searchTimer=null;
   const results=$('#history-results');if(!results||route()!=='history')return;
+  if(!canUpdatePage('history'))return render();
   const desc=$('#history-desc');if(desc)desc.textContent=state.search?HISTORY_DESC_SEARCH:HISTORY_DESC_CAL;
   results.innerHTML=historyResults();
 }
@@ -320,7 +323,7 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   if(a==='cal-prev'||a==='cal-next'||a==='cal-today'){const cur=monthOf(today()),base=validMonth(state.calMonth)?state.calMonth:cur,next=a==='cal-today'?cur:shiftMonth(base,a==='cal-prev'?-1:1);state.calMonth=next>cur?cur:next;state.calDay=null;render();return ensureRange(shiftMonth(state.calMonth,-1)+'-01');}
   if(a==='cal-day'){state.calDay=el.dataset.date;if(!updateCalDay(state.calDay))render();$('#cal-day-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
   if(a==='cal-log'){state.date=el.dataset.date||today();location.hash=el.dataset.target==='gym'?'gym':'eat';return;}
-  if(a==='chart-day'){state.chartDay=el.dataset.date;if(!chartCache||!selectCompactChartDay(document,chartCache.days,{...chartCache,selectedDate:state.chartDay}))render();return;}
+  if(a==='chart-day'){state.chartDay=el.dataset.date;if(!canUpdatePage('dashboard')||chartCache?.currentDate!==today()||!phoneChart.matches||!selectCompactChartDay(document,chartCache.days,{...chartCache,selectedDate:state.chartDay}))render();return;}
 
   if(a==='edit'){const r=state.data[el.dataset.table].find(x=>x.id===el.dataset.id);if(r)return el.dataset.table==='Archive'?openArchiveEditor(r):openEditor(el.dataset.table,r);return;}
   if(a==='delete'){

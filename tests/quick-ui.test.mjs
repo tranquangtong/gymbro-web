@@ -197,11 +197,11 @@ test('A prompt finishing while the tutorial is open does not replace it; back sh
 });
 
 test('createDemoPlayer sequences scenes, supports pause/goTo/replay/stop, and respects reducedMotion',()=>{
- let nextId=1;const timers=new Map(),scenes=[];let completed=0;
+ let nextId=1,time=0;const timers=new Map(),scenes=[];let completed=0;
  const setTimer=(fn,ms)=>{const id=nextId++;timers.set(id,{fn,ms});return id;};
  const clearTimer=id=>{timers.delete(id);};
- const fire=id=>{const t=timers.get(id);timers.delete(id);t?.fn();};
- const player=createDemoPlayer({durations:[100,200,300,400],setTimer,clearTimer,onScene:n=>scenes.push(n),onComplete:()=>{completed+=1;}});
+ const fire=id=>{const t=timers.get(id);timers.delete(id);time+=t.ms;t.fn();};
+ const player=createDemoPlayer({durations:[100,200,300,400],now:()=>time,setTimer,clearTimer,onScene:n=>scenes.push(n),onComplete:()=>{completed+=1;}});
  player.play();
  assert.deepEqual(scenes,[1]);assert.equal(timers.size,1);assert.equal([...timers.values()][0].ms,100);
  fire([...timers.keys()][0]);

@@ -68,6 +68,7 @@ test('Calendar markup: Monday-first padding, disabled future days, status classe
 
 test('calendarMonth buckets rows by date and matches per-day dayEnergy outputs identically',()=>{
   const data={
+    Archive:[meal('2026-11-02',9000,300)],
     WebMeals:[
       meal('2026-10-31',2000,100),
       meal('2026-11-02',600,40,{id:'m1'}),
@@ -83,7 +84,7 @@ test('calendarMonth buckets rows by date and matches per-day dayEnergy outputs i
       lift('2026-11-02',150,{id:'w2'}),
       {id:'w3',date:'2026-11-02',kind:'rest',created_at:'',updated_at:'',deleted:false},
       {id:'w4',date:'2026-11-03',kind:'rest',created_at:'',updated_at:'',deleted:false},
-      lift('2026-11-04',300,{id:'w5',deleted:true})
+      lift('2026-11-04',300,{id:'w5',deleted:'TRUE'})
     ]
   };
   const days=calendarMonth(data,'2026-11',{current:'2026-11-05',...T});
