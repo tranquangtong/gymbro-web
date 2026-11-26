@@ -45,3 +45,10 @@
   teammate has a better tool.
 - agy edits UI → codex (or lead) runs `npm run check && npm test` before merge.
 - A change touching both UI and logic: codex does src/core|data|worker first, then agy wires UI.
+
+## Handoffs
+- Location: next to the work, or repo root (`HANDOFF - <topic>.md`)
+- Follow COLLAB-GLOBAL.md Handoff protocol (6 sections, marker on line 1, <= 80 lines).
+- Checkpoint before: push to main (deploys Worker), new D1 migration / `firestore.rules` deploy,
+  data migration or import into prod, changes to `scripts/photo-cleanup.mjs` (deletes photos)
+- Promoted rules (DON'T seen twice) go to Project rules with a 1-line why.
