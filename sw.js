@@ -1,6 +1,6 @@
 // Bump this on each frontend release. Install snapshots the shell and the entire
 // module graph, including lazy imports, before the new worker can take control.
-const CACHE_VERSION='1';
+const CACHE_VERSION='gymbro-v2.22.0';
 const SHELL='index.html';
 const PRECACHE=[
   SHELL,'manifest.webmanifest',
@@ -13,7 +13,7 @@ const PRECACHE=[
   'src/data/firebase.js','src/data/idle.js','src/data/local-extras.js','src/data/migrate-cloudflare.js',
   'src/data/resume-retry.js','src/data/snapshot.js','src/data/sync.js','src/data/timeout.js',
   'src/ui/boot-timing.js','src/ui/calendar.js','src/ui/dashboard.js','src/ui/dialog-viewport.js',
-  'src/ui/exercise-library.js','src/ui/firebase-ui.js','src/ui/inapp.js','src/ui/quick-ui.js',
+  'src/ui/exercise-library.js','src/ui/firebase-ui.js','src/ui/inapp.js','src/ui/lazy.js','src/ui/quick-ui.js',
   'src/ui/update-check.js',
 ];
 

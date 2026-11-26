@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {runInNewContext} from 'node:vm';
 
 const script=readFileSync(new URL('../sw.js',import.meta.url),'utf8');
+const {version}=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
 const github='https://tranquangtong.github.io/gymbro-web/';
 const workers='https://gymbro-web.example.workers.dev/';
 const request=(url,options={})=>({url,method:'GET',headers:new Headers(),...options});
@@ -75,7 +76,7 @@ test('installation precaches the release in one batch relative to the registrati
   });
   listeners.install({waitUntil:value=>{installed=value;}});
   await installed;
-  assert.match(cacheName,/gymbro-shell:.*gymbro-web\/:\d+$/);
+  assert.equal(cacheName,'gymbro-shell:'+github+':gymbro-v'+version);
   assert.deepEqual(Array.from(requests,req=>req.url),Array.from(precache,path=>github+path));
   assert.ok(requests.every(req=>req.cache==='reload'));
 });
@@ -119,7 +120,7 @@ test('offline navigation uses the pinned shell and activation removes only older
   let preloads=0;
   const {listeners}=worker(workers,{
     navigationPreload:{enable:async()=>{preloads++;}},
-    caches:{keys:async()=>[prefix+'0',prefix+'1','gymbro-shell:'+github+':0','another-app'],
+    caches:{keys:async()=>[prefix+'0',prefix+'gymbro-v'+version,'gymbro-shell:'+github+':0','another-app'],
       delete:async key=>removed.push(key),open:async()=>({match:async()=>new Response('offline shell')})},
     fetch:async()=>{throw Error('offline');},
   });
