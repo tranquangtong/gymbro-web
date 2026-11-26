@@ -37,3 +37,29 @@ test('A field low on the screen is lifted to the top of the sheet before the key
  assert.equal(focusLiftDelta({top:500,bottom:640},container,664),368,'lifted to container top + 12');
  assert.equal(focusLiftDelta({top:110,bottom:400},{top:120,bottom:640},664),0,'never scrolls backwards');
 });
+test('Unchanged viewport bounds skip redundant root style writes on input, and focusin reads layout before adding field-focus',()=>{
+ const listeners={},events=[],queue=[];let setPropCalls=0,toggleCalls=0;
+ const container={scrollTop:0,getBoundingClientRect:()=>{events.push('read-container');return {top:120,bottom:640};}};
+ const field={matches:()=>true,closest:s=>s==='dialog[open]'?{}:s==='.quick-content,.editor-fields'?container:null,getBoundingClientRect:()=>{events.push('read-field');return {top:500,bottom:640};}};
+ const doc={
+  activeElement:field,
+  documentElement:{
+   style:{setProperty:()=>{setPropCalls++;}},
+   classList:{toggle:()=>{toggleCalls++;},add:cls=>events.push('add:'+cls),remove(){}}
+  },
+  addEventListener:(k,v)=>{(listeners['doc:'+k]??=[]).push(v);}
+ };
+ const win={innerHeight:800,visualViewport:{height:360,offsetTop:70,scale:1,addEventListener(){}},addEventListener(){},requestAnimationFrame:f=>queue.push(f),setTimeout(){}};
+ installDialogViewport(win,doc);
+ assert.equal(setPropCalls,2);assert.equal(toggleCalls,1);
+ // Typing when viewport did not move must not re-write CSS custom properties or toggle keyboard-open.
+ listeners['doc:input'].forEach(fn=>fn({target:field}));
+ queue.shift()();
+ assert.equal(setPropCalls,2,'no redundant style.setProperty writes on unchanged bounds');
+ assert.equal(toggleCalls,1,'no redundant classList.toggle writes on unchanged bounds');
+ // Focusin must measure field & container rects BEFORE mutating documentElement.classList.
+ events.length=0;container.scrollTop=0;
+ listeners['doc:focusin'].forEach(fn=>fn({target:field}));
+ assert.deepEqual(events,['read-field','read-container','add:field-focus']);
+ assert.ok(container.scrollTop>0);
+});

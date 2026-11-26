@@ -3,23 +3,42 @@ import {withTimeout,TRANSIENT} from './data/timeout.js';
 import {installDialogViewport} from './ui/dialog-viewport.js';
 import {walkingSettings,applyWalkingSettings,isWalking} from './core/walking.js';
 import {estimateWorkoutBatch,workoutWeight} from './core/workout-kcal.js';
-import {DASHBOARD_DAYS,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './ui/dashboard.js';
+import {DASHBOARD_DAYS,macroProgress,energyDays,dashboardDay,chooseDashboardDate,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,updateCompactChartSelection,renderWorkoutInsight,focusEnergyChart,energyHero,renderEnergyHero} from './ui/dashboard.js';
 import {accessStage,SESSION_MS,sessionValid,verifySession,profileDetails,profileComplete,validatePersonalProfile,estimateEnergy,estimateMacroTargets,suggestMacroGoal,currentNutritionTargets} from './data/access.js';
 import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from './data/sync.js';
 import './data/local-extras.js';
-import {createQuickUI} from './ui/quick-ui.js';
+import {createLazyLoader,debounce} from './ui/lazy.js';
 import {MEALS,KINDS,EXERCISES,SCHEMAS,today,shiftDate,dateLabel,num,active,setsOf,norm,nutrition,workoutSummary,latestProfile,uid,emptyData,LocalRepository,validateRecord} from './core/core.js';
 import {createRepository,backendName,BACKEND} from './data/backend.js';
-import {migrateOwner,migrateAll,KIND_LABELS} from './data/migrate-cloudflare.js';
 import {firebaseService,loginGoogle,logoutFirebase,firebaseError,isAdmin} from './data/firebase.js';
 import {cleanRecord,validateBundle,validateArchive} from './core/migration.js';
-import {firebaseSettings} from './ui/firebase-ui.js';
 import {watchForUpdates} from './ui/update-check.js';
 import {readSnapshot,writeSnapshot,clearSnapshot} from './data/snapshot.js';
 import {createBootTiming} from './ui/boot-timing.js';
 import {inAppBrowser,platformOf,externalOpenUrl} from './ui/inapp.js';
-import {calendarMonth,monthStats,monthInsights,renderCalendar,renderDayHeadline,monthOf,shiftMonth,monthLabel,validMonth} from './ui/calendar.js';
 const boot=createBootTiming();
+const quickModLoader=createLazyLoader(()=>import('./ui/quick-ui.js'));
+const calendarLoader=createLazyLoader(()=>import('./ui/calendar.js'));
+const firebaseUiLoader=createLazyLoader(()=>import('./ui/firebase-ui.js'));
+const migrateLoader=createLazyLoader(()=>import('./data/migrate-cloudflare.js'));
+let quickInstance=null,quickInit=null,lastDashboardChart=null,lastCalendar=null,chartFocusFrame=0;
+function getQuick(){
+  if(quickInstance)return Promise.resolve(quickInstance);
+  if(!quickInit)quickInit=quickModLoader.load().then(({createQuickUI})=>{
+    quickInstance=createQuickUI({getState:()=>state,esc,fmt,icon,toast,writable,reload:load,render,openDetailed:openEditor,saveMessage:count=>saveMessage(state,count)});
+    $('#quick-dialog')?.addEventListener('close',()=>resumeRetry.closed());
+    return quickInstance;
+  }).catch(err=>{quickInit=null;throw err;});
+  return quickInit;
+}
+function uiFirebaseError(e){
+  if(e?.code==='auth/unauthorized-domain'){
+    const host=globalThis.location?.hostname||'',origin=globalThis.location?.origin||'';
+    if(host)return `Tên miền hiện tại (${origin&&origin!=='null'?origin:host}) chưa được cấp phép đăng nhập. Thêm ${host} vào Firebase Authentication → Settings → Authorized domains.`;
+    return 'Tên miền hiện tại chưa được cấp phép đăng nhập. Thêm tên miền hiện tại vào Firebase Authentication → Settings → Authorized domains.';
+  }
+  return firebaseError(e);
+}
 
 const paths={user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/>',logout:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/>',dashboard:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',food:'<path d="M4 3v6c0 3 6 3 6 0V3M7 3v18M19 21V3c-5 0-5 10 0 10"/>',gym:'<path d="M7 8v8M3 10v4M17 8v8M21 10v4M7 12h10M5 6v12M19 6v12"/>',history:'<path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2"/>',settings:'<path d="M9 3h6l1 4 4 1v8l-4 1-1 4H9l-1-4-4-1V8l4-1z"/><circle cx="12" cy="12" r="3"/>',plus:'<path d="M12 5v14M5 12h14"/>',arrow:'<path d="M5 12h14m-5-5 5 5-5 5"/>',calendar:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4M17 3v4M3 10h18"/>',refresh:'<path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/>',fire:'<path d="M12 3c1 5-5 6-5 10 0 2 1 3 2 3 0-3 3-3 3-6 5 3 6 8 2 11 9-1 10-12-2-18z"/>',protein:'<path d="m9 3 6 3v6l-6 3-6-3V6zM15 12l6 3v6l-6 3-6-3v-6"/>',scale:'<rect x="3" y="4" width="18" height="17" rx="4"/><path d="M7 8a6 6 0 0 1 10 0M12 7l2 3"/>',chart:'<path d="M4 3v17h17M7 15l5-6 4 3 5-7"/>',check:'<path d="m5 12 4 4L19 6"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',edit:'<path d="m16 3 5 5-12 12-6 1 1-6zM13 6l5 5"/>',trash:'<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',leaf:'<path d="M20 3C9 2 1 9 6 17s17 2 14-14zM4 21 16 9"/>',camera:'<rect x="3" y="6" width="18" height="15" rx="3"/><path d="m8 6 2-3h4l2 3"/><circle cx="12" cy="13" r="4"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',cloud:'<path d="M7 18a5 5 0 1 1 0-10 6 6 0 0 1 11-1 5.5 5.5 0 1 1 0 11M12 11v10m-3-3 3 3 3-3"/>',copy:'<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/>',moon:'<path d="M20 14A8 8 0 0 1 10 4a9 9 0 1 0 10 10z"/>',more:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',chevron:'<path d="m6 9 6 6 6-6"/>',left:'<path d="m15 6-6 6 6 6"/>',right:'<path d="m9 6 6 6-6 6"/>'};
 const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]||paths.info}</svg>`;
@@ -75,8 +94,11 @@ function renderChrome(){
   for(const link of navEl.querySelectorAll('.nav-link')){const on=link.dataset.route===route();link.classList.toggle('active',on);if(on)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');}
   const mode=state.cached&&!state.initialized?(state.connectionError?'Dữ liệu đã lưu · chưa kết nối':'Đang đồng bộ…'):state.mode==='demo'?'Dữ liệu mẫu':state.mode==='local'?'Trên thiết bị':state.connected?(state.initialized?backendName()+' · tự đồng bộ':backendName()+' · chờ kết nối'):state.authRestoring?'Đang khôi phục…':'Chưa đăng nhập';
   renderAccount(mode);
-  const banner=$('#storage-banner');banner.className='storage-banner'+(state.mode==='demo'?' demo':'')+(state.connectionError||localError?' error':'');
-  banner.textContent=state.connected&&state.repo?.ownerUid!==state.repo?.uid?'Quản trị: đang xem và sửa dữ liệu UID '+state.repo.ownerUid+'. Vào Quản trị để quay lại tài khoản mình.':localError||state.connectionError||(state.mode==='demo'?'Đang xem dữ liệu minh họa. Các số liệu này không phải nhật ký thật của bạn.':state.mode==='local'?'Lưu trên trình duyệt này · Chưa đồng bộ Firebase. Xuất bản sao để giữ dữ liệu khi đổi thiết bị.':state.connected?(state.localPending?`Có ${state.localPending} log trên thiết bị chưa có trên máy chủ. Vào Thêm → Chuyển log trên thiết bị.`:''):state.authRestoring?'Đang khôi phục tài khoản Firebase…':'Đăng nhập Google trong Thêm để đồng bộ nhật ký.');
+  const banner=$('#storage-banner');
+  const bannerClass='storage-banner'+(state.mode==='demo'?' demo':'')+(state.connectionError||localError?' error':'');
+  const bannerText=state.connected&&state.repo?.ownerUid!==state.repo?.uid?'Quản trị: đang xem và sửa dữ liệu UID '+state.repo.ownerUid+'. Vào Quản trị để quay lại tài khoản mình.':localError||state.connectionError||(state.mode==='demo'?'Đang xem dữ liệu minh họa. Các số liệu này không phải nhật ký thật của bạn.':state.mode==='local'?'Lưu trên trình duyệt này · Chưa đồng bộ Firebase. Xuất bản sao để giữ dữ liệu khi đổi thiết bị.':state.connected?(state.localPending?`Có ${state.localPending} log trên thiết bị chưa có trên máy chủ. Vào Thêm → Chuyển log trên thiết bị.`:''):(state.authRestoring||state.cached)?'':'Đăng nhập Google trong Thêm để đồng bộ nhật ký.');
+  if(banner.className!==bannerClass)banner.className=bannerClass;
+  if(banner.textContent!==bannerText)banner.textContent=bannerText;
 }
 async function load(options={}){if(!state.repo){state.data=emptyData();return;}if(await loadCurrentData(state,options)){if(state.mode==='firebase'){if(state.repo.ownerUid===state.repo.uid)state.accountProfile=latestProfile(state.data.WebProfile);state.connectionError='';state.initialized=true;}}}
 function appLink(){return location.origin+location.pathname;}
@@ -98,7 +120,8 @@ function render({resetChart=false}={}){
   if(stage==='profile'&&route()!=='settings'){$('#main').innerHTML=profileGate();return;}
   boot.mark(stage==='cached'?'cached':'ready');
   $('#main').innerHTML=({dashboard:dashboard,eat:eatPage,gym:gymPage,history:historyPage,archive:archivePage,settings:settingsPage,admin:adminPage})[route()]();
-  focusEnergyChart(document,previousChart);
+  if(chartFocusFrame)cancelAnimationFrame(chartFocusFrame);
+  if($('.energy-chart-scroll'))chartFocusFrame=requestAnimationFrame(()=>{chartFocusFrame=0;focusEnergyChart(document,previousChart);});
 }
 
 function metric(label,value,unit,note,ico,progress=null){return `<article class="metric"><div class="metric-header">${label}<span class="metric-icon">${icon(ico)}</span></div><div class="metric-value">${value}<small>${unit}</small></div>${progress!==null?`<div class="progress-track"><span style="width:${Math.max(0,Math.min(100,progress))}%"></span></div>`:''}<div class="metric-note">${note}</div></article>`;}
@@ -122,44 +145,82 @@ function dashboard(){
   const t=state.dashboardDate||today(),isToday=t===today(),{meals,profile:p,workouts}=dashboardDay(state.data,t),dayName=isToday?'hôm nay':'ngày '+dateLabel(t);
   const burned=workouts.filter(r=>r.kind!=='rest'&&num(r.kcal_burned_est)!==null),burn=burned.reduce((v,r)=>v+Number(r.kcal_burned_est),0),dials=macroProgress(meals,p);
   const dateTools=`<div class="dashboard-date-controls"><button class="icon-button" data-action="dashboard-shift" data-days="-1" aria-label="Ngày trước, ${dateLabel(shiftDate(t,-1))}">${icon('left')}</button>${button('Hôm nay','dashboard-today','','calendar',`aria-pressed="${isToday}"`)}${button('Chọn ngày','dashboard-pick-date','','calendar','aria-controls="dashboard-date"')}<button class="icon-button" data-action="dashboard-shift" data-days="1" aria-label="Ngày sau${isToday?'':', '+dateLabel(shiftDate(t,1))}" ${isToday?'disabled':''}>${icon('right')}</button><label id="dashboard-date-field" class="dashboard-date-field" hidden><span class="sr-only">Ngày muốn xem</span><input id="dashboard-date" type="date" value="${t}" max="${today()}" aria-label="Ngày muốn xem"></label></div>`;
+  const days=energyDays(state.data,t),chartOpts={currentDate:today(),target:num(p.kcal_target),proteinTarget:num(p.protein_target),selectedDate:state.chartDay};
+  lastDashboardChart={days,currentDate:chartOpts.currentDate,target:chartOpts.target,proteinTarget:chartOpts.proteinTarget};
   return heading('',isToday?'Hôm nay':'Ngày '+dateLabel(t),dateLabel(t,true),dateTools)+
   renderEnergyHero(energyHero(meals,p),{isToday})+
   `<div class="dashboard-quick-actions" role="group" aria-label="Thêm nhật ký">${button('Thêm món','new-meal','primary floating-log-button','plus','type="button"')}${button('Thêm bài tập','new-workout','workout-log-button floating-log-button','plus','type="button"')}</div>`+
   `<div class="dashboard-overview">${card('Macro '+dayName,'So với mục tiêu hiện tại, dùng chung cho mọi ngày.',renderMacroDials(dials),button('Mục tiêu','new-profile','small','settings','data-targets="true"'),'nutrition-dashboard')}${card('Buổi tập','',`${renderWorkoutInsight(workouts)}${workouts.some(r=>r.kind!=='rest')?`<p class="form-note">${burned.length?fmt(burn)+' kcal tập luyện ước tính'+(burned.length<workouts.filter(r=>r.kind!=='rest').length?', chưa đủ số liệu':''):'Chưa ước tính kcal tập luyện'}</p>`:''}`,button('Chi tiết','view-workout-day','small','gym',`data-date="${t}"`))}</div>`+
-  card('Năng lượng & protein theo ngày',`${DASHBOARD_DAYS} ngày, từ ${dateLabel(shiftDate(t,1-DASHBOARD_DAYS))} đến ${dateLabel(t)}.`,(phoneChart.matches?renderEnergyChartCompact:renderEnergyChart)(energyDays(state.data,t),{target:num(p.kcal_target),proteinTarget:num(p.protein_target),selectedDate:state.chartDay}),'','energy-dashboard')+
+  card('Năng lượng & protein theo ngày',`${DASHBOARD_DAYS} ngày, từ ${dateLabel(shiftDate(t,1-DASHBOARD_DAYS))} đến ${dateLabel(t)}.`,(phoneChart.matches?renderEnergyChartCompact:renderEnergyChart)(days,chartOpts),'','energy-dashboard')+
   card('Trong ngày','',dayLog([...meals.map(r=>({table:'WebMeals',r})),...workouts.map(r=>({table:'WebWorkouts',r}))]),'','day-log-card');
 }
 function insightBody(n,week,p){const items=[];if(n.count&&n.knownKcal<n.count)items.push('Còn '+(n.count-n.knownKcal)+' món chưa có kcal. Tổng năng lượng hiện tại chỉ là phần đã ghi nhận.');if(week.sessions)items.push('Bạn đã ghi '+week.sessions+' ngày tập trong 7 ngày gần nhất. Dùng lịch sử từng bài để so sánh các buổi có cùng điều kiện.');if(!num(p.weight_kg))items.push('Thêm cân nặng theo ngày để có thêm bối cảnh khi theo dõi chin-up trợ lực.');if(!items.length)items.push('Ghi nhật ký đều trong vài buổi để dashboard có đủ dữ liệu phản ánh thói quen của bạn.');return items.map(text=>`<div class="insight">${icon('leaf')}<div><strong>Ghi chú cho hành trình</strong><p>${text}</p></div></div>`).join('');}
 function workoutDescription(r){if(r.kind==='rest')return 'Ngày nghỉ';if(r.kind==='cardio'){const w=walkingSettings(r);return fmt(r.duration_min)+' phút'+(w.incline!==''?' · '+w.incline+'%':'')+(w.speed!==''?' · '+w.speed+' kph':'');}const sets=setsOf(r),same=sets.length&&sets.every(s=>s.reps===sets[0].reps&&num(s.weight_kg)===num(sets[0].weight_kg));if(same)return sets.length+' × '+sets[0].reps+' reps'+(r.kind==='bodyweight'?(num(sets[0].weight_kg)>0?' · +'+fmt(sets[0].weight_kg,1)+' kg':''):' · '+fmt(sets[0].weight_kg,1)+' kg'+(r.kind==='assisted'?' trợ lực':''));return sets.map(s=>r.kind==='bodyweight'?s.reps+' reps'+(num(s.weight_kg)>0?' +'+fmt(s.weight_kg,1)+' kg':''):fmt(s.weight_kg,1)+' kg'+(r.kind==='assisted'?' trợ lực':'')+' × '+s.reps).join(' · ');}
 function setLoad(r,s){return r.kind==='bodyweight'?'bodyweight'+(num(s.weight_kg)>0?' + '+fmt(s.weight_kg,1)+' kg':''):num(s.weight_kg)===null?'? kg':fmt(s.weight_kg,1)+' kg'+(r.kind==='assisted'?' trợ lực':'');}
+function previousSessionIndex(workouts,beforeDate){
+  const best=new Map();
+  for(const x of active(workouts)){
+    if(x.kind==='rest'||x.kind==='cardio'||!(x.date<beforeDate))continue;
+    const k=x.kind+'|'+norm(x.exercise),cur=best.get(k);
+    if(!cur||x.date>cur.date||(x.date===cur.date&&String(x.created_at||'')>String(cur.created_at||'')))best.set(k,x);
+  }
+  return best;
+}
 function previousSession(r){const key=norm(r.exercise);return active(state.data.WebWorkouts).filter(x=>x.id!==r.id&&x.kind===r.kind&&x.date<r.date&&norm(x.exercise)===key).sort((a,b)=>b.date.localeCompare(a.date)||String(b.created_at).localeCompare(String(a.created_at)))[0]||null;}
-function workoutDetail(r){if(['rest','cardio'].includes(r.kind))return '';const sets=setsOf(r);const chips=sets.length?`<div class="set-chips">${sets.map((x,i)=>`<span class="set-chip"><span>Set ${i+1}</span><b>${esc(x.reps)}</b>${esc(setLoad(r,x))}</span>`).join('')}</div>`:'';const prev=previousSession(r);return chips+(prev?`<p class="log-trend">Lần trước ${dateLabel(prev.date)}: ${esc(workoutDescription(prev))}</p>`:'');}
+function workoutDetail(r,prevIndex=null){if(['rest','cardio'].includes(r.kind))return '';const sets=setsOf(r);const chips=sets.length?`<div class="set-chips">${sets.map((x,i)=>`<span class="set-chip"><span>Set ${i+1}</span><b>${esc(x.reps)}</b>${esc(setLoad(r,x))}</span>`).join('')}</div>`:'';const prev=prevIndex?prevIndex.get(r.kind+'|'+norm(r.exercise))||null:previousSession(r);return chips+(prev?`<p class="log-trend">Lần trước ${dateLabel(prev.date)}: ${esc(workoutDescription(prev))}</p>`:'');}
 function rowMenu(table,r,title,meal,skipped){const photos=r.photo_ids?.length||0;return `<details class="row-menu"><summary aria-label="Tùy chọn cho ${esc(title)}">${icon('more')}</summary><div class="row-menu-list">${meal&&!skipped?`<button type="button" data-quick="entry-photos" data-id="${esc(r.id)}">${icon('camera')}Ảnh món${photos?`<span class="has-photos-count">${photos}</span>`:''}</button>`:''}<button type="button" data-action="edit" data-table="${table}" data-id="${esc(r.id)}">${icon('edit')}Sửa</button><button type="button" class="danger" data-action="delete" data-table="${table}" data-id="${esc(r.id)}">${icon('trash')}Xóa</button></div></details>`;}
-function logRow(table,r,actions=true,{detail=false,grouped=false}={}){const meal=table==='WebMeals',profile=table==='WebProfile',skipped=String(r.skipped).toLowerCase()==='true';const title=meal?(skipped?'Đã bỏ '+(MEALS[r.meal]||'bữa ăn').toLowerCase():r.food):profile?'Cân nặng':r.kind==='rest'?'Ngày nghỉ':r.exercise;const photos=r.photo_ids?.length||0;const subtitle=meal?`${grouped?'':MEALS[r.meal]||''}${r.portion?' · '+r.portion:''}${r.nutrition_source==='estimate'?' · Ước tính':r.nutrition_source==='label'&&/^(ChatGPT|AI):/.test(String(r.nutrition_notes||''))?' · Nhãn + ước tính':''}${photos?' · '+photos+' ảnh':''}`.replace(/^ · /,''):profile?dateLabel(r.date):workoutDescription(r);const value=meal?(skipped?'':num(r.kcal)!==null?fmt(r.kcal)+' kcal':'Chưa có kcal'):profile?fmt(r.weight_kg,1)+' kg':r.kind==='rest'?'':r.kind==='cardio'?fmt(r.duration_min)+' phút':setsOf(r).length+' set';return `<div class="log-row"><span class="log-icon ${meal?'food':''}">${icon(meal?'food':profile?'scale':r.kind==='rest'?'moon':'gym')}</span><div class="log-info"><strong>${esc(title)}</strong><small>${esc(subtitle)}</small>${!meal&&r.kcal_estimation_notes?`<small>${num(r.kcal_burned_est)!==null?fmt(r.kcal_burned_est)+' kcal gross · ước tính':''}</small>`:''}${detail&&table==='WebWorkouts'?workoutDetail(r):''}</div><span class="log-value">${value}</span>${actions?rowMenu(table,r,title,meal,skipped):''}</div>`;}
+function logRow(table,r,actions=true,{detail=false,grouped=false,prevIndex=null}={}){const meal=table==='WebMeals',profile=table==='WebProfile',skipped=String(r.skipped).toLowerCase()==='true';const title=meal?(skipped?'Đã bỏ '+(MEALS[r.meal]||'bữa ăn').toLowerCase():r.food):profile?'Cân nặng':r.kind==='rest'?'Ngày nghỉ':r.exercise;const photos=r.photo_ids?.length||0;const subtitle=meal?`${grouped?'':MEALS[r.meal]||''}${r.portion?' · '+r.portion:''}${r.nutrition_source==='estimate'?' · Ước tính':r.nutrition_source==='label'&&/^(ChatGPT|AI):/.test(String(r.nutrition_notes||''))?' · Nhãn + ước tính':''}${photos?' · '+photos+' ảnh':''}`.replace(/^ · /,''):profile?dateLabel(r.date):workoutDescription(r);const value=meal?(skipped?'':num(r.kcal)!==null?fmt(r.kcal)+' kcal':'Chưa có kcal'):profile?fmt(r.weight_kg,1)+' kg':r.kind==='rest'?'':r.kind==='cardio'?fmt(r.duration_min)+' phút':setsOf(r).length+' set';return `<div class="log-row"><span class="log-icon ${meal?'food':''}">${icon(meal?'food':profile?'scale':r.kind==='rest'?'moon':'gym')}</span><div class="log-info"><strong>${esc(title)}</strong><small>${esc(subtitle)}</small>${!meal&&r.kcal_estimation_notes?`<small>${num(r.kcal_burned_est)!==null?fmt(r.kcal_burned_est)+' kcal gross · ước tính':''}</small>`:''}${detail&&table==='WebWorkouts'?workoutDetail(r,prevIndex):''}</div><span class="log-value">${value}</span>${actions?rowMenu(table,r,title,meal,skipped):''}</div>`;}
 function dateFilter(){return `<label>Ngày ghi nhận<input id="log-date" type="date" value="${state.date}" required></label>`;}
 function quickDate(){return `<div class="day-toolbar"><button class="icon-button" data-action="day-prev" aria-label="Ngày trước">‹</button>${dateFilter()}<button class="icon-button" data-action="day-next" aria-label="Ngày sau">›</button></div>`;}
 function eatPage(){const rows=filtered('WebMeals',state.date),n=nutrition(rows);return heading('','Ăn uống','Ghi nhanh món quen. Chụp ảnh cho bữa mới.',false)+`<div class="day-row">${quickDate()}${floatingLogActions('eat')}</div>`+`<div class="day-summary"><strong>${n.knownKcal?fmt(n.kcal):'—'} <small>kcal</small></strong><span>P ${n.knownProtein?fmt(n.protein,1):'—'} · C ${macroValue(rows,'carbs')} · F ${macroValue(rows,'fat')} g</span><small>${n.knownKcal}/${n.count} món có kcal</small></div><div class="page-tools compact-tools"><button class="button" data-quick="estimate-meals">${icon('fire')}Ước tính bằng AI</button><button class="text-button" data-quick="estimate-help">Cách dùng</button><button class="text-button tools-end" data-quick="library">Thư viện món</button></div><section class="diary-card">${Object.entries(MEALS).map(([key,label])=>`<div class="meal-group"><div class="meal-group-head"><h2>${label}</h2><button class="icon-button" data-action="meal-for" data-meal="${key}" aria-label="Thêm ${label.toLowerCase()}">${icon('plus')}</button></div>${rows.filter(r=>r.meal===key).map(r=>logRow('WebMeals',r)).join('')||'<p class="empty-meal">Chưa ghi món nào</p>'}</div>`).join('')}</section>`;}
-function gymPage(){const rows=filtered('WebWorkouts',state.date),summary=workoutSummary(rows),known=rows.filter(r=>num(r.kcal_burned_est)!==null);return heading('','Tập luyện','Một dòng cho mỗi bài. Ghi cả buổi trong một lần.',false)+`<div class="day-row">${quickDate()}${floatingLogActions('gym')}</div>`+`<div class="day-summary"><strong>${summary.sets} <small>set</small></strong><span>${rows.filter(r=>r.kind!=='rest').length} bài · ${summary.minutes>0?fmt(summary.minutes,1)+' phút':'chưa ghi thời lượng'}</span><small>${known.length?fmt(known.reduce((s,r)=>s+Number(r.kcal_burned_est),0))+' kcal gross ước tính':'Chưa có kcal tiêu hao'}</small></div><div class="page-tools compact-tools"><button class="button" data-quick="estimate-workouts">${icon('fire')}Tính / cập nhật kcal</button>${button('Lặp buổi trước','repeat','','copy')}${button('Ngày nghỉ','rest','','moon')}</div>`+card('Buổi tập','',rows.length?rows.map(r=>logRow('WebWorkouts',r,true,{detail:true})).join(''):'<p class="card-sub">Chưa có bài tập cho ngày này.</p>');}
-function historyPage(){
-  const tools=`<div class="page-tools">${button('Xuất JSON','export','','download')}</div>`,search=`<label class="cal-search">Tìm trong nhật ký<input id="history-search" type="search" value="${esc(state.search)}" placeholder="Tên món, bài tập, ghi chú…"></label>`;
+function gymPage(){const rows=filtered('WebWorkouts',state.date),summary=workoutSummary(rows),known=rows.filter(r=>num(r.kcal_burned_est)!==null),prevIndex=rows.length?previousSessionIndex(state.data.WebWorkouts,state.date):null;return heading('','Tập luyện','Một dòng cho mỗi bài. Ghi cả buổi trong một lần.',false)+`<div class="day-row">${quickDate()}${floatingLogActions('gym')}</div>`+`<div class="day-summary"><strong>${summary.sets} <small>set</small></strong><span>${rows.filter(r=>r.kind!=='rest').length} bài · ${summary.minutes>0?fmt(summary.minutes,1)+' phút':'chưa ghi thời lượng'}</span><small>${known.length?fmt(known.reduce((s,r)=>s+Number(r.kcal_burned_est),0))+' kcal gross ước tính':'Chưa có kcal tiêu hao'}</small></div><div class="page-tools compact-tools"><button class="button" data-quick="estimate-workouts">${icon('fire')}Tính / cập nhật kcal</button>${button('Lặp buổi trước','repeat','','copy')}${button('Ngày nghỉ','rest','','moon')}</div>`+card('Buổi tập','',rows.length?rows.map(r=>logRow('WebWorkouts',r,true,{detail:true,prevIndex})).join(''):'<p class="card-sub">Chưa có bài tập cho ngày này.</p>');}
+function renderCalDayPanel(cal,day,selected,targets){
+  if(!day||!selected)return '';
+  const order=Object.keys(SCHEMAS);
+  const items=order.flatMap(table=>active(state.data[table]).filter(r=>r.date===selected).map(r=>({table,r}))).sort((a,b)=>order.indexOf(a.table)-order.indexOf(b.table)||String(a.r.created_at).localeCompare(String(b.r.created_at)));
+  return `<section class="card cal-day-panel" id="cal-day-panel"><div class="card-head"><div><h2>${dateLabel(selected,true)}</h2><p class="card-sub">${items.length} mục đã ghi</p></div><div class="page-tools compact-tools">${button('Ghi ăn uống','cal-log','','plus',`data-date="${selected}" data-target="eat"`)}${button('Ghi tập luyện','cal-log','','plus',`data-date="${selected}" data-target="gym"`)}</div></div>${cal.renderDayHeadline(day,targets)}${items.length?dayLog(items):'<p class="card-sub">Chưa ghi gì cho ngày này.</p>'}</section>`;
+}
+function historyResultsBody(){
   if(state.search){
-    const entries=Object.keys(SCHEMAS).flatMap(table=>active(state.data[table]).map(r=>({table,r}))).filter(({r})=>norm([r.food,r.exercise,r.notes,MEALS[r.meal]].join(' ')).includes(norm(state.search))).sort((a,b)=>b.r.date.localeCompare(a.r.date)||String(b.r.created_at).localeCompare(String(a.r.created_at)));const dates=[...new Set(entries.map(x=>x.r.date))];
-    return heading('','Nhật ký','Tìm trong toàn bộ nhật ký đã tải trên thiết bị này.',tools)+search+card('Kết quả tìm kiếm',`${entries.length} mục khớp “${esc(state.search)}”`,entries.length?dates.map((date,i)=>historyDay(date,entries.filter(x=>x.r.date===date),i===0)).join(''):empty('Không có mục phù hợp','Thử từ khóa khác, hoặc xóa ô tìm kiếm để quay lại lịch.'));
+    lastCalendar=null;
+    const q=norm(state.search);
+    const entries=Object.keys(SCHEMAS).flatMap(table=>active(state.data[table]).map(r=>({table,r}))).filter(({r})=>norm([r.food,r.exercise,r.notes,MEALS[r.meal]].join(' ')).includes(q)).sort((a,b)=>b.r.date.localeCompare(a.r.date)||String(b.r.created_at).localeCompare(String(a.r.created_at)));
+    const byDate=new Map();
+    for(const entry of entries){let list=byDate.get(entry.r.date);if(!list){list=[];byDate.set(entry.r.date,list);}list.push(entry);}
+    const dates=[...byDate.keys()],kcalTarget=num(currentNutritionTargets(state.data.WebProfile).kcal_target);
+    return card('Kết quả tìm kiếm',`${entries.length} mục khớp “${esc(state.search)}”`,entries.length?dates.map((date,i)=>historyDay(date,byDate.get(date),i===0,kcalTarget)).join(''):empty('Không có mục phù hợp','Thử từ khóa khác, hoặc xóa ô tìm kiếm để quay lại lịch.'));
   }
-  const now=today(),month=validMonth(state.calMonth)&&state.calMonth<=monthOf(now)?state.calMonth:monthOf(now),t=currentNutritionTargets(state.data.WebProfile),targets={kcalTarget:num(t.kcal_target),proteinTarget:num(t.protein_target)};
-  const days=calendarMonth(state.data,month,{current:now,...targets}),stats=monthStats(days),prevMonth=shiftMonth(month,-1),prev=monthStats(calendarMonth(state.data,prevMonth,{current:now,...targets}));
-  const insights=monthInsights(stats,prev,{...targets,prevLabel:monthLabel(prevMonth).replace(',','').toLowerCase()});
+  const cal=calendarLoader.peek();
+  if(!cal){
+    lastCalendar=null;
+    calendarLoader.load().then(()=>{if(route()==='history'&&!state.search){const el=$('#history-results');if(el)el.innerHTML=historyResultsBody();else render();}}).catch(err=>toast(err.message,true));
+    return '<section class="card cal-card" aria-busy="true"><p class="card-sub">Đang tải lịch…</p></section>';
+  }
+  const now=today(),month=cal.validMonth(state.calMonth)&&state.calMonth<=cal.monthOf(now)?state.calMonth:cal.monthOf(now),t=currentNutritionTargets(state.data.WebProfile),targets={kcalTarget:num(t.kcal_target),proteinTarget:num(t.protein_target)};
+  const days=cal.calendarMonth(state.data,month,{current:now,...targets}),stats=cal.monthStats(days),prevMonth=cal.shiftMonth(month,-1),prev=cal.monthStats(cal.calendarMonth(state.data,prevMonth,{current:now,...targets}));
+  const insights=cal.monthInsights(stats,prev,{...targets,prevLabel:cal.monthLabel(prevMonth).replace(',','').toLowerCase()});
   const open=days.filter(d=>!d.future),has=d=>d.intake!==null||d.session||d.rest||d.protein!==null;
   const selected=open.some(d=>d.date===state.calDay)?state.calDay:open.find(d=>d.today)?.date||[...open].reverse().find(has)?.date||open.at(-1)?.date||null;
   const day=days.find(d=>d.date===selected);
-  const items=selected?Object.keys(SCHEMAS).flatMap(table=>active(state.data[table]).filter(r=>r.date===selected).map(r=>({table,r}))).sort((a,b)=>Object.keys(SCHEMAS).indexOf(a.table)-Object.keys(SCHEMAS).indexOf(b.table)||String(a.r.created_at).localeCompare(String(b.r.created_at))):[];
-  const panel=day?`<section class="card cal-day-panel" id="cal-day-panel"><div class="card-head"><div><h2>${dateLabel(selected,true)}</h2><p class="card-sub">${items.length} mục đã ghi</p></div><div class="page-tools compact-tools">${button('Ghi ăn uống','cal-log','','plus',`data-date="${selected}" data-target="eat"`)}${button('Ghi tập luyện','cal-log','','plus',`data-date="${selected}" data-target="gym"`)}</div></div>${renderDayHeadline(day,targets)}${items.length?dayLog(items):'<p class="card-sub">Chưa ghi gì cho ngày này.</p>'}</section>`:'';
-  return heading('','Nhật ký','Theo tháng: kcal, protein và tập luyện từng ngày. Chạm vào một ngày để xem và sửa.',tools)+search+`<section class="card cal-card">${renderCalendar({month,days,stats,insights,selected,current:now,...targets})}</section>`+panel;
+  lastCalendar={cal,days,targets};
+  return `<section class="card cal-card">${cal.renderCalendar({month,days,stats,insights,selected,current:now,...targets})}</section>`+renderCalDayPanel(cal,day,selected,targets);
+}
+function historyPage(){
+  const tools=`<div class="page-tools">${button('Xuất JSON','export','','download')}</div>`,search=`<label class="cal-search">Tìm trong nhật ký<input id="history-search" type="search" value="${esc(state.search)}" placeholder="Tên món, bài tập, ghi chú…"></label>`;
+  return heading('','Nhật ký','Theo tháng: kcal, protein và tập luyện từng ngày. Chạm vào một ngày để xem và sửa.',tools)+search+`<div id="history-results">${historyResultsBody()}</div>`;
 }
 const WEEKDAYS=['CN','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-function historyDay(date,items,first){const meals=items.filter(x=>x.table==='WebMeals').map(x=>x.r).filter(r=>String(r.skipped).toLowerCase()!=='true'),known=meals.filter(r=>num(r.kcal)!==null),kcal=known.reduce((n,r)=>n+Number(r.kcal),0),target=num(currentNutritionTargets(state.data.WebProfile).kcal_target),workouts=items.filter(x=>x.table==='WebWorkouts').map(x=>x.r),sets=workoutSummary(workouts).sets,rest=workouts.length&&workouts.every(r=>r.kind==='rest');const open=state.historyOpen.has(date)||(first&&!state.historyTouched.has(date));const pct=target>0?Math.min(100,kcal/target*100):0;return `<details class="history-day" data-date="${date}" ${open?'open':''}><summary><span class="history-daynum">${Number(date.slice(8))}<small>${WEEKDAYS[new Date(date+'T12:00:00Z').getUTCDay()]}, ${date.slice(5,7)}/${date.slice(0,4)}</small></span><span><span class="history-meta"><strong>${known.length?fmt(kcal)+' kcal':meals.length?'Chưa có kcal':'Không ghi ăn'}${known.length<meals.length&&known.length?'*':''}</strong><span class="${sets?'gym':'none'}">${sets?'Tập '+sets+' set':rest?'Ngày nghỉ':'Không tập'}</span></span>${target>0?`<span class="history-bar${kcal>target?' over':''}" aria-label="${fmt(kcal)} trên mục tiêu ${fmt(target)} kcal"><span style="width:${pct.toFixed(1)}%"></span></span>`:''}</span><span class="history-chevron">${icon('chevron')}</span></summary><div class="history-day-body">${items.map(({table,r})=>logRow(table,r)).join('')}</div></details>`;}
-function settingsPage(){return firebaseSettings({state,bootTiming:boot.marks,profile:latestProfile(state.data.WebProfile),fmt,esc,card,button,heading,dateLabel})+migrationCard();}
-function migrationReport(r){return `<div class="migration-report"><p class="migration-title"><strong>${esc(r.email||r.uid)}</strong> <span class="${r.match?'ok':'bad'}">${r.match?'Khớp hoàn toàn':'Chưa khớp'}</span></p><div class="chart-table-scroll"><table class="migration-table"><thead><tr><th scope="col">Loại</th><th scope="col">Firestore</th><th scope="col">Cloudflare</th><th scope="col">Mới chép</th><th scope="col">Đối chiếu</th></tr></thead><tbody>${Object.entries(r.kinds).map(([k,v])=>`<tr><th scope="row">${KIND_LABELS[k]}</th><td>${fmt(v.source)}</td><td>${fmt(v.target)}</td><td>${fmt(v.saved)}</td><td class="${v.match?'ok':'bad'}">${v.match?'Khớp':`Thiếu ${v.diff.missing.length}, khác ${v.diff.changed.length}, dư ${v.diff.extra.length}`}</td></tr>`).join('')}</tbody></table></div>${Object.entries(r.kinds).filter(([,v])=>!v.match).map(([k,v])=>`<p class="form-note">${KIND_LABELS[k]}: ${esc([...v.diff.missing.map(id=>'thiếu '+id),...v.diff.changed.map(id=>'khác '+id),...v.diff.extra.map(id=>'dư '+id)].slice(0,8).join(', '))}</p>`).join('')}</div>`;}
+function historyDay(date,items,first,target=num(currentNutritionTargets(state.data.WebProfile).kcal_target)){const meals=items.filter(x=>x.table==='WebMeals').map(x=>x.r).filter(r=>String(r.skipped).toLowerCase()!=='true'),known=meals.filter(r=>num(r.kcal)!==null),kcal=known.reduce((n,r)=>n+Number(r.kcal),0),workouts=items.filter(x=>x.table==='WebWorkouts').map(x=>x.r),sets=workoutSummary(workouts).sets,rest=workouts.length&&workouts.every(r=>r.kind==='rest');const open=state.historyOpen.has(date)||(first&&!state.historyTouched.has(date));const pct=target>0?Math.min(100,kcal/target*100):0;return `<details class="history-day" data-date="${date}" ${open?'open':''}><summary><span class="history-daynum">${Number(date.slice(8))}<small>${WEEKDAYS[new Date(date+'T12:00:00Z').getUTCDay()]}, ${date.slice(5,7)}/${date.slice(0,4)}</small></span><span><span class="history-meta"><strong>${known.length?fmt(kcal)+' kcal':meals.length?'Chưa có kcal':'Không ghi ăn'}${known.length<meals.length&&known.length?'*':''}</strong><span class="${sets?'gym':'none'}">${sets?'Tập '+sets+' set':rest?'Ngày nghỉ':'Không tập'}</span></span>${target>0?`<span class="history-bar${kcal>target?' over':''}" aria-label="${fmt(kcal)} trên mục tiêu ${fmt(target)} kcal"><span style="width:${pct.toFixed(1)}%"></span></span>`:''}</span><span class="history-chevron">${icon('chevron')}</span></summary><div class="history-day-body">${items.map(({table,r})=>logRow(table,r)).join('')}</div></details>`;}
+const DEFAULT_KIND_LABELS={WebMeals:'Ăn uống',WebWorkouts:'Tập luyện',WebProfile:'Hồ sơ',Archive:'Tư liệu',FoodLibrary:'Thư viện món'};
+function settingsPage(){
+  const mod=firebaseUiLoader.peek();
+  if(!mod){
+    firebaseUiLoader.load().then(()=>{if(route()==='settings')render();}).catch(err=>toast(err.message,true));
+    return heading('','Thêm','Tài khoản, hồ sơ và dữ liệu.')+`<div class="settings-simple"><section class="card" aria-busy="true"><p class="card-sub">Đang tải cài đặt…</p></section></div>`;
+  }
+  return mod.firebaseSettings({state,bootTiming:boot.marks,profile:latestProfile(state.data.WebProfile),fmt,esc,card,button,heading,dateLabel})+migrationCard();
+}
+function migrationReport(r){const labels=migrateLoader.peek()?.KIND_LABELS||DEFAULT_KIND_LABELS;return `<div class="migration-report"><p class="migration-title"><strong>${esc(r.email||r.uid)}</strong> <span class="${r.match?'ok':'bad'}">${r.match?'Khớp hoàn toàn':'Chưa khớp'}</span></p><div class="chart-table-scroll"><table class="migration-table"><thead><tr><th scope="col">Loại</th><th scope="col">Firestore</th><th scope="col">Cloudflare</th><th scope="col">Mới chép</th><th scope="col">Đối chiếu</th></tr></thead><tbody>${Object.entries(r.kinds).map(([k,v])=>`<tr><th scope="row">${labels[k]||k}</th><td>${fmt(v.source)}</td><td>${fmt(v.target)}</td><td>${fmt(v.saved)}</td><td class="${v.match?'ok':'bad'}">${v.match?'Khớp':`Thiếu ${v.diff.missing.length}, khác ${v.diff.changed.length}, dư ${v.diff.extra.length}`}</td></tr>`).join('')}</tbody></table></div>${Object.entries(r.kinds).filter(([,v])=>!v.match).map(([k,v])=>`<p class="form-note">${labels[k]||k}: ${esc([...v.diff.missing.map(id=>'thiếu '+id),...v.diff.changed.map(id=>'khác '+id),...v.diff.extra.map(id=>'dư '+id)].slice(0,8).join(', '))}</p>`).join('')}</div>`;}
 function migrationCard(){if(!BACKEND.apiBase||!state.connected||state.repo?.ownerUid!==state.repo?.uid)return '';const admin=isAdmin(state.repo?.s.auth.currentUser);return `<div class="settings-simple">${card('Chuyển dữ liệu sang Cloudflare',BACKEND.kind==='cloudflare'?'Đang dùng Cloudflare. Chạy lại chỉ để bổ sung mục còn trên Firestore.':'Firestore vẫn là nơi lưu chính cho tới khi chuyển chính thức.',`<p class="form-note">Sao chép nhật ký, hồ sơ, tư liệu và thư viện món từ Firestore sang Cloudflare D1, giữ nguyên ID và chủ sở hữu. Không xoá gì trên Firestore. Chạy lại an toàn: mục đã có chỉ được cập nhật khi Firestore có bản mới hơn. Ảnh món không được chuyển; ảnh mới được giữ trên Cloudflare 7 ngày.</p><div class="page-tools">${button('Chuyển dữ liệu của tôi','cf-migrate','primary','cloud')}${admin?button('Chuyển mọi tài khoản','cf-migrate-all','','cloud'):''}</div><p class="form-note" id="cf-progress" role="status"></p>${(state.migration||[]).map(migrationReport).join('')}`)}</div>`;}
 function archivePage(){const rows=active(state.data.Archive||[]).sort((a,b)=>b.date.localeCompare(a.date));const labels={report:'Báo cáo cũ',workout_plan:'Giáo án tập',diet_plan:'Giáo án ăn',review:'Cần rà lại'};return heading('','Tư liệu','Nội dung chuyển từ Sheets; các báo cáo phản ánh đánh giá tại thời điểm tạo.')+Object.entries(labels).map(([type,label])=>card(label,rows.filter(r=>r.type===type).length+' mục',rows.some(r=>r.type===type)?rows.filter(r=>r.type===type).map(r=>`${state.connected&&isAdmin(state.repo?.s.auth.currentUser)?`<div class="page-tools">${button('Sửa','edit','','edit',`data-table="Archive" data-id="${esc(r.id)}"`)}${button('Xóa','delete','','trash',`data-table="Archive" data-id="${esc(r.id)}"`)}</div>`:''}<details class="archive-entry"><summary>${esc(r.title)} <span class="subtle">${type==='report'?dateLabel(r.date):''}</span></summary><dl>${Object.entries(r.payload||{}).map(([key,val])=>`<dt>${esc(key)}</dt><dd>${esc(val)}</dd>`).join('')}</dl></details>`).join(''):'<p class="card-sub">Chưa có dữ liệu.</p>')).join('');}
 
@@ -176,7 +237,7 @@ function writable({profile=false}={}){
   const stage=accessStage(state);
   if(['login','restoring','loading','cached','error'].includes(stage)){toast(stage==='error'?state.connectionError:stage==='login'?'Đăng nhập Google trước khi sử dụng.':stage==='cached'?(state.connectionError?'Chưa kết nối được máy chủ nên chưa ghi được. Bấm nút làm mới ⟳ để thử lại.':'Đang kết nối máy chủ để đồng bộ. Thử lại sau giây lát.'):'Đang khôi phục tài khoản và dữ liệu. Vui lòng chờ.',true);render();return false;}
   if(navigator.onLine===false){toast('Đang mất mạng. Chưa lưu lên máy chủ; nội dung đang nhập vẫn được giữ. Bật mạng rồi bấm Lưu lại.',true);return false;}
-  if(!profile&&stage==='profile'){toast('Hoàn tất hồ sơ cá nhân trước khi ghi nhật ký.',true);if($('#quick-dialog').open)$('#quick-dialog').close();if($('#editor').open)$('#editor').close();openEditor('WebProfile',null,{date:today()});return false;}
+  if(!profile&&stage==='profile'){toast('Hoàn tất hồ sơ cá nhân trước khi ghi nhật ký.',true);if($('#quick-dialog')?.open)$('#quick-dialog').close();if($('#editor').open)$('#editor').close();openEditor('WebProfile',null,{date:today()});return false;}
   return true;
 }
 function draftKey(table){return 'gymbro.v2.draft.'+(state.repo?.ownerUid||'signed-out')+'.'+table;}
@@ -214,16 +275,18 @@ function formRecord(){const f=$('#entry-form'),o=editorContext.original||{};if(e
   if(o._row||o._revision)r._originalUpdatedAt=o.updated_at;
   return r;
 }
-function saveDraft(){if(!editorContext||editorContext.original||!$('#entry-form'))return;try{sessionStorage.setItem(draftKey(editorContext.table),JSON.stringify(formRecord()));}catch{}}
+function saveDraftNow(){if(!editorContext||editorContext.original||!$('#entry-form'))return;try{sessionStorage.setItem(draftKey(editorContext.table),JSON.stringify(formRecord()));}catch{}}
+const scheduleSaveDraft=debounce(saveDraftNow,300);
+function saveDraft(){scheduleSaveDraft.cancel();saveDraftNow();}
 function closeEditor(){if(state.busy)return;saveDraft();$('#editor').close();editorContext=null;}
 async function submitEntry(e){e.preventDefault();if(state.busy)return;if(!writable({profile:editorContext?.table==='WebProfile'}))return;const error=$('#entry-error');error.textContent='';let saved=false;try{let r=formRecord();const table=editorContext.table;table==='Archive'?validateArchive(r):validateRecord(table,r);if(table==='WebProfile')validatePersonalProfile(r);state.busy=true;lockEditor(true);if(table==='WebWorkouts'){
       const fresh=await state.repo.load();r=estimateWorkoutBatch([r],{weight:workoutWeight(fresh.WebProfile,r.date)})[0];const same=active(fresh.WebWorkouts).filter(x=>x.date===r.date&&x.id!==r.id);if(r.kind==='rest'&&same.length)throw Error('Ngày này đã có nhật ký tập/nghỉ. Hãy kiểm tra nhật ký trước.');if(r.kind!=='rest'&&same.some(x=>x.kind==='rest'))throw Error('Ngày này đang được đánh dấu nghỉ. Hãy xóa mục ngày nghỉ trước khi ghi bài tập.');
     }
-    await state.repo.save(table,r);if(table==='WebProfile'&&state.repo.ownerUid===state.repo.uid)state.accountProfile=r;saved=true;try{sessionStorage.removeItem(draftKey(table));}catch{}$('#editor').close();editorContext=null;toast(saveMessage(state));await load();render();
-  }catch(err){if(saved){state.connectionError='Đã lưu, nhưng chưa làm mới được dữ liệu: '+err.message;render();toast('Đã lưu. Hãy làm mới để cập nhật dashboard.',true);}else{error.textContent=firebaseError(err);saveDraft();}}finally{state.busy=false;lockEditor(false);}}
+    await state.repo.save(table,r);if(table==='WebProfile'&&state.repo.ownerUid===state.repo.uid)state.accountProfile=r;saved=true;scheduleSaveDraft.cancel();try{sessionStorage.removeItem(draftKey(table));}catch{}$('#editor').close();editorContext=null;toast(saveMessage(state));await load();render();
+  }catch(err){if(saved){state.connectionError='Đã lưu, nhưng chưa làm mới được dữ liệu: '+err.message;render();toast('Đã lưu. Hãy làm mới để cập nhật dashboard.',true);}else{error.textContent=uiFirebaseError(err);saveDraft();}}finally{state.busy=false;lockEditor(false);}}
 function lockEditor(locked){$('#editor').querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=locked);if(!locked)updateForm();}
 function ask(title,message,actionText,callback,danger=false){const d=$('#confirm-dialog');d.innerHTML=`<div class="dialog-inner"><div class="dialog-header"><h2 id="confirm-title">${title}</h2><button class="close-button" data-action="cancel-confirm" aria-label="Đóng">${icon('close')}</button></div><p class="help-box">${message}</p><div class="form-error" role="alert"></div><div class="form-actions"><button class="button" data-action="cancel-confirm">Để sau</button><button class="button ${danger?'danger':'primary'}" id="confirm-action">${actionText}</button></div></div>`;d.showModal();$('#confirm-action').onclick=async()=>{if(state.busy)return;state.busy=true;d.querySelectorAll('button').forEach(b=>b.disabled=true);try{await callback();d.close();}catch(e){d.querySelector('.form-error').textContent=e.message;}finally{state.busy=false;d.querySelectorAll('button').forEach(b=>b.disabled=false);}};}
-async function connect({force=false}={}){if(state.busy)return;const app=inAppBrowser();if(app&&!force){toast(`Trình duyệt của ${app} chặn đăng nhập Google. Mở GymBro bằng ${platformOf()==='ios'?'Safari':'Chrome'}.`,true);render();return;}state.busy=true;try{const service=await loginGoogle();setRepo('firebase');await activateFirebase(service);toast('Đã đăng nhập.');}catch(e){state.connectionError=firebaseError(e);if(keepForRetry(await firebaseService().catch(()=>null),e))resumeRetry.failed();render();toast(state.connectionError,true);}finally{state.busy=false;}}
+async function connect({force=false}={}){if(state.busy)return;const app=inAppBrowser();if(app&&!force){toast(`Trình duyệt của ${app} chặn đăng nhập Google. Mở GymBro bằng ${platformOf()==='ios'?'Safari':'Chrome'}.`,true);render();return;}state.busy=true;try{const service=await loginGoogle();setRepo('firebase');await activateFirebase(service);toast('Đã đăng nhập.');}catch(e){state.connectionError=uiFirebaseError(e);if(keepForRetry(await firebaseService().catch(()=>null),e))resumeRetry.failed();render();toast(state.connectionError,true);}finally{state.busy=false;}}
 // Signed in with Firebase but the network failed before a repository exists: keep a retry card.
 // Metadata is only a display hint; activateFirebase still verifies the token before any read.
 function keepForRetry(service,e){
@@ -232,7 +295,7 @@ function keepForRetry(service,e){
   if(sessionValid(expiresAt))state.retrySession={service,expiresAt};return !!state.retrySession;
 }
 async function activateFirebase(service){
-  const previousVersion=authVersion;try{await verifySession(service);}catch(e){if(keepForRetry(service,e)){state.authRestoring=false;state.connectionError=firebaseError(e);resumeRetry.failed();render();}throw e;}if(previousVersion!==authVersion||state.mode!=='firebase')return;state.retrySession=null;
+  const previousVersion=authVersion;try{await verifySession(service);}catch(e){if(keepForRetry(service,e)){state.authRestoring=false;state.connectionError=uiFirebaseError(e);resumeRetry.failed();render();}throw e;}if(previousVersion!==authVersion||state.mode!=='firebase')return;state.retrySession=null;
   liveSync.stop();adminUsers=[];const generation=++authVersion;
   state.mode='firebase';state.repo=createRepository(service);const repo=state.repo;
   state.connected=true;state.authRestoring=false;state.initialized=false;state.connectionError='';if(state.cached?.uid!==repo.uid){dropCache();state.data=emptyData();}localError='';remember();render();
@@ -260,7 +323,7 @@ async function restoreFirebaseOnce(){
     if(service.auth.currentUser&&state.mode==='firebase'&&state.repo?.uid!==service.auth.currentUser.uid)await activateFirebase(service);
     else{resumeRetry.reset();render();}
   }catch(e){if(generation!==authVersion&&state.repo?.s!==service)return;state.authRestoring=false;if(state.mode==='firebase'){
-    keepForRetry(service,e);state.connectionError=firebaseError(e);if(state.retrySession||state.cached)resumeRetry.failed();render();}}
+    keepForRetry(service,e);state.connectionError=uiFirebaseError(e);if(state.retrySession||state.cached)resumeRetry.failed();render();}}
 }
 async function selectImport(file){pendingImport=null;const target=$('#migration-preview');if(!file||!target)return;try{if(file.size>15000000)throw Error('File quá lớn, tối đa 15 MB.');pendingImport=validateBundle(JSON.parse(await file.text()));const totals=Object.entries(pendingImport.data).map(([t,rows])=>`${t}: ${rows.length}`).join(' · ');target.innerHTML=`<div class="help-box">${esc(totals)}<br>Chỉ nhập vào tài khoản ${esc(state.repo?.s.auth.currentUser?.email||'')}.</div><br>${button('Nhập dữ liệu vào '+backendName(),'import-bundle','primary','cloud')}<p id="import-progress" class="form-note"></p>`;}catch(e){target.textContent=e.message;}}
 
@@ -274,17 +337,32 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   if(a==='view-workout-day'){state.date=el.dataset.date||today();location.hash='gym';return;}
   if(a==='dashboard-shift'){try{state.dashboardDate=chooseDashboardDate(shiftDate(state.dashboardDate||today(),Number(el.dataset.days)));}catch(e){return toast(e.message,true);}render({resetChart:true});return ensureDashboardRange();}
   if(a==='dashboard-today'){state.dashboardDate=null;return render({resetChart:true});}if(a==='dashboard-pick-date'){const field=$('#dashboard-date');$('#dashboard-date-field').hidden=false;field.focus();try{field.showPicker?.();}catch{}return;}
-  if(a==='day-prev'||a==='day-next'){state.date=shiftDate(state.date,a==='day-prev'?-1:1);return render();}if(a==='new-meal'){if(route()==='dashboard'){state.date=state.dashboardDate||today();return quick.open('meals',{date:state.date});}return quick.open('meals');}if(a==='meal-for')return quick.open('meals',{meal:el.dataset.meal});if(a==='food-preset')return quick.open('meals',{text:el.dataset.food});if(a==='new-workout'){if(route()==='dashboard'){state.date=state.dashboardDate||today();return quick.open('workouts',{date:state.date});}return quick.open('workouts');}if(a==='new-profile')return openEditor('WebProfile',null,{date:today(),macroTargets:el.dataset.targets==='true'});if(a==='rest')return quick.open('workouts',{text:'nghỉ',method:'text'});
+  if(a==='day-prev'||a==='day-next'){state.date=shiftDate(state.date,a==='day-prev'?-1:1);return render();}if(a==='new-meal'){if(route()==='dashboard'){state.date=state.dashboardDate||today();return (await getQuick()).open('meals',{date:state.date});}return (await getQuick()).open('meals');}if(a==='meal-for')return (await getQuick()).open('meals',{meal:el.dataset.meal});if(a==='food-preset')return (await getQuick()).open('meals',{text:el.dataset.food});if(a==='new-workout'){if(route()==='dashboard'){state.date=state.dashboardDate||today();return (await getQuick()).open('workouts',{date:state.date});}return (await getQuick()).open('workouts');}if(a==='new-profile')return openEditor('WebProfile',null,{date:today(),macroTargets:el.dataset.targets==='true'});if(a==='rest')return (await getQuick()).open('workouts',{text:'nghỉ',method:'text'});
   if(a==='close-editor')return closeEditor();if(a==='cancel-confirm'){if(!state.busy)$('#confirm-dialog').close();return;}
   if(a==='copy-link'){const url=appLink();try{await navigator.clipboard.writeText(url);toast('Đã sao chép liên kết. Dán vào trình duyệt để mở GymBro.');}catch{window.prompt('Sao chép liên kết này:',url);}return;}
   if(a==='firebase-login-anyway')return connect({force:true});
   if(a==='account-view'||a==='account-settings'){closeAccount();if(route()==='settings')return render();location.hash='settings';return;}
   if(a==='account-admin'){closeAccount();location.hash='admin';return;}
   if(a==='account-refresh'){closeAccount();return refreshData();}
-  if(a==='cal-prev'||a==='cal-next'||a==='cal-today'){const cur=monthOf(today()),base=validMonth(state.calMonth)?state.calMonth:cur,next=a==='cal-today'?cur:shiftMonth(base,a==='cal-prev'?-1:1);state.calMonth=next>cur?cur:next;state.calDay=null;render();return ensureRange(shiftMonth(state.calMonth,-1)+'-01');}
-  if(a==='cal-day'){state.calDay=el.dataset.date;render();$('#cal-day-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
+  if(a==='cal-prev'||a==='cal-next'||a==='cal-today'){const cal=await calendarLoader.load(),cur=cal.monthOf(today()),base=cal.validMonth(state.calMonth)?state.calMonth:cur,next=a==='cal-today'?cur:cal.shiftMonth(base,a==='cal-prev'?-1:1);state.calMonth=next>cur?cur:next;state.calDay=null;render();return ensureRange(cal.shiftMonth(state.calMonth,-1)+'-01');}
+  if(a==='cal-day'){
+    state.calDay=el.dataset.date;
+    const day=lastCalendar?.days.find(d=>d.date===state.calDay),panel=$('#cal-day-panel');
+    if(day&&panel){
+      const prev=$('.cal-day.selected');
+      if(prev&&prev!==el){prev.classList.remove('selected');prev.setAttribute('aria-pressed','false');}
+      el.classList.add('selected');el.setAttribute('aria-pressed','true');
+      panel.outerHTML=renderCalDayPanel(lastCalendar.cal,day,state.calDay,lastCalendar.targets);
+      $('#cal-day-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'});return;
+    }
+    render();$('#cal-day-panel')?.scrollIntoView({behavior:'smooth',block:'nearest'});return;
+  }
   if(a==='cal-log'){state.date=el.dataset.date||today();location.hash=el.dataset.target==='gym'?'gym':'eat';return;}
-  if(a==='chart-day'){state.chartDay=el.dataset.date;return render();}
+  if(a==='chart-day'){
+    state.chartDay=el.dataset.date;
+    if(lastDashboardChart&&updateCompactChartSelection($('.energy-dashboard'),lastDashboardChart.days,{...lastDashboardChart,selectedDate:state.chartDay}))return;
+    return render();
+  }
 
   if(a==='edit'){const r=state.data[el.dataset.table].find(x=>x.id===el.dataset.id);if(r)return el.dataset.table==='Archive'?openArchiveEditor(r):openEditor(el.dataset.table,r);return;}
   if(a==='delete'){
@@ -297,7 +375,7 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   if(a==='chinup-preset'){const f=$('#entry-form');f.elements.exercise.value='Kneeling easy chin-up';f.elements.kind.value='assisted';$('#sets-container').innerHTML=Array.from({length:3},(_,i)=>setInput({weight_kg:27.2,reps:12},i)).join('');updateForm();saveDraft();return;}
   if(a==='add-set'){const rows=[...document.querySelectorAll('.set-row')];if(rows.length>=50)return toast('Tối đa 50 set cho một lần lưu.',true);const last=rows.at(-1);$('#sets-container').insertAdjacentHTML('beforeend',setInput({weight_kg:last?.querySelector('.set-weight').value||'',reps:last?.querySelector('.set-reps').value||''},rows.length));updateForm();saveDraft();return;}
   if(a==='remove-set'){if(document.querySelectorAll('.set-row').length<=1)return toast('Cần giữ ít nhất một set.',true);el.closest('.set-row').remove();renumberSets();saveDraft();return;}
-  if(a==='cf-migrate'||a==='cf-migrate-all'){const s=state.repo.s,on=m=>{const p=$('#cf-progress');if(p)p.textContent=m;};state.busy=true;try{state.migration=a==='cf-migrate'?[{...await migrateOwner({service:s,uid:s.auth.currentUser.uid,apiBase:BACKEND.apiBase,onProgress:on}),email:s.auth.currentUser.email}]:await migrateAll({service:s,apiBase:BACKEND.apiBase,onProgress:on});}catch(e){on('');throw Error(firebaseError(e));}finally{state.busy=false;}render();const ok=state.migration.every(r=>r.match);return toast(ok?'Đã chuyển và đối chiếu khớp hoàn toàn.':'Đã chuyển, nhưng còn mục chưa khớp. Xem bảng đối chiếu.',!ok);}
+  if(a==='cf-migrate'||a==='cf-migrate-all'){const s=state.repo.s,on=m=>{const p=$('#cf-progress');if(p)p.textContent=m;};state.busy=true;try{on('Đang tải công cụ chuyển dữ liệu…');const {migrateOwner,migrateAll}=await migrateLoader.load();state.migration=a==='cf-migrate'?[{...await migrateOwner({service:s,uid:s.auth.currentUser.uid,apiBase:BACKEND.apiBase,onProgress:on}),email:s.auth.currentUser.email}]:await migrateAll({service:s,apiBase:BACKEND.apiBase,onProgress:on});}catch(e){on('');throw Error(uiFirebaseError(e));}finally{state.busy=false;}render();const ok=state.migration.every(r=>r.match);return toast(ok?'Đã chuyển và đối chiếu khớp hoàn toàn.':'Đã chuyển, nhưng còn mục chưa khớp. Xem bảng đối chiếu.',!ok);}
   if(a==='export')return exportData();
   if(a==='admin-refresh'){adminUsers=await state.repo.listUsers();render();return;}
   if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const repo=createRepository(state.repo.s,el.dataset.uid);const data=await repo.load();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;liveSync.start(repo);state.localPending=0;state.historyFrom=shiftDate(today(),-29);state.historyTo=today();location.hash='history';render();return;}
@@ -321,15 +399,42 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   }
 }
 
-document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(el){e.preventDefault();Promise.resolve(action(el)).catch(err=>toast(err.message,true));}});
+let searchComposing=false;
+const applyHistorySearch=debounce(value=>{
+  state.search=value;
+  const results=$('#history-results');
+  if(results)results.innerHTML=historyResultsBody();
+  else if(route()==='history')render();
+},150);
+const QUICK_INTENT='[data-quick],[data-action="new-meal"],[data-action="new-workout"],[data-action="meal-for"],[data-action="food-preset"],[data-action="rest"]';
+function preloadForTarget(target){
+  if(!target?.closest)return;
+  if(target.closest(QUICK_INTENT))quickModLoader.preload();
+  if(target.closest('[data-route="history"]'))calendarLoader.preload();
+  if(target.closest('[data-route="settings"],[data-action="account-view"],[data-action="account-settings"],#account-button'))firebaseUiLoader.preload();
+  if(target.closest('[data-action="cf-migrate"],[data-action="cf-migrate-all"]'))migrateLoader.preload();
+}
+document.addEventListener('pointerdown',e=>preloadForTarget(e.target),{passive:true,capture:true});
+document.addEventListener('pointerover',e=>preloadForTarget(e.target),{passive:true});
+document.addEventListener('focusin',e=>preloadForTarget(e.target));
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(el){e.preventDefault();Promise.resolve(action(el)).catch(err=>toast(err.message,true));return;}
+  if(!quickInstance){
+    const qEl=e.target.closest('[data-quick]');
+    if(qEl){e.preventDefault();getQuick().then(q=>q.trigger(qEl)).catch(err=>toast(err.message,true));}
+  }
+});
 document.addEventListener('toggle',e=>{const d=e.target;if(d.classList?.contains('history-day')){state.historyTouched.add(d.dataset.date);if(d.open)state.historyOpen.add(d.dataset.date);else state.historyOpen.delete(d.dataset.date);}if(d.classList?.contains('row-menu')&&d.open)document.querySelectorAll('.row-menu[open]').forEach(m=>{if(m!==d)m.open=false;});},true);
 document.addEventListener('click',e=>{document.querySelectorAll('.row-menu[open]').forEach(m=>{if(!m.contains(e.target)||e.target.closest('.row-menu-list button'))m.open=false;});},true);
 document.addEventListener('click',e=>{const trigger=e.target.closest('.dial-trigger'),inside=e.target.closest('.macro-dial');document.querySelectorAll('.macro-dial.open').forEach(d=>{if(d!==inside){d.classList.remove('open');d.querySelector('.dial-trigger')?.setAttribute('aria-expanded','false');}});if(trigger){const dial=trigger.closest('.macro-dial'),open=dial.classList.toggle('open');trigger.setAttribute('aria-expanded',String(open));}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const dial=document.querySelector('.macro-dial.open');if(dial){dial.classList.remove('open');const t=dial.querySelector('.dial-trigger');t?.setAttribute('aria-expanded','false');t?.focus();}}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const m=document.querySelector('.row-menu[open]');if(m){m.open=false;m.querySelector('summary')?.focus();}}});
 document.addEventListener('submit',e=>{if(e.target.id==='entry-form')submitEntry(e);});
-document.addEventListener('change',e=>{const t=e.target;if(t.id==='dashboard-date'){try{state.dashboardDate=chooseDashboardDate(t.value);render();ensureDashboardRange();}catch(e){toast(e.message,true);}return;}if(t.id==='migration-file'){selectImport(t.files[0]);return;}if(t.closest('#entry-form')){updateForm();saveDraft();return;}if(t.id==='log-date'){if(t.value)state.date=t.value;return render();}if(t.id==='progress-exercise'){state.exercise=t.value;return render();}if(t.id==='cal-month'){if(validMonth(t.value)&&t.value<=monthOf(today())){state.calMonth=t.value;state.calDay=null;render();ensureRange(shiftMonth(t.value,-1)+'-01');}return;}});
-document.addEventListener('input',e=>{if(e.target.closest('#entry-form')){if(e.target.name==='exercise')updateForm();saveDraft();}if(e.target.id==='history-search'){const start=e.target.selectionStart;state.search=e.target.value;render();const input=$('#history-search');input.focus();input.setSelectionRange(start,start);}});
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='dashboard-date'){try{state.dashboardDate=chooseDashboardDate(t.value);render();ensureDashboardRange();}catch(e){toast(e.message,true);}return;}if(t.id==='migration-file'){selectImport(t.files[0]);return;}if(t.closest('#entry-form')){updateForm();saveDraft();return;}if(t.id==='log-date'){if(t.value)state.date=t.value;return render();}if(t.id==='progress-exercise'){state.exercise=t.value;return render();}if(t.id==='cal-month'){calendarLoader.load().then(cal=>{if(cal.validMonth(t.value)&&t.value<=cal.monthOf(today())){state.calMonth=t.value;state.calDay=null;render();ensureRange(cal.shiftMonth(t.value,-1)+'-01');}}).catch(err=>toast(err.message,true));return;}});
+document.addEventListener('compositionstart',e=>{if(e.target.id==='history-search')searchComposing=true;});
+document.addEventListener('compositionend',e=>{if(e.target.id==='history-search'){searchComposing=false;applyHistorySearch(e.target.value);}});
+document.addEventListener('input',e=>{if(e.target.closest('#entry-form')){if(e.target.name==='exercise')updateForm();scheduleSaveDraft();}if(e.target.id==='history-search'&&!searchComposing&&!e.isComposing)applyHistorySearch(e.target.value);});
 $('#editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});$('#confirm-dialog').addEventListener('cancel',e=>{if(state.busy)e.preventDefault();});
 async function refreshData(){if(state.busy)return;if(['cached','error'].includes(accessStage(state))){resumeFirebase();return;}if(!writable({profile:true}))return;if(state.mode==='firebase'&&!state.connected){location.hash='settings';return toast('Đăng nhập Google để làm mới dữ liệu.',true);}state.busy=true;try{await load({force:true});state.connectionError='';if(state.mode==='firebase'){state.initialized=true;liveSync.start(state.repo);await updateLocalPending();}render();toast('Đã làm mới dữ liệu.');}catch(e){state.connectionError=e.message;render();toast(e.message,true);}finally{state.busy=false;}}
 // Account menu: toggle on the avatar, close on outside click or Escape.
@@ -337,14 +442,15 @@ document.addEventListener('click',e=>{if(e.target.closest('#account-button')){st
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.accountOpen){closeAccount();$('#account-button')?.focus();}});
 // A Google photo that fails to load falls back to the brand ring with no image.
 document.addEventListener('error',e=>{if(e.target.classList?.contains('avatar-img'))e.target.replaceWith(Object.assign(document.createElement('span'),{className:'avatar-initials',textContent:'•'}));},true);
-window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0});$('.shell').scrollTop=0;});
+window.addEventListener('hashchange',()=>{applyHistorySearch.cancel();render();window.scrollTo({top:0});$('.shell').scrollTop=0;});
 window.addEventListener('storage',async e=>{if(state.mode!=='firebase'&&e.key===state.repo?.key){try{await load();render();}catch(e){toast(e.message,true);}}});
-const resumeRetry=createResumeRetry({run:()=>resumeFirebase(),visible:()=>document.visibilityState!=='hidden',blocked:()=>state.busy||['#editor','#confirm-dialog','#quick-dialog'].some(id=>$(id).open)});
+const resumeRetry=createResumeRetry({run:()=>resumeFirebase(),visible:()=>document.visibilityState!=='hidden',blocked:()=>state.busy||['#editor','#confirm-dialog','#quick-dialog'].some(id=>$(id)?.open)});
 const liveSync=createLiveSync({isCurrent:repo=>state.mode==='firebase'&&state.connected&&state.repo===repo,onRows:(table,rows)=>{state.data[table]=rows;if(table==='WebProfile'&&state.repo?.ownerUid===state.repo?.uid)state.accountProfile=latestProfile(rows);render();},onError:e=>{state.connectionError='Tự đồng bộ tạm dừng: '+e.message;if(e.code==='auth/session-expired')expireSession();else resumeRetry.failed();render();}});
-const quick=createQuickUI({getState:()=>state,esc,fmt,icon,toast,writable,reload:load,render,openDetailed:openEditor,saveMessage:count=>saveMessage(state,count)});
 setRepo(state.mode);try{await load();}catch(e){localError=e.message;}
 {const snap=state.mode==='firebase'?readSnapshot(localStorage):null;if(snap){state.cached=snap;state.data=snap.data;state.accountProfile=latestProfile(snap.data.WebProfile);}}
 render();restoreFirebase();
+if(typeof requestIdleCallback==='function')requestIdleCallback(()=>quickModLoader.preload(),{timeout:4000});
+else setTimeout(()=>quickModLoader.preload(),2500);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 watchForUpdates();
 
@@ -352,7 +458,7 @@ let resumeInFlight=null,hiddenAt=document.visibilityState==='hidden'?Date.now():
 const RESUME_RELOAD_MS=5*60*1000;
 async function resumeFirebase(){
   if(state.connected&&!sessionValid(state.repo?.s.sessionExpiresAt)){expireSession();return;}if(state.mode!=='firebase'||resumeInFlight||document.visibilityState==='hidden')return;if(state.busy){resumeRetry.defer();return;}
-  if($('#editor').open||$('#confirm-dialog').open||$('#quick-dialog').open){resumeRetry.defer();return;}
+  if($('#editor').open||$('#confirm-dialog').open||$('#quick-dialog')?.open){resumeRetry.defer();return;}
   const generation=authVersion;resumeInFlight=(async()=>{
     try{
       if(!state.connected||!state.repo){await restoreFirebase();return;}
@@ -363,13 +469,13 @@ async function resumeFirebase(){
     }catch(e){if(generation!==authVersion)return;if(e.code==='auth/session-expired'){expireSession();return;}state.connectionError=e.message;resumeRetry.failed();render();}
   })();try{await resumeInFlight;}finally{resumeInFlight=null;}
 }
-for(const id of ['#editor','#confirm-dialog','#quick-dialog'])$(id).addEventListener('close',()=>resumeRetry.closed());
+for(const id of ['#editor','#confirm-dialog'])$(id).addEventListener('close',()=>resumeRetry.closed());
 window.addEventListener('online',resumeFirebase);
 setInterval(()=>{if(state.connected&&!sessionValid(state.repo?.s.sessionExpiresAt))expireSession();},60000);
 window.addEventListener('offline',()=>{if(state.mode==='firebase'){state.connectionError='Mất mạng · Chưa thể gửi dữ liệu lên máy chủ. Bật mạng rồi lưu lại nội dung đang nhập.';renderChrome();}});
 window.addEventListener('pageshow',e=>{if(e.persisted)resumeFirebase();});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){hiddenAt??=Date.now();resumeRetry.pause();liveSync.stop();}else resumeFirebase();});
-window.addEventListener('pagehide',()=>{hiddenAt??=Date.now();resumeRetry.pause();liveSync.stop();});
+window.addEventListener('pagehide',()=>{scheduleSaveDraft.flush();hiddenAt??=Date.now();resumeRetry.pause();liveSync.stop();});
 
 function adminPage(){if(!isAdmin(state.repo?.s.auth.currentUser))return empty('Không có quyền','Chỉ quản trị viên được mở màn hình này.');return heading('','Quản trị','Quản lý dữ liệu các tài khoản đã đăng nhập GymBro.',button('Làm mới danh sách','admin-refresh','','refresh'))+card('Tài khoản',`${adminUsers.length} tài khoản đã tải`,button('Mở dữ liệu của mình','admin-owner','primary','history',`data-uid="${esc(state.repo.uid)}"`)+adminUsers.map(u=>`<div class="log-row"><div class="log-info"><strong>${esc(u.email||u.display_name||u.uid)}</strong><small>UID: ${esc(u.uid)}</small></div>${button('Mở dữ liệu','admin-owner','','arrow',`data-uid="${esc(u.uid)}"`)}</div>`).join(''))+`<div class="help-box">Sau khi mở tài khoản, dùng Nhật ký để xem/sửa/xóa log, Tư liệu để sửa báo cáo và giáo án. Xóa là xóa mềm. Quyền admin được máy chủ kiểm tra bằng email đã xác minh trong Firebase Auth; không có field role cho người dùng tự sửa.</div>`;}
 function openArchiveEditor(r){if(!writable()||!isAdmin(state.repo?.s.auth.currentUser))return;editorContext={table:'Archive',original:r,id:r.id,created_at:r.created_at};$('#editor').innerHTML=`<div class="dialog-inner"><div class="dialog-header"><h2 id="dialog-title">Admin · Sửa tư liệu</h2><button data-action="close-editor" class="close-button" aria-label="Đóng">${icon('close')}</button></div><form id="entry-form">${field('Ngày','date','date',r.date,'','required')}${field('Tiêu đề','archive_title','text',r.title,'','required')}<label class="field">Nội dung JSON<textarea name="archive_payload" rows="14" required>${esc(JSON.stringify(r.payload,null,2))}</textarea></label><div class="form-error" id="entry-error" role="alert"></div><div class="form-actions"><button class="button primary" type="submit">Lưu thay đổi</button></div></form></div>`;$('#editor').showModal();}

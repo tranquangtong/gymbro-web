@@ -334,3 +334,40 @@ test('Demo pause keeps the remaining scene time and a step jump plays from that 
  player.pause();player.goTo(3);
  assert.equal(player.state().scene,3);assert.equal(player.state().playing,true);assert.equal(timers.at(-1).ms,3000);
 });
+
+test('Typing in the composer debounces sessionStorage writes, flushes on close, and trigger forwards lazy data-quick clicks',async t=>{
+ let nextId=1;const timers=new Map(),writes=[];
+ t.mock.method(globalThis,'setTimeout',(fn,ms)=>{const id=nextId++;timers.set(id,{fn,ms});return id;});
+ t.mock.method(globalThis,'clearTimeout',id=>{timers.delete(id);});
+ const c=composer(t);
+ const origSetItem=globalThis.sessionStorage.setItem;
+ globalThis.sessionStorage.setItem=(k,v)=>{writes.push([k,v]);origSetItem(k,v);};
+ c.dialog.close=()=>{c.dialog.open=false;c.dialogEvents.close?.();};
+ await c.ui.open('meals');
+ writes.length=0;
+ const foodSuggestions={hidden:true,innerHTML:''};
+ c.values.set('#food-suggestions',foodSuggestions);
+ c.values.set('#compact-food',{value:'ch'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ c.values.set('#compact-food',{value:'chu'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ assert.equal(foodSuggestions.hidden,false,'in-memory suggestions still update synchronously');
+ assert.equal(writes.length,0,'rapid typing coalesces sessionStorage writes');
+ assert.equal(timers.size,1);
+ const [entry]=[...timers.values()];timers.clear();entry.fn();
+ assert.equal(writes.length,1);
+ assert.match(writes[0][1],/"food":"chu"/);
+
+ c.values.set('#compact-food',{value:'chuối chín'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ assert.equal(writes.length,1);
+ c.click('close');
+ assert.equal(timers.size,0);
+ assert.equal(writes.length,2,'closing flushes the latest typed draft immediately');
+ assert.match(writes[1][1],/"food":"chuối chín"/);
+
+ // Lazy-load click forwarding: trigger() invokes a [data-quick] element directly.
+ await c.ui.trigger({dataset:{quick:'estimate-help'}});
+ assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);
+ c.click('close');
+});
