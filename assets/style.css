@@ -1,7 +1,8 @@
-/* Metric-matched fallback for Barlow Condensed so hero & heading text does not shift on font swap. */
+/* Compact bold fallback for Barlow Condensed display text. */
 @font-face{
   font-family:'Barlow Condensed Fallback';
-  src:local('Arial'),local('Helvetica Neue'),local('Roboto'),local('Segoe UI');
+  src:local('Arial Bold'),local('HelveticaNeue-Bold'),local('Roboto Bold'),local('Segoe UI Bold');
+  font-weight:600 700;
   size-adjust:79%;
   ascent-override:118%;
   descent-override:24%;
@@ -21,7 +22,7 @@
   --font-body:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
   --font-display:'Barlow Condensed','Barlow Condensed Fallback','Be Vietnam Pro',system-ui,sans-serif;
   --radius:14px;--radius-lg:20px;
-  font-family:var(--font-body);font-size:16px;font-size-adjust:from-font;color:var(--ink);background:var(--bg);font-synthesis:none;-webkit-text-size-adjust:100%;
+  font-family:var(--font-body);font-size:16px;color:var(--ink);background:var(--bg);font-synthesis:none;-webkit-text-size-adjust:100%;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -1280,8 +1281,9 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;ba
 
 /* Off-screen rendering deferral for long lists and below-the-fold day log (never above the fold).
    Relax containment while an inline row menu is open so its dropdown is never clipped. */
-.history-day{content-visibility:auto;contain-intrinsic-size:auto 72px}
 .archive-entry{content-visibility:auto;contain-intrinsic-size:auto 56px}
 .library-row,.exercise-library-list>div{content-visibility:auto;contain-intrinsic-size:auto 64px}
-.day-log-card{content-visibility:auto;contain-intrinsic-size:auto 320px}
-.history-day:has(.row-menu[open]),.day-log-card:has(.row-menu[open]){content-visibility:visible}
+@supports selector(:has(*)){
+  .history-day:not(:has(.row-menu[open])){content-visibility:auto;contain-intrinsic-size:auto 72px}
+  .day-log-card:not(:has(.row-menu[open])){content-visibility:auto;contain-intrinsic-size:auto 320px}
+}

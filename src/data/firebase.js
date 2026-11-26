@@ -36,7 +36,14 @@ export async function loginGoogle() {
   await s.authSDK.signInWithPopup(s.auth,provider);await verifySession(s);return s;
 }
 export async function logoutFirebase(){const s=await firebaseService();await s.authSDK.signOut(s.auth);}
-export function firebaseError(e){return quotaMessage(e)||({'auth/unauthorized-domain':'Thêm tranquangtong.github.io vào Authentication → Settings → Authorized domains.','auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/network-request-failed':'Không kết nối được máy chủ đăng nhập Google. Kiểm tra mạng rồi thử lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':e.message||'Không kết nối được máy chủ GymBro. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';}
+export function firebaseError(e){
+  if(e.code==='auth/unauthorized-domain'){
+    const {hostname,origin}=globalThis.location||{};
+    const site=hostname?` (${origin&&origin!=='null'?origin:hostname})`:'';
+    return `Tên miền hiện tại${site} chưa được cấp phép đăng nhập. Thêm ${hostname||'tên miền hiện tại'} vào Firebase Authentication → Settings → Authorized domains.`;
+  }
+  return quotaMessage(e)||({'auth/operation-not-allowed':'Bật Google trong Authentication → Sign-in method.','auth/popup-blocked':'Trình duyệt chặn popup. Cho phép popup rồi bấm đăng nhập lại.','auth/network-request-failed':'Không kết nối được máy chủ đăng nhập Google. Kiểm tra mạng rồi thử lại.','auth/popup-closed-by-user':'Bạn đã đóng cửa sổ đăng nhập.','permission-denied':'Firestore chưa cấp quyền. Publish file firestore.rules trong Firebase Console rồi thử lại.','unavailable':e.message||'Không kết nối được máy chủ GymBro. Kiểm tra mạng; nội dung form vẫn được giữ.','failed-precondition':'Firestore chưa sẵn sàng. Kiểm tra đã tạo database (default) và publish Rules.'})[e.code]||e.message||'Không kết nối được Firebase.';
+}
 
 function firebaseFailure(e){const error=Error(firebaseError(e));if(e.code!==undefined)error.code=e.code;error.name=e.name||'Error';return error;}
 

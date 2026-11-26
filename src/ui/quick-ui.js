@@ -150,14 +150,14 @@ export function createQuickUI(env){
   const table=type=>type==='meals'?'WebMeals':'WebWorkouts';
   async function foods(seed=false){const repo=getState().repo;if(!repo)return DEFAULT_FOODS;library=seed?await repo.seedFoods():await repo.loadFoods();if(!library.length&&(getState().mode!=='firebase'||repo.ownerUid===repo.uid))library=await repo.seedFoods();return library.length?library:DEFAULT_FOODS;}
   function scopeGuard(expected){if(scope()!==expected)throw Error('Tài khoản hoặc chế độ đã thay đổi. Đóng và mở lại thao tác.');}
-  const draftKey=type=>'gymbro.quick.'+scope()+'.'+type;
+  const draftKey=(type,owner=scope())=>'gymbro.quick.'+owner+'.'+type;
   function syncComposeFields(){if(!ctx||ctx.view!=='compose')return;ctx.text=$('#quick-text')?.value??ctx.text;ctx.date=$('#quick-date')?.value||ctx.date;ctx.meal=$('#quick-meal')?.value||ctx.meal;for(const key of ['food','amount','unit','exercise','count','reps','kg','kind','duration','incline','speed'])ctx[key]=$('#compact-'+key)?.value??ctx[key];ctx.photoTarget=Number($('#photo-target')?.value??ctx.photoTarget??0);drafts.set(ctx.scope+ctx.type,ctx);}
-  function persistComposeDraft(){if(!ctx||ctx.view!=='compose')return;try{sessionStorage.setItem(draftKey(ctx.type),JSON.stringify({text:ctx.text,date:ctx.date,meal:ctx.meal,method:ctx.method,food:ctx.food,amount:ctx.amount,exercise:ctx.exercise,count:ctx.count,reps:ctx.reps,kg:ctx.kg,kind:ctx.kind,duration:ctx.duration,incline:ctx.incline,speed:ctx.speed}));}catch{}}
+  function persistComposeDraft(){if(!ctx||ctx.view!=='compose')return;try{sessionStorage.setItem(draftKey(ctx.type,ctx.scope),JSON.stringify({text:ctx.text,date:ctx.date,meal:ctx.meal,method:ctx.method,food:ctx.food,amount:ctx.amount,unit:ctx.unit,exercise:ctx.exercise,count:ctx.count,reps:ctx.reps,kg:ctx.kg,kind:ctx.kind,duration:ctx.duration,incline:ctx.incline,speed:ctx.speed}));}catch{}}
   const schedulePersistCompose=debounce(persistComposeDraft,300);
   function rememberCompose(){schedulePersistCompose.cancel();syncComposeFields();persistComposeDraft();}
   function close(){if(busy)return;stopDemo();rememberCompose();schedulePersistEstimate.flush();dialog.close();}
   async function open(type,opts={}){
-    if(!writable())return;const currentScope=scope();let draft={};try{draft=JSON.parse(sessionStorage.getItem(draftKey(type))||'{}');}catch{}
+    if(!writable())return;flushDrafts();const currentScope=scope();let draft={};try{draft=JSON.parse(sessionStorage.getItem(draftKey(type))||'{}');}catch{}
     ctx=drafts.get(currentScope+type)||{view:'compose',type,scope:currentScope,text:'',date:getState().date,meal:'lunch',photos:[],preview:null,amount:1,count:3,reps:12,kg:'',kind:'strength',duration:'',...draft,method:draft.method==='text'&&draft.text?.trim()?'text':'form'};
     const legacyText=opts.text??(ctx.method==='text'?ctx.text:'');
     ctx={...ctx,...opts,method:'form',view:'compose'};
@@ -298,7 +298,7 @@ export function createQuickUI(env){
     startDemo();
   }
   async function openEstimate(type,onlyId=null,opts={}){
-    if(!writable())return;rememberCompose();const s=getState(),rows=active(s.data[table(type)]).filter(r=>r.date===s.date&&(type==='meals'?needsMealEstimate(r):r.kind!=='rest')&&(!onlyId||r.id===onlyId));
+    if(!writable())return;rememberCompose();schedulePersistEstimate.flush();const s=getState(),rows=active(s.data[table(type)]).filter(r=>r.date===s.date&&(type==='meals'?needsMealEstimate(r):r.kind!=='rest')&&(!onlyId||r.id===onlyId));
     if(!rows.length){toast(type==='meals'?'Không có món cần ước tính: các món đã đủ kcal và P/C/F, hoặc ngày này chưa có món.':'Lưu nhật ký trước khi xuất prompt.');return;}
     if(type==='meals'&&!opts.skipHelp&&!helpSeenInSession&&shouldAutoShowHelp(readStorage())){markHelpSeen();return showEstimateHelp({from:'start',onlyId});}
     let old=null;try{old=JSON.parse(sessionStorage.getItem(requestKey(type))||'null');}catch{}
@@ -453,8 +453,9 @@ export function createQuickUI(env){
   const trigger=el=>{if(busy)return;return Promise.resolve(action(el)).catch(error);};
   document.addEventListener('click',e=>{const el=e.target.closest('[data-quick]');if(el){e.preventDefault();trigger(el);}});
   dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
-  dialog.addEventListener('close',()=>{stopDemo();schedulePersistCompose.flush();schedulePersistEstimate.flush();});
-  globalThis.addEventListener?.('pagehide',()=>{schedulePersistCompose.flush();schedulePersistEstimate.flush();});
+  function flushDrafts(){schedulePersistCompose.flush();schedulePersistEstimate.flush();}
+  dialog.addEventListener('close',()=>{stopDemo();flushDrafts();});
+  globalThis.addEventListener?.('pagehide',flushDrafts);
   dialog.addEventListener('paste',e=>{
     if(e.target.id!=='estimate-output'||ctx?.view!=='estimate'||busy)return;
     const text=e.clipboardData?.getData('text/plain')||e.clipboardData?.getData('text')||'';if(!text.trim())return;
@@ -483,6 +484,6 @@ export function createQuickUI(env){
     if(ctx?.view==='compose')drawCompose();else if(ctx?.view==='photos'){ctx.record={...ctx.record,photo_ids:ctx.photos.map(p=>p.id)};drawPhotos();}else if(ctx?.view==='estimate'){estimate.text=$('#estimate-output')?.value??estimate.text;drawEstimate();}
   }
   const cleanup=()=>{purgeMemoryPhotos();purgeLocalPhotoCache().catch(()=>{});};
-  cleanup();setInterval(cleanup,60*1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)cleanup();});
+  cleanup();setInterval(cleanup,60*1000);document.addEventListener('visibilitychange',()=>{if(document.hidden)flushDrafts();else cleanup();});
   return {open,openEstimate,showLibrary,showPhotos,trigger};
 }

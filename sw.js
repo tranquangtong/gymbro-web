@@ -1,7 +1,6 @@
-// Bump this on each frontend release. Install snapshots the shell and the entire
-// module graph, including lazy imports, before the new worker can take control.
-const CACHE_VERSION='1';
-const SHELL='index.html';
+// Bump package.json and CACHE_VERSION for every user-facing release because pinned assets stay in the release cache until a new worker installs.
+const CACHE_VERSION='gymbro-v2.22.1';
+const SHELL='./';
 const PRECACHE=[
   SHELL,'manifest.webmanifest',
   'assets/style.css','assets/icons/apple-touch-icon.png','assets/icons/icon.svg',
@@ -13,7 +12,7 @@ const PRECACHE=[
   'src/data/firebase.js','src/data/idle.js','src/data/local-extras.js','src/data/migrate-cloudflare.js',
   'src/data/resume-retry.js','src/data/snapshot.js','src/data/sync.js','src/data/timeout.js',
   'src/ui/boot-timing.js','src/ui/calendar.js','src/ui/dashboard.js','src/ui/dialog-viewport.js',
-  'src/ui/exercise-library.js','src/ui/firebase-ui.js','src/ui/inapp.js','src/ui/quick-ui.js',
+  'src/ui/exercise-library.js','src/ui/firebase-ui.js','src/ui/inapp.js','src/ui/lazy.js','src/ui/quick-ui.js',
   'src/ui/update-check.js',
 ];
 
@@ -23,7 +22,7 @@ function requestStrategy(request,scope){
     ||request.cache==='no-store'||request.headers.has('authorization')||request.headers.has('range')
     ||/^gymbro-api(?:[.-][^.]+)*\.workers\.dev$/.test(url.hostname))return 'bypass';
   const path=url.pathname.slice(base.pathname.length);
-  if(request.mode==='navigate'&&(path===''||path===SHELL))return 'network-first';
+  if(request.mode==='navigate'&&(path===''||path==='index.html'))return 'network-first';
   if(request.mode!=='navigate'&&(/^(src|assets)\//.test(path)||path==='manifest.webmanifest'))return 'stale-while-revalidate';
   return 'bypass';
 }

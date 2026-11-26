@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {runInNewContext} from 'node:vm';
 
 const script=readFileSync(new URL('../sw.js',import.meta.url),'utf8');
+const {version}=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
 const github='https://tranquangtong.github.io/gymbro-web/';
 const workers='https://gymbro-web.example.workers.dev/';
 const request=(url,options={})=>({url,method:'GET',headers:new Headers(),...options});
@@ -62,22 +63,49 @@ test('the release cache includes all first-party assets and lazy modules',()=>{
       }
     }
   }
-  for(const path of ['index.html','manifest.webmanifest'])assert.ok(precache.includes(path));
+  for(const path of ['./','manifest.webmanifest'])assert.ok(precache.includes(path),path);
+  for(const path of precache){
+    if(path!=='./')assert.match(path,/\.(?:js|css|png|svg|webmanifest)$/);
+  }
 });
 
 test('installation precaches the release in one batch relative to the registration scope',async()=>{
-  let cacheName,requests,installed;
-  const {listeners,precache}=worker(github,{
-    caches:{open:async name=>{
-      cacheName=name;
-      return {addAll:async batch=>{requests=batch;}};
-    }},
-  });
-  listeners.install({waitUntil:value=>{installed=value;}});
-  await installed;
-  assert.match(cacheName,/gymbro-shell:.*gymbro-web\/:\d+$/);
-  assert.deepEqual(Array.from(requests,req=>req.url),Array.from(precache,path=>github+path));
-  assert.ok(requests.every(req=>req.cache==='reload'));
+  for(const scope of [github,workers]){
+    let cacheName,requests,installed;
+    const {listeners,precache}=worker(scope,{
+      caches:{open:async name=>{
+        cacheName=name;
+        return {addAll:async batch=>{requests=batch;}};
+      }},
+    });
+    listeners.install({waitUntil:value=>{installed=value;}});
+    await installed;
+    assert.equal(cacheName,'gymbro-shell:'+scope+':gymbro-v'+version);
+    assert.deepEqual(Array.from(requests,req=>req.url),Array.from(precache,path=>new URL(path,scope).href));
+    assert.ok(requests.some(req=>req.url===scope));
+    assert.ok(requests.every(req=>req.cache==='reload'&&req.redirect==='error'));
+  }
+});
+
+test('a 307 response for any precache request rejects installation',async()=>{
+  const {precache}=worker(workers);
+  for(const path of precache){
+    const redirectedUrl=new URL(path,workers).href;
+    const {listeners}=worker(workers,{
+      caches:{open:async()=>({addAll:async batch=>{
+        for(const req of batch){
+          const response=req.url===redirectedUrl
+            ?Response.redirect(new URL('target',workers),307)
+            :new Response('asset');
+          // Model fetch rejecting the redirect before addAll can store the batch.
+          if(response.status===307&&req.redirect==='error')throw new TypeError('Precache request redirected');
+        }
+      }})},
+    });
+    let installed;
+    listeners.install({waitUntil:value=>{installed=value;}});
+    await assert.rejects(installed,{name:'TypeError',message:'Precache request redirected'},redirectedUrl);
+  }
 });
 
 function fetchEvent(listener,req,preloadResponse){
@@ -87,7 +115,7 @@ function fetchEvent(listener,req,preloadResponse){
 }
 
 test('the old release serves cached HTML and modules when a new deploy appears',async()=>{
-  const entries=new Map([[github+'index.html','old html'],[github+'src/app.js','old app']]);
+  const entries=new Map([[github,'old html'],[github+'src/app.js','old app']]);
   const cache={match:async key=>entries.has(key)?new Response(entries.get(key)):undefined,
     put:async(key,response)=>entries.set(key,await response.text())};
   let networkBody='new app',requests=0;
@@ -98,7 +126,7 @@ test('the old release serves cached HTML and modules when a new deploy appears',
   const {response:navigation}=fetchEvent(listeners.fetch,request(github,{mode:'navigate'}),Promise.resolve(new Response('new html')));
   assert.equal(await (await navigation).text(),'old html');
   assert.equal(requests,0,'preload should replace the request');
-  assert.equal(entries.get(github+'index.html'),'old html');
+  assert.equal(entries.get(github),'old html');
 
   const asset=request(github+'src/app.js?from=page');
   const {response,background}=fetchEvent(listeners.fetch,asset);
@@ -119,8 +147,8 @@ test('offline navigation uses the pinned shell and activation removes only older
   let preloads=0;
   const {listeners}=worker(workers,{
     navigationPreload:{enable:async()=>{preloads++;}},
-    caches:{keys:async()=>[prefix+'0',prefix+'1','gymbro-shell:'+github+':0','another-app'],
-      delete:async key=>removed.push(key),open:async()=>({match:async()=>new Response('offline shell')})},
+    caches:{keys:async()=>[prefix+'0',prefix+'gymbro-v'+version,'gymbro-shell:'+github+':0','another-app'],
+      delete:async key=>removed.push(key),open:async()=>({match:async key=>key===workers?new Response('offline shell'):undefined})},
     fetch:async()=>{throw Error('offline');},
   });
   let activated;
@@ -128,6 +156,8 @@ test('offline navigation uses the pinned shell and activation removes only older
   await activated;
   assert.equal(preloads,1);
   assert.deepEqual(removed,[prefix+'0']);
-  const {response}=fetchEvent(listeners.fetch,request(workers,{mode:'navigate'}));
-  assert.equal(await (await response).text(),'offline shell');
+  for(const path of ['', 'index.html']){
+    const {response}=fetchEvent(listeners.fetch,request(workers+path,{mode:'navigate'}));
+    assert.equal(await (await response).text(),'offline shell');
+  }
 });
