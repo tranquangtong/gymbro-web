@@ -289,14 +289,14 @@ async function activateFirebase(service,verifiedUser=null){
     // /v1/me only keeps the admin's account directory current; reads do not depend on it.
     repo.registerOwner().catch(()=>{});const data=await repo.load({cachedArchive:state.cached?.data.Archive});boot.mark('data');
     if(generation!==authVersion||state.mode!=='firebase'||state.repo!==repo)return;
-    state.data=data;state.accountProfile=latestProfile(data.WebProfile);state.initialized=true;state.cached=null;dataChanged();resumeRetry.reset();clearTimeout(expiryTimer);expiryTimer=setTimeout(expireSession,Math.max(0,service.sessionExpiresAt-Date.now()));if(document.visibilityState!=='hidden')liveSync.start(repo);await updateLocalPending();render();showRouteArchive();
+    state.data=data;state.accountProfile=latestProfile(data.WebProfile);state.initialized=true;state.cached=null;dataChanged();resumeRetry.reset();clearTimeout(expiryTimer);expiryTimer=setTimeout(expireSession,Math.max(0,service.sessionExpiresAt-Date.now()));if(document.visibilityState!=='hidden')liveSync.start(repo);if(repo.ensureArchive&&route()==='archive'){render();showRouteArchive();}else{await updateLocalPending();render();}
   }catch(e){if(generation!==authVersion||state.repo!==repo)return;state.connectionError=e.message;state.initialized=false;resumeRetry.failed();render();throw e;}
 }
-async function updateLocalPending({verifyArchive=false}={}){
+async function updateLocalPending(){
   const repo=state.repo;if(state.mode!=='firebase'||!state.connected||repo?.ownerUid!==repo?.uid){state.localPending=0;return;}
   try{
     const local=await new LocalRepository(localStorage).load();if(state.repo!==repo)return;
-    if(verifyArchive&&local.Archive?.length&&repo.ensureArchive)await ensureArchive(repo);
+    if(local.Archive?.length&&repo.ensureArchive&&repo.archiveStatus!=='ready')await ensureArchive(repo);
     if(state.repo===repo)state.localPending=localMissingCount(local,state.data);
   }catch{if(state.repo===repo)state.localPending=0;}
 }
@@ -353,8 +353,9 @@ async function loadRouteArchive(options){
 }
 async function showRouteArchive(options){
   const repo=state.repo;
-  try{if(await loadRouteArchive(options)){await updateLocalPending();if(state.repo===repo)render();}}
-  catch(e){if(state.repo===repo&&route()==='archive'){render();toast(e.message,true);}}
+  try{if(await loadRouteArchive(options)){await updateLocalPending();if(state.repo===repo)render();return true;}}
+  catch(e){if(state.repo===repo&&route()==='archive'){render();toast(e.message,true);}return repo?.archiveStatus!=='ready';}
+  return false;
 }
 async function archiveForEdit(){
   const repo=state.repo;
@@ -468,9 +469,9 @@ async function resumeFirebase(){
       const data=await repo.load({force});if(state.repo!==repo||state.mode!=='firebase')return;
       state.data=data;state.connectionError='';if(document.visibilityState!=='hidden')hiddenAt=null;resumeRetry.reset();if(repo.ownerUid===repo.uid)state.accountProfile=latestProfile(data.WebProfile);dataChanged();if(document.visibilityState!=='hidden')liveSync.start(repo);
       render();const pending=state.localPending;
-      if(repo.ensureArchive&&route()==='archive')await showRouteArchive({force});
+      const archiveHandled=repo.ensureArchive&&route()==='archive'&&await showRouteArchive({force});
       if(state.repo!==repo)return;
-      await updateLocalPending();
+      if(!archiveHandled)await updateLocalPending();
       if(state.repo===repo&&state.localPending!==pending){if(route()==='settings')render();else renderChrome();}
     }catch(e){if(generation!==authVersion)return;if(e.code==='auth/session-expired'){expireSession();return;}state.connectionError=e.message;resumeRetry.failed();render();}
   })();try{await resumeInFlight;}finally{resumeInFlight=null;}
