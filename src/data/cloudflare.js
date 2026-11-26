@@ -28,7 +28,7 @@ export class CloudflareRepository{
     this.ownerUid=targetUid||this.uid;this.apiBase=apiBase.replace(/\/+$/,'');this.fetchImpl=fetchImpl;this.windowDays=windowDays;
     this.timeoutMs=timeoutMs;this.writeTimeoutMs=writeTimeoutMs;this.pollMs=pollMs;
     this.backendName='Cloudflare';this._cache=null;this._loadTask=null;this.loadedFrom=null;this.seq=0;
-    this._cacheVersion=0;this._archiveLoaded=false;this._archiveTask=null;
+    this._cacheVersion=0;this.archiveStatus='unloaded';this._archiveTask=null;
     this.photos=new LocalRepository(globalThis.localStorage,'gymbro.cf.'+this.ownerUid);
     this.check();
     this.title=this.ownerUid===this.uid?'Cloudflare · '+s.auth.currentUser.email:'Quản trị · dữ liệu UID '+this.ownerUid;
@@ -57,6 +57,7 @@ export class CloudflareRepository{
   async registerOwner(){await this.api('/v1/me',{method:'POST',body:{}});}
   async listUsers(){if(!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được xem danh sách tài khoản.');return (await this.api('/v1/admin/users')).users;}
   async load({force=false,cachedArchive}={}){
+    this.check();
     if(this._cache&&!force)return clone(this._cache);
     if(this._loadTask)return clone(await this._loadTask);
     this._loadTask=(async()=>{try{
@@ -66,7 +67,7 @@ export class CloudflareRepository{
       data.Archive=this._cache?.Archive??clone(cachedArchive??[]);
       const seq=Math.min(...parts.map(([,r])=>r.seq));
       // A base refresh leaves Archive alone, so it must keep any outstanding Archive changes.
-      this.seq=this._archiveLoaded?Math.min(this.seq,seq):seq;
+      this.seq=this.archiveStatus==='ready'?Math.min(this.seq,seq):seq;
       this.loadedFrom=from;this._cache=data;this._cacheVersion++;this.uploadLocalPhotos().catch(()=>{});return data;
     }finally{this._loadTask=null;}})();
     return clone(await this._loadTask);
@@ -74,15 +75,17 @@ export class CloudflareRepository{
   async ensureArchive({force=false}={}){
     this.check();
     if(this._archiveTask)return clone(await this._archiveTask);
-    if(this._archiveLoaded&&!force)return null;
+    if(this.archiveStatus==='ready'&&!force)return null;
     this._archiveTask=(async()=>{try{
+      if(this.archiveStatus!=='ready')this.archiveStatus='loading';
       if(!this._cache)await this.load();
       const {rows,seq}=await this.page('Archive');
-      this._cache.Archive=rows;this._archiveLoaded=true;this._cacheVersion++;
+      this._cache.Archive=rows;this.archiveStatus='ready';this._cacheVersion++;
       // Revisit changes made while the Archive pages were being read.
       this.seq=Math.min(this.seq,seq);
       return rows;
-    }finally{this._archiveTask=null;}})();
+    }catch(e){if(this.archiveStatus!=='ready')this.archiveStatus='error';throw e;}
+    finally{this._archiveTask=null;}})();
     return clone(await this._archiveTask);
   }
   // Pages in meals/workouts older than the loaded window. Returns null when already covered.
@@ -95,20 +98,23 @@ export class CloudflareRepository{
     for(const [k,rows] of parts){const ids=new Set(this._cache[k].map(r=>r.id));this._cache[k].push(...rows.filter(r=>!ids.has(r.id)));}
     this.loadedFrom=from;return clone(this._cache);
   }
-  async loadAll(){await this.ensureRange('2000-01-01');await this.ensureArchive({force:true});return clone(this._cache);}
+  async loadAll(){
+    const tables=await Promise.all(TABLES.map(async kind=>[kind,(await this.page(kind)).rows]));
+    this.check();return Object.fromEntries(tables);
+  }
   remember(table,records){
     if(!this._cache||!TABLES.includes(table))return;
     const map=new Map(this._cache[table].map(r=>[r.id,r]));
     for(const r of records)map.set(r.id,{...clone(r),_revision:r.updated_at});
     this._cache[table]=[...map.values()];
   }
-  async poll(){
+  async poll(isCurrent=()=>true){
     const touched=new Set();let more=true;
     while(more){
       const version=this._cacheVersion;
       const r=await this.api('/v1/changes',{params:{since:this.seq}});
-      if(version!==this._cacheVersion)break;
-      for(const {kind,row} of r.changes){if(TABLES.includes(kind)&&(kind!=='Archive'||this._archiveLoaded)){this.remember(kind,[strip(row)]);touched.add(kind);}}
+      if(!isCurrent()||version!==this._cacheVersion)break;
+      for(const {kind,row} of r.changes){if(TABLES.includes(kind)&&(kind!=='Archive'||this.archiveStatus==='ready')){this.remember(kind,[strip(row)]);touched.add(kind);}}
       this.seq=r.seq;more=r.more;
     }
     return touched;
@@ -118,7 +124,7 @@ export class CloudflareRepository{
     const tick=async()=>{
       if(stopped||running||(typeof document!=='undefined'&&document.visibilityState==='hidden'))return;
       running=true;
-      try{const touched=await this.poll();if(!stopped)for(const t of touched)onRows(t,clone(this._cache[t]));}
+      try{const touched=await this.poll(()=>!stopped);if(!stopped)for(const t of touched)onRows(t,clone(this._cache[t]));}
       catch(e){if(!stopped){stop();onError(e);}}
       finally{running=false;}
     };
@@ -186,7 +192,7 @@ export class CloudflareRepository{
     for(const table of TABLES){const rows=(bundle.data[table]||[]).map(r=>cleanRecord(table,r));
       for(let i=0;i<rows.length;i+=100){
         const batch=rows.slice(i,i+100),r=await this.write(table,batch.map(record=>({record,insertOnly:true})));
-        if(table==='Archive'&&this._archiveLoaded){const saved=new Set(r.saved);this.remember(table,batch.filter(record=>saved.has(record.id)));}
+        if(table==='Archive'&&this.archiveStatus==='ready'){const saved=new Set(r.saved);this.remember(table,batch.filter(record=>saved.has(record.id)));}
         inserted+=r.saved.length;skipped+=r.skipped.length;done+=batch.length;onProgress({done,total,inserted,skipped});
       }}
     await this.load({force:true});return {inserted,skipped};
