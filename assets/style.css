@@ -1,3 +1,12 @@
+/* Metric-matched fallback for Barlow Condensed so hero & heading text does not shift on font swap. */
+@font-face{
+  font-family:'Barlow Condensed Fallback';
+  src:local('Arial'),local('Helvetica Neue'),local('Roboto'),local('Segoe UI');
+  size-adjust:79%;
+  ascent-override:118%;
+  descent-override:24%;
+  line-gap-override:0%;
+}
 /* GymBro — "phấn & đĩa tạ". One token set; dark mode follows the device setting. */
 :root{
   color-scheme:light;
@@ -10,9 +19,9 @@
   --logo-bar:#1d2730;--logo-gym-stroke:#1d2730;
   --scrim:#1d273080;--shadow:0 18px 60px #1d27302e;
   --font-body:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
-  --font-display:'Barlow Condensed','Be Vietnam Pro',system-ui,sans-serif;
+  --font-display:'Barlow Condensed','Barlow Condensed Fallback','Be Vietnam Pro',system-ui,sans-serif;
   --radius:14px;--radius-lg:20px;
-  font-family:var(--font-body);font-size:16px;color:var(--ink);background:var(--bg);font-synthesis:none;-webkit-text-size-adjust:100%;
+  font-family:var(--font-body);font-size:16px;font-size-adjust:from-font;color:var(--ink);background:var(--bg);font-synthesis:none;-webkit-text-size-adjust:100%;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -882,7 +891,8 @@ dialog::backdrop{background:var(--scrim)}
   --gb-bg:linear-gradient(180deg,#ffffff1f,#ffffff0a);--gb-rim:inset 0 1px 0 #ffffff2e,inset 0 -1px 0 #0000002e,0 1px 2px #00000033;
   --gloss:linear-gradient(180deg,#ffffff47 0%,#ffffff14 42%,#ffffff00 60%,#00000024 100%);
 }}
-body{background:var(--ambient),var(--bg);background-attachment:fixed}
+body{background:transparent}
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--ambient)}
 .topbar{background:transparent}
 
 /* Cards */
@@ -931,7 +941,7 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 
 /* Accessibility: users who ask for less transparency get solid surfaces. */
 @media (prefers-reduced-transparency:reduce){
-  body{background:var(--bg)}
+  body::before{display:none}
   .card,.sidebar{background:var(--surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 }
 
@@ -1267,3 +1277,11 @@ body{background:var(--ambient),var(--bg);background-attachment:fixed}
 
 /* Pausing the demo freezes its CSS animations too */
 .demo-stage.is-paused,.demo-stage.is-paused *,.demo-stage.is-paused ::before,.demo-stage.is-paused ::after{animation-play-state:paused!important}
+
+/* Off-screen rendering deferral for long lists and below-the-fold day log (never above the fold).
+   Relax containment while an inline row menu is open so its dropdown is never clipped. */
+.history-day{content-visibility:auto;contain-intrinsic-size:auto 72px}
+.archive-entry{content-visibility:auto;contain-intrinsic-size:auto 56px}
+.library-row,.exercise-library-list>div{content-visibility:auto;contain-intrinsic-size:auto 64px}
+.day-log-card{content-visibility:auto;contain-intrinsic-size:auto 320px}
+.history-day:has(.row-menu[open]),.day-log-card:has(.row-menu[open]){content-visibility:visible}

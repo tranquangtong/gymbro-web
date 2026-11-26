@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../src/ui/dashboard.js';
+import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,updateCompactChartSelection,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../src/ui/dashboard.js';
 import {validatePersonalProfile} from '../src/data/access.js';
 import {cleanRecord} from '../src/core/migration.js';
 const day='2026-10-30';
@@ -183,4 +183,19 @@ test('Phone chart day columns stay inside the viewBox, and the selected day is a
   for(const [,y,h] of cols)assert.ok(Number(y)>=0&&Number(y)+Number(h)<=192-2,`column ends at ${Number(y)+Number(h)}`);
   assert.equal((html.match(/class="glass-col"/g)||[]).length,1);assert.match(html,/<linearGradient id="cg-rim"/);assert.match(html,/class="bar-gloss"/);
  }
+});
+
+test('Phone chart selection updates only the readout and compact SVG in place without rebuilding the page',()=>{
+ const days=[{date:'2026-10-28',intake:2000,protein:120,burned:400},{date:'2026-10-29',intake:null,protein:null,burned:0,rest:true},{date:day,intake:1000,protein:60,burned:null,intakeIncomplete:true}];
+ const readout={innerHTML:''},wrap={innerHTML:''};
+ const root={querySelector:s=>s==='.chart-readout'?readout:s==='.compact-chart-wrap'?wrap:null};
+ assert.equal(updateCompactChartSelection(root,days,{currentDate:day,target:2000,proteinTarget:120,selectedDate:'2026-10-29'}),true);
+ assert.match(readout.innerHTML,/<strong>29-10<\/strong>/);
+ assert.match(readout.innerHTML,/Tập nghỉ/);
+ assert.match(wrap.innerHTML,/class="energy-chart compact-chart"/);
+ assert.match(wrap.innerHTML,/class="today-highlight"/,'today stays marked separately when another day is selected');
+ assert.equal(updateCompactChartSelection(root,days,{currentDate:day,target:2000,proteinTarget:120,selectedDate:day}),true);
+ assert.match(readout.innerHTML,/Hôm nay<\/strong>/);
+ assert.doesNotMatch(wrap.innerHTML,/class="today-highlight"/,'today uses the glass capsule when selected');
+ assert.equal(updateCompactChartSelection({querySelector:()=>null},days,{currentDate:day}),false);
 });
