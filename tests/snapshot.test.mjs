@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import {writeSnapshot,readSnapshot,clearSnapshot,SNAPSHOT_KEY,SNAPSHOT_MAX_BYTES} from '../src/data/snapshot.js';
 import {accessStage} from '../src/data/access.js';
+import {loadCurrentData} from '../src/data/sync.js';
 
 const memory=()=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>m.set(k,String(v)),removeItem:k=>m.delete(k),m};};
 const now=1_800_000_000_000,later=now+3600_000;
@@ -10,8 +13,40 @@ const data={WebMeals:[{id:'m1',date:'2026-11-05',kcal:500}],WebWorkouts:[],WebPr
 test('Snapshot round-trips for a valid session and fills missing tables',()=>{
   const s=memory();
   assert.equal(writeSnapshot(s,{uid:'u1',sessionExpiresAt:later,data},now),true);
+  assert.equal(Object.hasOwn(JSON.parse(s.getItem(SNAPSHOT_KEY)).data,'Archive'),false);
   const snap=readSnapshot(s,now+1000);
   assert.equal(snap.uid,'u1');assert.deepEqual(snap.data.WebMeals,data.WebMeals);assert.deepEqual(snap.data.Archive,[]);
+});
+
+test('Snapshot can read legacy Archive rows for the cached archive page',()=>{
+  const s=memory(),Archive=[{id:'a1',date:'2026-11-05',type:'report',title:'Báo cáo',payload:{notes:'Tập luyện'}}];
+  s.setItem(SNAPSHOT_KEY,JSON.stringify({v:1,uid:'u1',sessionExpiresAt:later,data:{...data,Archive}}));
+  assert.deepEqual(readSnapshot(s,now).data.Archive,Archive);
+  assert.equal(writeSnapshot(s,{uid:'u1',sessionExpiresAt:later,data:{...data,Archive}},now),true);
+  assert.deepEqual(readSnapshot(s,now).data.Archive,Archive);
+});
+
+test('App renders leave the snapshot timer alone while data loads debounce a write',async()=>{
+  const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8'),s=memory(),timers=[];
+  const repo={uid:'u1',ownerUid:'u1',s:{sessionExpiresAt:later,auth:{currentUser:{uid:'u1'}}},load:async()=>data,ensureRange:async()=>null};
+  const state={mode:'firebase',connected:true,initialized:true,repo,data:{}};
+  const ctx=vm.createContext({state,localStorage:s,loadCurrentData,latestProfile:()=>({}),accountUser:()=>({name:'GymBro'}),
+    writeSnapshot:(storage,value)=>writeSnapshot(storage,value,now),clearSnapshot,
+    setTimeout:(run,delay)=>{const timer={run,delay};timers.push(timer);return timer;},clearTimeout:t=>{if(t)t.cancelled=true;},
+    $:s=>s==='#main'?{}:null,document:{body:{classList:{toggle(){}}}},renderChrome(){},accessStage:()=>'profile',route:()=>'dashboard',profileGate:()=>''});
+  vm.runInContext(app.slice(app.indexOf('function dropCache('),app.indexOf('let expiryTimer='))+
+    app.slice(app.indexOf('async function load(options'),app.indexOf('function appLink('))+
+    app.slice(app.indexOf('function render('),app.indexOf('function metric('))+
+    app.slice(app.indexOf('async function ensureRange('),app.indexOf('function ensureDashboardRange(')),ctx);
+  ctx.render();ctx.render();await ctx.ensureRange('2026-11-01');assert.equal(timers.length,0);
+  await ctx.load();assert.equal(timers.length,1);assert.equal(timers[0].delay,1500);
+  ctx.render();assert.equal(timers.length,1);assert.equal(timers[0].cancelled,undefined);
+  const expanded={...data,WebMeals:[...data.WebMeals,{id:'old',date:'2026-10-05'}]};
+  repo.ensureRange=async()=>expanded;await ctx.ensureRange('2026-10-01');
+  assert.equal(timers.length,2);assert.equal(timers[0].cancelled,true);
+  timers[1].run();assert.deepEqual(readSnapshot(s,now).data.WebMeals,expanded.WebMeals);assert.equal(readSnapshot(s,now).user.name,'GymBro');
+  await ctx.load();ctx.dropCache();assert.equal(timers[2].cancelled,true);assert.equal(s.getItem(SNAPSHOT_KEY),null);
+  await ctx.load();repo.s.auth.currentUser={uid:'u2'};timers[3].run();assert.equal(s.getItem(SNAPSHOT_KEY),null);
 });
 
 test('Expired, corrupt or oversized snapshots are never used and are removed',()=>{

@@ -11,7 +11,7 @@ function setup(){
   const calls=[],dialogs={open:false,addEventListener:(event,run)=>{dialogs.onclose=run;}},repo={ownerUid:'owner',uid:'owner',s:{sessionExpiresAt:Date.now()+3600000},load:async options=>{calls.push(options);return {WebProfile:[]};}};
   const state={mode:'firebase',connected:true,initialized:true,repo};
   const timers=[];let context;const resumeRetry=createResumeRetry({run:()=>context.resume(),visible:()=>context.document.visibilityState!=='hidden',blocked:()=>dialogs.open||state.busy,setTimer:(run,ms)=>{const t={run,ms};timers.push(t);return t;},clearTimer:t=>{t.cancelled=true;}});
-  context=vm.createContext({authVersion:0,resumeRetry,state,document:{visibilityState:'visible'},$:()=>dialogs,sessionValid:()=>true,expireSession:()=>assert.fail('valid session'),restoreFirebase:()=>assert.fail('already connected'),activateFirebase:()=>assert.fail('already initialized'),latestProfile:()=>({}),liveSync:{stop:()=>calls.push('stop'),start:r=>{assert.equal(r,repo);calls.push('start');}},updateLocalPending:async()=>{},render:()=>{}});
+  context=vm.createContext({authVersion:0,resumeRetry,state,document:{visibilityState:'visible'},$:()=>dialogs,sessionValid:()=>true,expireSession:()=>assert.fail('valid session'),restoreFirebase:()=>assert.fail('already connected'),activateFirebase:()=>assert.fail('already initialized'),latestProfile:()=>({}),liveSync:{stop:()=>calls.push('stop'),start:r=>{assert.equal(r,repo);calls.push('start');}},updateLocalPending:async()=>{},dataChanged:()=>assert.deepEqual(state.data.WebProfile,[]),render:()=>{}});
   vm.runInContext(controller+'\nglobalThis.resume=resumeFirebase;globalThis.hideAt=t=>{hiddenAt=t;};',context);
   return {context,calls,dialogs,state,repo,resumeRetry,timers};
 }
