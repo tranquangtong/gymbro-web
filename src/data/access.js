@@ -56,6 +56,6 @@ export function currentNutritionTargets(rows=[]){
  const entries=active(rows),hasTargets=r=>[r.kcal_target,r.protein_target,r.goal?.carbs_target,r.goal?.fat_target].some(v=>v!==''&&v!=null);
  const marked=entries.filter(r=>r.goal?.global_targets===true),candidates=marked.length?marked:entries.filter(hasTargets);
  const stamp=r=>{const v=Date.parse(r.updated_at||r.created_at||'');return Number.isFinite(v)?v:Date.parse(r.date+'T12:00:00Z')||0;};
- const r=[...candidates].sort((a,b)=>stamp(b)-stamp(a)||String(b.id||'').localeCompare(String(a.id||'')))[0]||{};
+ const r=candidates.toSorted((a,b)=>stamp(b)-stamp(a)||String(b.id||'').localeCompare(String(a.id||'')))[0]||{};
  return {kcal_target:r.kcal_target??'',protein_target:r.protein_target??'',goal:{carbs_target:r.goal?.carbs_target??'',fat_target:r.goal?.fat_target??'',macro_goal:r.goal?.macro_goal??''}};
 }

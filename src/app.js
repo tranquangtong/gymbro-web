@@ -150,7 +150,7 @@ function historyPage(){
   const days=calendarMonth(state.data,month,{current:now,...targets}),stats=monthStats(days),prevMonth=shiftMonth(month,-1),prev=monthStats(calendarMonth(state.data,prevMonth,{current:now,...targets}));
   const insights=monthInsights(stats,prev,{...targets,prevLabel:monthLabel(prevMonth).replace(',','').toLowerCase()});
   const open=days.filter(d=>!d.future),has=d=>d.intake!==null||d.session||d.rest||d.protein!==null;
-  const selected=open.some(d=>d.date===state.calDay)?state.calDay:open.find(d=>d.today)?.date||[...open].reverse().find(has)?.date||open.at(-1)?.date||null;
+  const selected=open.some(d=>d.date===state.calDay)?state.calDay:open.find(d=>d.today)?.date||open.findLast(has)?.date||open.at(-1)?.date||null;
   const day=days.find(d=>d.date===selected);
   const items=selected?Object.keys(SCHEMAS).flatMap(table=>active(state.data[table]).filter(r=>r.date===selected).map(r=>({table,r}))).sort((a,b)=>Object.keys(SCHEMAS).indexOf(a.table)-Object.keys(SCHEMAS).indexOf(b.table)||String(a.r.created_at).localeCompare(String(b.r.created_at))):[];
   const panel=day?`<section class="card cal-day-panel" id="cal-day-panel"><div class="card-head"><div><h2>${dateLabel(selected,true)}</h2><p class="card-sub">${items.length} mục đã ghi</p></div><div class="page-tools compact-tools">${button('Ghi ăn uống','cal-log','','plus',`data-date="${selected}" data-target="eat"`)}${button('Ghi tập luyện','cal-log','','plus',`data-date="${selected}" data-target="gym"`)}</div></div>${renderDayHeadline(day,targets)}${items.length?dayLog(items):'<p class="card-sub">Chưa ghi gì cho ngày này.</p>'}</section>`:'';

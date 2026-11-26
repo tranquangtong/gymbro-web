@@ -52,6 +52,33 @@ test('date-range queries page by (date, id) with an opaque cursor', async () => 
   assert.match(plan, /records_by_date/);
 });
 
+test('Unicode cursor round-trips and matches the legacy encoding', async () => {
+  const e = env(), a = await token(), date = '2026-10-23';
+  const id = 'bữa|sáng-🥣', nextId = id + '-tiếp';
+  // Seed the read path directly because normal writes enforce ASCII IDs.
+  const insert = e.DB.db.prepare("INSERT INTO records (owner_uid, kind, id, date, body, seq) VALUES ('user-a', 'WebMeals', ?, ?, ?, 0)");
+  for (const key of [id, nextId]) insert.run(key, date, JSON.stringify(meal(key, date)));
+  const path = '/v1/records?kind=WebMeals&limit=1';
+  const first = await call(e, 'GET', path, { tok: a });
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.body.rows.map(r => [r.date, r.id]), [[date, id]]);
+  const legacyCursor = btoa(unescape(encodeURIComponent(`${date}|${id}`)));
+  assert.equal(first.body.next_cursor, legacyCursor);
+  const second = await call(e, 'GET', `${path}&cursor=${encodeURIComponent(legacyCursor)}`, { tok: a });
+  assert.equal(second.status, 200);
+  assert.deepEqual(second.body.rows.map(r => [r.date, r.id]), [[date, nextId]]);
+  assert.equal(second.body.next_cursor, null);
+});
+
+test('invalid base64 and malformed UTF-8 cursors still return 400', async () => {
+  const e = env(), a = await token();
+  for (const cursor of ['!!!', btoa('\xff')]) {
+    const result = await call(e, 'GET', `/v1/records?kind=WebMeals&cursor=${encodeURIComponent(cursor)}`, { tok: a });
+    assert.equal(result.status, 400);
+    assert.equal(result.body.error, 'Cursor không hợp lệ.');
+  }
+});
+
 test('revision conflicts abort the whole batch; insert-only import never overwrites and is safe to retry', async () => {
   const e = env(), a = await token();
   await call(e, 'POST', '/v1/records', { tok: a, body: { kind: 'WebMeals', items: [{ record: meal('m1', '2026-10-30') }, { record: meal('m2', '2026-10-30') }] } });
