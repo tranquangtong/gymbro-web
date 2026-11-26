@@ -1,7 +1,7 @@
 // Cloudflare Workers + D1 repository with the same surface as FirebaseRepository.
 // Differences by design:
-// - load() fetches a recent window of meals/workouts (plus all profile and archive rows),
-//   never the whole history; ensureRange() pages older dates in on demand.
+// - load() fetches a recent window of meals/workouts and all profiles.
+//   ensureRange() pages older dates in and ensureArchive() loads Archive on demand.
 // - subscribe() polls /v1/changes instead of realtime listeners.
 // - Meal photos are stored by the API for 7 days so every device sees them; a copy is cached
 //   on this device (IndexedDB) for fast, repeat viewing.
@@ -17,7 +17,7 @@ import {photoExpired} from '../core/photo-retention.js';
 
 export const WINDOW_DAYS=120;
 export const POLL_MS=45000;
-const DATED=['WebMeals','WebWorkouts'],ALL=['WebProfile','Archive'],TABLES=[...Object.keys(SCHEMAS),'Archive'];
+const DATED=['WebMeals','WebWorkouts'],TABLES=[...Object.keys(SCHEMAS),'Archive'];
 const clone=v=>structuredClone(v);
 const strip=r=>{const c={...r};delete c._revision;delete c._originalUpdatedAt;return c;};
 
@@ -28,6 +28,7 @@ export class CloudflareRepository{
     this.ownerUid=targetUid||this.uid;this.apiBase=apiBase.replace(/\/+$/,'');this.fetchImpl=fetchImpl;this.windowDays=windowDays;
     this.timeoutMs=timeoutMs;this.writeTimeoutMs=writeTimeoutMs;this.pollMs=pollMs;
     this.backendName='Cloudflare';this._cache=null;this._loadTask=null;this.loadedFrom=null;this.seq=0;
+    this._cacheVersion=0;this._archiveLoaded=false;this._archiveTask=null;
     this.photos=new LocalRepository(globalThis.localStorage,'gymbro.cf.'+this.ownerUid);
     this.check();
     this.title=this.ownerUid===this.uid?'Cloudflare · '+s.auth.currentUser.email:'Quản trị · dữ liệu UID '+this.ownerUid;
@@ -55,16 +56,34 @@ export class CloudflareRepository{
   }
   async registerOwner(){await this.api('/v1/me',{method:'POST',body:{}});}
   async listUsers(){if(!isAdmin(this.s.auth.currentUser))throw Error('Chỉ admin được xem danh sách tài khoản.');return (await this.api('/v1/admin/users')).users;}
-  async load({force=false}={}){
+  async load({force=false,cachedArchive}={}){
     if(this._cache&&!force)return clone(this._cache);
     if(this._loadTask)return clone(await this._loadTask);
     this._loadTask=(async()=>{try{
-      const recent=shiftDate(today(),-this.windowDays),from=this.loadedFrom&&(!force||this.loadedFrom<recent)?this.loadedFrom:recent,data=emptyData();data.Archive=[];
-      const parts=await Promise.all([...DATED.map(k=>this.page(k,{from}).then(r=>[k,r])),...ALL.map(k=>this.page(k).then(r=>[k,r]))]);
+      const recent=shiftDate(today(),-this.windowDays),from=this.loadedFrom&&(!force||this.loadedFrom<recent)?this.loadedFrom:recent,data=emptyData();
+      const parts=await Promise.all([...DATED.map(k=>this.page(k,{from}).then(r=>[k,r])),this.page('WebProfile').then(r=>['WebProfile',r])]);
       for(const [k,r] of parts)data[k]=r.rows;
-      this.seq=Math.min(...parts.map(([,r])=>r.seq));this.loadedFrom=from;this._cache=data;this.uploadLocalPhotos().catch(()=>{});return data;
+      data.Archive=this._cache?.Archive??clone(cachedArchive??[]);
+      const seq=Math.min(...parts.map(([,r])=>r.seq));
+      // A base refresh leaves Archive alone, so it must keep any outstanding Archive changes.
+      this.seq=this._archiveLoaded?Math.min(this.seq,seq):seq;
+      this.loadedFrom=from;this._cache=data;this._cacheVersion++;this.uploadLocalPhotos().catch(()=>{});return data;
     }finally{this._loadTask=null;}})();
     return clone(await this._loadTask);
+  }
+  async ensureArchive({force=false}={}){
+    this.check();
+    if(this._archiveTask)return clone(await this._archiveTask);
+    if(this._archiveLoaded&&!force)return null;
+    this._archiveTask=(async()=>{try{
+      if(!this._cache)await this.load();
+      const {rows,seq}=await this.page('Archive');
+      this._cache.Archive=rows;this._archiveLoaded=true;this._cacheVersion++;
+      // Revisit changes made while the Archive pages were being read.
+      this.seq=Math.min(this.seq,seq);
+      return rows;
+    }finally{this._archiveTask=null;}})();
+    return clone(await this._archiveTask);
   }
   // Pages in meals/workouts older than the loaded window. Returns null when already covered.
   async ensureRange(from){
@@ -76,7 +95,7 @@ export class CloudflareRepository{
     for(const [k,rows] of parts){const ids=new Set(this._cache[k].map(r=>r.id));this._cache[k].push(...rows.filter(r=>!ids.has(r.id)));}
     this.loadedFrom=from;return clone(this._cache);
   }
-  async loadAll(){await this.ensureRange('2000-01-01');return clone(this._cache);}
+  async loadAll(){await this.ensureRange('2000-01-01');await this.ensureArchive({force:true});return clone(this._cache);}
   remember(table,records){
     if(!this._cache||!TABLES.includes(table))return;
     const map=new Map(this._cache[table].map(r=>[r.id,r]));
@@ -86,8 +105,10 @@ export class CloudflareRepository{
   async poll(){
     const touched=new Set();let more=true;
     while(more){
+      const version=this._cacheVersion;
       const r=await this.api('/v1/changes',{params:{since:this.seq}});
-      for(const {kind,row} of r.changes){if(TABLES.includes(kind)){this.remember(kind,[strip(row)]);touched.add(kind);}}
+      if(version!==this._cacheVersion)break;
+      for(const {kind,row} of r.changes){if(TABLES.includes(kind)&&(kind!=='Archive'||this._archiveLoaded)){this.remember(kind,[strip(row)]);touched.add(kind);}}
       this.seq=r.seq;more=r.more;
     }
     return touched;
@@ -112,6 +133,7 @@ export class CloudflareRepository{
   }
   async save(table,record,{insertOnly=false}={}){
     const clean=cleanRecord(table,record),expected=record._originalUpdatedAt??record._revision;
+    if(table==='Archive'&&!insertOnly)await this.ensureArchive();
     const r=await this.write(table,[{record:clean,expected:insertOnly?undefined:expected,insertOnly}]);
     const inserted=r.saved.includes(clean.id);if(inserted)this.remember(table,[clean]);return inserted;
   }
@@ -119,6 +141,7 @@ export class CloudflareRepository{
     if(!records.length||records.length>100)throw Error('Mỗi lần lưu từ 1 đến 100 mục.');
     const cleans=records.map(r=>cleanRecord(table,r));
     if(new Set(cleans.map(r=>r.id)).size!==cleans.length)throw Error('Trùng ID trong lần lưu.');
+    if(table==='Archive')await this.ensureArchive();
     await this.write(table,cleans.map((record,i)=>({record,expected:records[i]._originalUpdatedAt??records[i]._revision})));
     this.remember(table,cleans);
   }
@@ -161,7 +184,11 @@ export class CloudflareRepository{
   async importBundle(bundle,onProgress=()=>{}){
     let inserted=0,skipped=0,done=0;const total=TABLES.reduce((n,t)=>n+(bundle.data[t]||[]).length,0);
     for(const table of TABLES){const rows=(bundle.data[table]||[]).map(r=>cleanRecord(table,r));
-      for(let i=0;i<rows.length;i+=100){const r=await this.write(table,rows.slice(i,i+100).map(record=>({record,insertOnly:true})));inserted+=r.saved.length;skipped+=r.skipped.length;done+=Math.min(100,rows.length-i);onProgress({done,total,inserted,skipped});}}
+      for(let i=0;i<rows.length;i+=100){
+        const batch=rows.slice(i,i+100),r=await this.write(table,batch.map(record=>({record,insertOnly:true})));
+        if(table==='Archive'&&this._archiveLoaded){const saved=new Set(r.saved);this.remember(table,batch.filter(record=>saved.has(record.id)));}
+        inserted+=r.saved.length;skipped+=r.skipped.length;done+=batch.length;onProgress({done,total,inserted,skipped});
+      }}
     await this.load({force:true});return {inserted,skipped};
   }
   // Migration helpers: copy rows keeping IDs; re-runs only replace rows with a later updated_at.

@@ -25,6 +25,26 @@ test('Snapshot can read legacy Archive rows for the cached archive page',()=>{
   assert.deepEqual(readSnapshot(s,now).data.Archive,Archive);
 });
 
+test('Archive route shows cached rows while loading and swaps to the live rows on arrival',async()=>{
+  const cached={id:'cached',date:'2026-11-05',type:'report',title:'Cached report',payload:{}};
+  const live={...cached,id:'live',title:'Live report'};
+  let requests=0,release;
+  const repo={uid:'u1',ownerUid:'u1',s:{auth:{currentUser:{uid:'u1'}}},ensureArchive:()=>{requests++;return new Promise(resolve=>{release=resolve;});}};
+  const {ctx,state,events,nodes}=createAppEnv({isAdmin:()=>false,setTimeout:()=>1,clearTimeout(){}});
+  Object.assign(state,{connected:true,initialized:true,repo,data:{...data,Archive:[cached]}});
+  ctx.location.hash='#settings';
+  await ctx.showRouteArchive();
+  assert.equal(requests,0);
+  ctx.location.hash='#archive';
+  const opened=events.hashchange();
+  assert.match(nodes['#main'].innerHTML,/Cached report/);
+  assert.equal(requests,1);
+  release([live]);
+  await opened;
+  assert.match(nodes['#main'].innerHTML,/Live report/);
+  assert.doesNotMatch(nodes['#main'].innerHTML,/Cached report/);
+});
+
 test('App renders leave the snapshot timer alone while data loads debounce a write',async()=>{
   const s=memory(),timers=[];
   const repo={uid:'u1',ownerUid:'u1',s:{sessionExpiresAt:later,auth:{currentUser:{uid:'u1',displayName:'GymBro'}}},load:async()=>data,ensureRange:async()=>null};

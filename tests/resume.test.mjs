@@ -24,6 +24,68 @@ test('long background resume forces fresh data and restarts live sync; short res
   assert.equal(calls[0].force,false);assert.equal(calls[1],'start');
 });
 
+test('resume renders promptly and updates only the banner when pending records change',async()=>{
+  const {context,state}=setup();
+  let renders=0,chrome=0,finish;
+  state.localPending=2;
+  context.render=()=>{renders++;};
+  context.renderChrome=()=>{chrome++;};
+  let pendingStarted;
+  const pending=new Promise(resolve=>{pendingStarted=resolve;});
+  context.updateLocalPending=()=>new Promise(resolve=>{finish=resolve;pendingStarted();});
+  const resumed=context.resume();
+  await pending;
+  assert.equal(renders,1);
+  finish();await resumed;
+  assert.equal(renders,1);
+  assert.equal(chrome,0);
+  context.updateLocalPending=async()=>{state.localPending=3;};
+  await context.resume();
+  assert.equal(renders,2);
+  assert.equal(chrome,1);
+});
+
+test('migration code is loaded only when the user starts a migration',()=>{
+  const references=app.split('\n').filter(line=>line.includes('./data/migrate-cloudflare.js'));
+  assert.equal(references.length,1);
+  assert.match(references[0],/await import\('\.\/data\/migrate-cloudflare\.js'\)/);
+});
+
+test('cold boot verifies once and rejects expired, malformed or mismatched credentials',async t=>{
+  const {SESSION_MS,sessionValid,assertSession,verifySession}=await import('../src/data/access.js');
+  const source=app.slice(app.indexOf('function keepForRetry('),app.indexOf('async function selectImport'));
+  for(const scenario of ['valid','expired','malformed','mismatch'])await t.test(scenario,async()=>{
+    const auth={currentUser:{uid:'owner'}},state={mode:'firebase',connected:false,initialized:false,cached:{uid:'owner',data:{}}};
+    let verifications=0,reads=0,signedOut=0;
+    const service={auth,authSDK:{
+      getIdTokenResult:async()=>{
+        verifications++;
+        if(scenario==='mismatch')auth.currentUser={uid:'different'};
+        return {authTime:scenario==='malformed'?'invalid':new Date(Date.now()-(scenario==='expired'?SESSION_MS+1000:0)).toISOString()};
+      },
+      signOut:async()=>{signedOut++;auth.currentUser=null;},
+      onAuthStateChanged:(auth,callback)=>{callback(auth.currentUser);return ()=>{};},
+    }};
+    const repo={s:service,uid:'owner',load:async()=>{reads++;return {WebProfile:[]};},registerOwner:async()=>{}};
+    const context=vm.createContext({
+      state,authVersion:0,authWatch:null,SESSION_MS,sessionValid,assertSession,verifySession,TRANSIENT:[],
+      firebaseService:async()=>service,boot:{mark(){}},resumeRetry:{reset(){}},withTimeout:run=>run(),
+      dropCache:()=>{state.cached=null;},emptyData:()=>({}),liveSync:{start(){},stop(){}},render(){},
+      createRepository:s=>{assert.equal(s,service);return repo;},remember(){},dataChanged(){},expiryTimer:null,expireSession(){},
+      document:{visibilityState:'visible'},clearTimeout(){},setTimeout(){},latestProfile:()=>({}),showRouteArchive(){},
+    });
+    vm.runInContext(source+'\nglobalThis.restore=restoreFirebase;',context);
+    await context.restore();
+    assert.equal(verifications,1);
+    assert.equal(reads,scenario==='valid'?1:0);
+    assert.equal(signedOut,scenario==='valid'?0:1);
+    assert.equal(state.initialized,scenario==='valid');
+    assert.equal(state.connected,scenario==='valid');
+    assert.equal(state.cached,null);
+    if(scenario!=='valid')assert.equal(state.repo,null);
+  });
+});
+
 test('resume defers refresh while a dialog is open and retains the long sleep deadline',async()=>{
   const {context,calls,dialogs,resumeRetry}=setup();
   context.hideAt(Date.now()-6*60000);dialogs.open=true;await context.resume();assert.equal(calls.length,0);
