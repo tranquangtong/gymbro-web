@@ -1,7 +1,7 @@
 // Month calendar for the Nhật ký page: per-day intake vs kcal target, workout kcal and
 // protein progress, plus month insights that compare patterns instead of listing numbers.
 import {active,num,today,workoutSummary} from '../core/core.js';
-import {dayEnergy} from './dashboard.js';
+import {byDate,dayEnergy} from './dashboard.js';
 
 export const KCAL_BAND=0.10; // within ±10% of the kcal target counts as on target
 const WEEK=['T2','T3','T4','T5','T6','T7','CN'];
@@ -27,10 +27,12 @@ export function kcalStatus(intake,target){
 
 // One entry per date of the month, with targets applied.
 export function calendarMonth(data,month,{current=today(),kcalTarget=null,proteinTarget=null}={}){
-  const meals=active(data.WebMeals||[]).filter(r=>!skipped(r)),workouts=active(data.WebWorkouts||[]);
+  const dates=monthDates(month),first=dates[0],last=dates.at(-1);
+  const meals=byDate(active(data.WebMeals||[]).filter(r=>!skipped(r)),first,last),workouts=byDate(active(data.WebWorkouts||[]),first,last);
   const kt=num(kcalTarget)>0?num(kcalTarget):null,pt=num(proteinTarget)>0?num(proteinTarget):null;
-  return monthDates(month).map(date=>{
-    const e=dayEnergy(meals,workouts,date),training=workouts.filter(r=>r.date===date&&r.kind!=='rest');
+  return dates.map(date=>{
+    const dayMeals=meals.get(date)||[],dayWorkouts=workouts.get(date)||[];
+    const e=dayEnergy(dayMeals,dayWorkouts,date),training=dayWorkouts.filter(r=>r.kind!=='rest');
     return {...e,sets:workoutSummary(training).sets,session:training.length>0,future:date>current,today:date===current,weekday:weekdayIndex(date),
       status:kcalStatus(e.intake,kt),intakePct:kt&&e.intake!==null?e.intake/kt*100:null,proteinPct:pt&&e.protein!==null?e.protein/pt*100:null,proteinHit:pt&&e.protein!==null?e.protein>=pt:null};
   });

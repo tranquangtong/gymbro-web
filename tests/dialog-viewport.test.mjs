@@ -37,3 +37,58 @@ test('A field low on the screen is lifted to the top of the sheet before the key
  assert.equal(focusLiftDelta({top:500,bottom:640},container,664),368,'lifted to container top + 12');
  assert.equal(focusLiftDelta({top:110,bottom:400},{top:120,bottom:640},664),0,'never scrolls backwards');
 });
+test('No-op when no dialog is open, memoizes viewport writes, and clears keyboard-open on close',()=>{
+ const listeners={},queue=[];let writes=0,openDialog=null,keyboard=null;
+ const doc={
+  activeElement:null,
+  querySelector:s=>s==='dialog[open]'?openDialog:null,
+  documentElement:{
+   style:{setProperty:()=>{writes++;}},
+   classList:{toggle:(k,v)=>{writes++;if(k==='keyboard-open')keyboard=v;},add:()=>{writes++;},remove:()=>{}}
+  },
+  addEventListener:(k,v)=>listeners['doc:'+k]=v
+ };
+ const win={innerHeight:800,visualViewport:{height:360,offsetTop:70,scale:1,addEventListener:(k,v)=>listeners['view:'+k]=v},addEventListener:(k,v)=>listeners[k]=v,requestAnimationFrame:f=>queue.push(f),setTimeout:f=>f()};
+ installDialogViewport(win,doc);
+ assert.equal(writes,0,'boot with no open dialog does not touch styles or classes');
+ listeners['doc:input']();listeners['view:resize']();
+ assert.equal(queue.length,0,'input/resize with no open dialog and no keyboard state skips scheduling');
+ openDialog={};
+ listeners['view:resize']();assert.equal(queue.length,1);queue.shift()();
+ assert.equal(keyboard,true);const afterOpen=writes;
+ listeners['doc:input']();assert.equal(queue.length,1);queue.shift()();
+ assert.equal(writes,afterOpen,'unchanged {height,top,keyboard} skips style/class writes');
+ win.visualViewport.height=350;listeners['view:resize']();queue.shift()();
+ assert.equal(writes,afterOpen+1,'only the changed CSS var is written');
+ openDialog=null;listeners['view:resize']();assert.equal(queue.length,1);queue.shift()();
+ assert.equal(keyboard,false);assert.equal(writes,afterOpen+2);
+ listeners['doc:input']();assert.equal(queue.length,0);assert.equal(writes,afterOpen+2);
+});
+test('focusin reads geometry before adding field-focus class and writing scrollTop',()=>{
+ const listeners={},ops=[];let scrollTop=0;
+ const container={
+  get scrollTop(){return scrollTop;},
+  set scrollTop(v){ops.push('scrollTop');scrollTop=v;},
+  getBoundingClientRect(){ops.push('read:container');return {top:120,bottom:640};}
+ };
+ const field={
+  matches:()=>true,
+  closest:s=>s==='dialog[open]'?{}:s==='.quick-content,.editor-fields'?container:null,
+  getBoundingClientRect(){ops.push('read:field');return {top:500,bottom:640};}
+ };
+ const doc={
+  activeElement:null,
+  querySelector:s=>s==='dialog[open]'?{}:null,
+  documentElement:{
+   style:{setProperty:()=>{}},
+   classList:{toggle:()=>{},add:c=>ops.push('class:'+c),remove:()=>{}}
+  },
+  addEventListener:(k,v)=>listeners['doc:'+k]=v
+ };
+ const win={innerHeight:664,visualViewport:{height:664,offsetTop:0,scale:1,addEventListener:()=>{}},addEventListener:()=>{},requestAnimationFrame:()=>{},setTimeout:()=>{}};
+ installDialogViewport(win,doc);
+ ops.length=0;
+ listeners['doc:focusin']({target:field});
+ assert.deepEqual(ops,['read:field','read:container','class:field-focus','scrollTop']);
+ assert.equal(scrollTop,368);
+});
