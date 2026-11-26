@@ -51,6 +51,27 @@ test('admin reads another owner; ordinary users cannot', async () => {
   assert.throws(() => new CloudflareRepository({ sessionExpiresAt: Date.now() + 1e6, auth: { currentUser: { uid: 'user-b', email: 'b@x', emailVerified: true } } }, 'user-a', { apiBase: 'https://api.test' }), /Chỉ admin/);
 });
 
+test('automatic legacy photo upload runs at idle once per owner across loads',async()=>{
+  const original=globalThis.indexedDB,idle=globalThis.requestIdleCallback,scheduled=[];
+  globalThis.indexedDB={};
+  globalThis.requestIdleCallback=callback=>scheduled.push(callback);
+  try{
+    const e=env(),claims={sub:'idle-photo-owner'};
+    const first=await repoFor(e,claims),replacement=await repoFor(e,claims);
+    let uploads=0;
+    first.uploadLocalPhotos=async()=>{uploads++;};
+    replacement.uploadLocalPhotos=async()=>{uploads++;};
+    await first.load();
+    await replacement.load();
+    assert.equal(uploads,0);
+    assert.equal(scheduled.length,1);
+    await scheduled.shift()();
+    assert.equal(uploads,1);
+    await replacement.load({force:true});
+    assert.equal(scheduled.length,0);
+  }finally{globalThis.indexedDB=original;globalThis.requestIdleCallback=idle;}
+});
+
 test('food library seeds once and import is insert-only', async () => {
   const e = env(), repo = await repoFor(e);
   const seeded = await repo.seedFoods(); assert.ok(seeded.length >= 5);

@@ -69,7 +69,8 @@ export function demoData() {
 
 export class LocalRepository {
   constructor(storage,key='gymbro.v1.local') { this.storage=storage; this.key=key; }
-  async load() { const raw=this.storage.getItem(this.key); if(!raw)return emptyData(); let d; try{ d=JSON.parse(raw); }catch{throw Error('Dữ liệu trên thiết bị bị lỗi. Hãy xuất bản sao trước khi xử lý.');} if(!d||Object.keys(SCHEMAS).some(t=>!Array.isArray(d[t])))throw Error('Cấu trúc dữ liệu lưu trên thiết bị không hợp lệ.'); return d; }
+  read() { const raw=this.storage.getItem(this.key); if(!raw)return null; let d; try{ d=JSON.parse(raw); }catch{throw Error('Dữ liệu trên thiết bị bị lỗi. Hãy xuất bản sao trước khi xử lý.');} if(!d||Object.keys(SCHEMAS).some(t=>!Array.isArray(d[t])))throw Error('Cấu trúc dữ liệu lưu trên thiết bị không hợp lệ.'); return d; }
+  async load() { return this.read()??emptyData(); }
   async save(table,record){return this.saveMany(table,[record]);}
   async saveMany(table,records){const d=await this.load();for(const r of records){validateRecord(table,r);const i=d[table].findIndex(x=>x.id===r.id),expected=r._originalUpdatedAt??r._revision;if(i>=0&&expected&&d[table][i].updated_at!==expected)throw Error('Mục này đã thay đổi. Làm mới trước khi sửa.');const clean={...r};delete clean._revision;delete clean._originalUpdatedAt;if(i<0)d[table].push(clean);else d[table][i]=clean;}try{this.storage.setItem(this.key,JSON.stringify(d));}catch{throw Error('Không lưu được trên thiết bị. Có thể bộ nhớ đã đầy hoặc bị chặn.');}}
 }
