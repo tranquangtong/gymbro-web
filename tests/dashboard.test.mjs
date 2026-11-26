@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {macroProgress,energyDays,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../src/ui/dashboard.js';
+import {macroProgress,energyDays,dayEnergy,renderMacroDials,renderEnergyChart,renderEnergyChartCompact,selectCompactChartDay,energyStats,chooseDashboardDate,dashboardDay,energyScales,energyFocusDate,focusEnergyChart,energyHero,renderEnergyHero} from '../src/ui/dashboard.js';
+import {active} from '../src/core/core.js';
 import {validatePersonalProfile} from '../src/data/access.js';
 import {cleanRecord} from '../src/core/migration.js';
 const day='2026-10-30';
@@ -183,4 +184,52 @@ test('Phone chart day columns stay inside the viewBox, and the selected day is a
   for(const [,y,h] of cols)assert.ok(Number(y)>=0&&Number(y)+Number(h)<=192-2,`column ends at ${Number(y)+Number(h)}`);
   assert.equal((html.match(/class="glass-col"/g)||[]).length,1);assert.match(html,/<linearGradient id="cg-rim"/);assert.match(html,/class="bar-gloss"/);
  }
+});
+
+test('energyDays buckets rows by date once and matches per-day dayEnergy across range boundaries',()=>{
+ const data={
+  WebMeals:[meal({id:'out-early',date:'2026-10-18',kcal:999}),meal({id:'a',date:'2026-10-29',kcal:400,protein:25}),meal({id:'b',date:'2026-10-29',kcal:600,protein:''}),meal({id:'skip',date:'2026-10-29',kcal:500,skipped:true}),meal({id:'del',date:'2026-10-29',kcal:500,deleted:true}),meal({id:'out-late',date:'2026-10-31',kcal:999})],
+  WebWorkouts:[workout({id:'w-out',date:'2026-10-18',kcal_burned_est:500}),workout({id:'w1',date:'2026-10-29',kcal_burned_est:150}),workout({id:'w2',date:'2026-10-29',kcal_burned_est:200}),workout({id:'r',date:'2026-10-28',kind:'rest'})]
+ };
+ const days=energyDays(data,day,12);
+ const activeMeals=active(data.WebMeals).filter(r=>String(r.skipped).toLowerCase()!=='true'),activeWorkouts=active(data.WebWorkouts);
+ for(const d of days)assert.deepEqual(d,dayEnergy(activeMeals,activeWorkouts,d.date));
+ assert.equal(days.at(-2).intake,1000);assert.equal(days.at(-2).protein,25);assert.equal(days.at(-2).proteinIncomplete,true);assert.equal(days.at(-2).burned,350);
+});
+
+test('selectCompactChartDay updates glass capsule, today highlight, active bar/point classes and readout in place',()=>{
+ const makeEl=(tag,attrs={},classes=[])=>{
+  const set=new Set(classes),el={tag,attrs:{...attrs},children:[],parentNode:null,
+   setAttribute(k,v){this.attrs[k]=String(v);if(k==='class'){set.clear();String(v).split(/\s+/).filter(Boolean).forEach(c=>set.add(c));}},
+   getAttribute(k){return this.attrs[k]??null;},
+   classList:{toggle:(c,on)=>on?set.add(c):set.delete(c),contains:c=>set.has(c)},
+   remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(x=>x!==this);this.parentNode=null;},
+   insertBefore(node,ref){node.parentNode=this;const i=this.children.indexOf(ref);this.children.splice(i>=0?i:this.children.length,0,node);return node;}
+  };
+  return el;
+ };
+ const days=[{date:'2026-10-29',intake:1800,protein:110,burned:300},{date:day,intake:1200,protein:80,burned:200}];
+ const glassRects=[makeEl('rect',{x:'186.5'},['glass-body']),makeEl('rect',{x:'186.5'},['glass-sheen']),makeEl('rect',{x:'186.5'},['glass-rim'])];
+ const glassCol=makeEl('g',{},['glass-col']);glassCol.querySelectorAll=s=>s==='rect'?glassRects:[];
+ const bar1=makeEl('rect',{'data-date':'2026-10-29'},['intake-bar']),bar2=makeEl('rect',{'data-date':day},['intake-bar','today']);
+ const pt1=makeEl('circle',{'data-date':'2026-10-29'},['burn-point']),pt2=makeEl('circle',{'data-date':day},['burn-point','today']);
+ const svg=makeEl('svg',{},['energy-chart','compact-chart']);
+ svg.insertBefore(glassCol,null);
+ svg.ownerDocument={createElementNS:(_ns,tag)=>makeEl(tag)};
+ svg.querySelector=s=>s==='.glass-col'?glassCol:s==='.today-highlight'?svg.children.find(c=>c.classList.contains('today-highlight'))||null:null;
+ svg.querySelectorAll=s=>s==='.intake-bar,.burn-point'?[bar1,bar2,pt1,pt2]:[];
+ const readout={innerHTML:''};
+ const root={querySelector:s=>s==='.compact-chart'?svg:s==='.chart-readout'?readout:null};
+ assert.equal(selectCompactChartDay(root,days,{currentDate:day,target:2000,proteinTarget:120,selectedDate:'2026-10-29'}),true);
+ assert.deepEqual(glassRects.map(r=>r.attrs.x),['35.5','35.5','35.5']);
+ const hl=svg.querySelector('.today-highlight');assert.ok(hl);assert.equal(hl.attrs.x,'186');assert.equal(svg.children[0],hl,'today-highlight inserted before glass-col');
+ assert.equal(bar1.classList.contains('today'),true);assert.equal(bar2.classList.contains('today'),false);
+ assert.equal(pt1.classList.contains('today'),true);assert.equal(pt2.classList.contains('today'),false);
+ assert.match(readout.innerHTML,/<strong>29-10<\/strong><span class="intake">Ăn 1\.800 \/ 2\.000 kcal<\/span><span class="protein">Protein 110 \/ 120 g<\/span><span class="burn">Tập 300 kcal<\/span>/);
+ assert.equal(selectCompactChartDay(root,days,{currentDate:day,target:2000,proteinTarget:120,selectedDate:day}),true);
+ assert.deepEqual(glassRects.map(r=>r.attrs.x),['186.5','186.5','186.5']);
+ assert.equal(svg.querySelector('.today-highlight'),null,'today-highlight removed when today is selected');
+ assert.equal(bar2.classList.contains('today'),true);assert.equal(bar1.classList.contains('today'),false);
+ assert.match(readout.innerHTML,/<strong>30-10 · Hôm nay<\/strong>/);
+ assert.equal(selectCompactChartDay({querySelector:()=>null},days,{currentDate:day}),false);
 });

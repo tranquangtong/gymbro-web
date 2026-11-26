@@ -27,12 +27,16 @@ export function focusLiftDelta(field,container,viewHeight,gap=12){
 const EDITABLE='input:not([type=file]):not([type=hidden]):not([type=date]):not([type=checkbox]):not([type=radio]),textarea';
 export function installDialogViewport(win=window,doc=document){
   let scheduled=false;
+  const last={height:null,top:null,keyboard:null};
+  const hasOpenDialog=()=>!!(doc.querySelector?doc.querySelector('dialog[open]'):doc.activeElement?.closest?.('dialog[open]'));
+  const clearKeyboard=()=>{if(last.keyboard){doc.documentElement.classList.toggle('keyboard-open',false);last.keyboard=false;}};
   const update=()=>{
     scheduled=false;
+    if(!hasOpenDialog()){clearKeyboard();return;}
     const bounds=viewportBounds(win),root=doc.documentElement;
-    root.style.setProperty('--dialog-viewport',bounds.height+'px');
-    root.style.setProperty('--dialog-viewport-top',bounds.top+'px');
-    root.classList.toggle('keyboard-open',bounds.keyboard);
+    if(bounds.height!==last.height){root.style.setProperty('--dialog-viewport',bounds.height+'px');last.height=bounds.height;}
+    if(bounds.top!==last.top){root.style.setProperty('--dialog-viewport-top',bounds.top+'px');last.top=bounds.top;}
+    if(bounds.keyboard!==last.keyboard){root.classList.toggle('keyboard-open',bounds.keyboard);last.keyboard=bounds.keyboard;}
     const field=doc.activeElement;
     // Only fields that bring up the keyboard; a <select> opens a picker, scrolling for it only made the sheet jump.
     if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
@@ -42,21 +46,21 @@ export function installDialogViewport(win=window,doc=document){
     const delta=fieldScrollDelta(field.getBoundingClientRect(),container.getBoundingClientRect(),bounds,suggestion?.getBoundingClientRect().bottom);
     if(delta)container.scrollTop+=delta;
   };
-  const schedule=()=>{if(!scheduled){scheduled=true;win.requestAnimationFrame(update);}};
+  const schedule=()=>{if(!hasOpenDialog()&&!last.keyboard)return;if(!scheduled){scheduled=true;win.requestAnimationFrame(update);}};
   win.visualViewport?.addEventListener('resize',schedule);
   win.visualViewport?.addEventListener('scroll',schedule);
   win.addEventListener('resize',schedule);
-  doc.addEventListener('focusin',schedule);
   doc.addEventListener('input',schedule);
-  // Synchronously on focus (before the keyboard animates): mark the page as editing, which gives the
-  // sheet's scroll area room below its content, then lift the field into the upper part of the sheet.
+  // Synchronously on focus (before the keyboard animates): read layout first, then mark the page as
+  // editing (giving the sheet's scroll area room below its content) and lift the field into view.
   doc.addEventListener('focusin',e=>{
-    const field=e.target;if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
+    schedule();
+    const field=e?.target;if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
     const container=field.closest('.quick-content,.editor-fields');if(!container)return;
-    doc.documentElement.classList.add('field-focus');
     const delta=focusLiftDelta(field.getBoundingClientRect(),container.getBoundingClientRect(),win.visualViewport?.height||win.innerHeight);
+    doc.documentElement.classList.add('field-focus');
     if(delta)container.scrollTop+=delta;
   });
-  doc.addEventListener('focusout',()=>{win.setTimeout(()=>{const f=doc.activeElement;if(!(f?.matches?.(EDITABLE)&&f.closest('dialog[open]')))doc.documentElement.classList.remove('field-focus');},150);});
+  doc.addEventListener('focusout',()=>{win.setTimeout(()=>{const f=doc.activeElement;if(!(f?.matches?.(EDITABLE)&&f.closest('dialog[open]')))doc.documentElement.classList.remove('field-focus');if(!hasOpenDialog())clearKeyboard();},150);});
   update();
 }
