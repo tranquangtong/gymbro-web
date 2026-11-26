@@ -453,7 +453,7 @@ export function createQuickUI(env){
     e.preventDefault();Promise.resolve(pasteResult(text)).catch(error);
   });
   dialog.addEventListener('input',e=>{
-    if(ctx?.view==='compose'){rememberCompose();if(['compact-food','compact-exercise'].includes(e.target.id))renderNameSuggestions(e.target.id);if(e.target.id==='compact-food')syncUnits();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
+    if(ctx?.view==='compose'){rememberCompose();if(['compact-food','compact-exercise'].includes(e.target.id))renderNameSuggestions(e.target.id);if(e.target.id==='compact-food')syncUnits();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.replaceChildren();dialog.querySelector('[data-quick="save"]')?.remove();}}
     if(e.target.id==='estimate-output'){estimate.text=e.target.value;rememberEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
     if(e.target.id==='session-minutes'&&estimate?.q){estimate.sessionMinutes=e.target.value;estimate.q=null;estimate.result=null;drawEstimate();$('#session-minutes')?.focus();}
   });

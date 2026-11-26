@@ -45,10 +45,10 @@ export async function currentSeq(db) {
 }
 
 // Keyset pagination over (date, id); cursor is opaque base64 of "date|id".
-const encodeCursor = (date, id) => btoa(unescape(encodeURIComponent(`${date}|${id}`)));
+const encodeCursor = (date, id) => btoa(Array.from(new TextEncoder().encode(`${date}|${id}`), byte => String.fromCharCode(byte)).join(''));
 function decodeCursor(c) {
   if (!c) return null;
-  try { const [date, ...rest] = decodeURIComponent(escape(atob(c))).split('|'); return { date, id: rest.join('|') }; }
+  try { const [date, ...rest] = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(Uint8Array.from(atob(c), ch => ch.charCodeAt(0))).split('|'); return { date, id: rest.join('|') }; }
   catch { throw new StoreError('Cursor không hợp lệ.'); }
 }
 
