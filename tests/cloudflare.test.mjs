@@ -110,6 +110,41 @@ test('an admin editing Archive loads the target owner’s Archive on demand', as
   assert.deepEqual((await admin.load()).Archive.map(r => r.title), ['Updated', 'second']);
 });
 
+test('export reads every date and includes remote writes made since the last poll',async()=>{
+  const e=env(),writer=await repoFor(e),reader=await repoFor(e);
+  await reader.load();
+  await writer.saveMany('WebMeals',[meal('early','1999-12-31'),meal('today',today())]);
+  await writer.save('Archive',archive('report'),{insertOnly:true});
+  const exported=await reader.loadAll();
+  assert.deepEqual(exported.WebMeals.map(row=>row.id),['early','today']);
+  assert.deepEqual(exported.Archive.map(row=>row.id),['report']);
+  assert.equal(reader.loadedFrom,shiftDate(today(),-reader.windowDays),'export preserves the dashboard window');
+});
+
+test('cached reads recheck the session, signed-in UID, and admin access to the selected owner',async()=>{
+  const repo=await repoFor(env(),{sub:'admin',email:ADMIN},'other');
+  await repo.load();await repo.ensureArchive();
+  const user=repo.s.auth.currentUser;
+  user.emailVerified=false;await assert.rejects(repo.load(),/Chỉ admin/);
+  user.emailVerified=true;user.uid='changed';await assert.rejects(repo.load(),/Tài khoản đã thay đổi/);
+  user.uid='admin';repo.s.sessionExpiresAt=Date.now()-1;
+  await assert.rejects(repo.load(),{code:'auth/session-expired'});
+  await assert.rejects(repo.ensureArchive(),{code:'auth/session-expired'});
+});
+
+test('a suspended poll leaves a late Archive change for the resumed subscription',async()=>{
+  const e=env(),reader=await repoFor(e),writer=await repoFor(e);
+  await reader.load();await reader.ensureArchive();
+  await writer.save('Archive',archive('late'),{insertOnly:true});
+  let subscribed=true;
+  const before=reader.seq,pending=reader.poll(()=>subscribed);
+  subscribed=false;
+  assert.equal((await pending).size,0);
+  assert.equal(reader.seq,before);
+  assert.equal((await reader.poll()).has('Archive'),true);
+  assert.deepEqual((await reader.load()).Archive.map(r=>r.id),['late']);
+});
+
 test('admin reads another owner; ordinary users cannot', async () => {
   const e = env(), a = await repoFor(e);
   await a.saveMany('WebMeals', [meal('m1', today())]);

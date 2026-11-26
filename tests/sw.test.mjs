@@ -8,7 +8,7 @@ const origin = 'https://example.test';
 const scope = `${origin}/gymbro-web/`;
 const cacheName = 'gymbro-shell-v1';
 
-function loadWorker(fetch, entries = []) {
+function loadWorker(fetch, entries = [], cacheOverrides = {}) {
   const handlers = new Map();
   const stores = new Map(entries);
   const lifecycle = [];
@@ -33,6 +33,7 @@ function loadWorker(fetch, entries = []) {
         return { put: async (key, copy) => stores.get(name).set(urlFor(key), copy) };
       },
       match: async (key, { cacheName }) => stores.get(cacheName)?.get(urlFor(key)),
+      ...cacheOverrides,
     },
   });
 
@@ -96,6 +97,43 @@ test('offline navigation falls back to the index under the worker scope', async 
   const request = { url: `${scope}workouts?tab=recent`, method: 'GET', mode: 'navigate' };
 
   assert.equal(await worker.dispatch('fetch', request).response, index);
+});
+
+test('empty or unavailable Cache Storage retries the original request with browser cache policy', async () => {
+  for (const cache of [{}, { match: async () => { throw Error('Storage unavailable'); } }]) {
+    for (const request of [new Request(scope+'src/app.js'), { url: scope, method: 'GET', mode: 'navigate', redirect: 'manual' }]) {
+      const calls = [], saved = response('HTTP cache');
+      const worker = loadWorker(async (...args) => {
+        calls.push(args);
+        return calls.length === 1 ? offline() : saved;
+      }, [], cache);
+      assert.equal(await worker.dispatch('fetch', request).response, saved);
+      assert.deepEqual(calls[1], [request]);
+      if (request.mode === 'navigate') assert.equal(calls[0][0].redirect, 'manual');
+    }
+  }
+});
+
+test('cache copy survives immediate consumption of the network body', async () => {
+  const live = new Response('shell');
+  Object.defineProperty(live, 'type', { value: 'basic' });
+  const worker = loadWorker(async () => live);
+  const event = worker.dispatch('fetch', new Request(scope));
+  assert.equal(await (await event.response).text(), 'shell');
+  await event.settled;
+  assert.equal(await worker.stores.get(cacheName).get(scope).text(), 'shell');
+});
+
+test('opaque and redirected navigations cannot replace the offline shell', async () => {
+  const saved = response('shell');
+  for (const result of [{ ...response('redirect'), redirected: true }, response('', {type:'opaqueredirect'}), response('', {type:'opaque'})]) {
+    const shell = new Map([[scope, saved]]);
+    const worker = loadWorker(async () => result, [[cacheName, shell]]);
+    const event = worker.dispatch('fetch', {url:scope, method:'GET', mode:'navigate', redirect:'manual'});
+    assert.equal(await event.response, result);
+    await event.settled;
+    assert.equal(shell.get(scope), saved);
+  }
 });
 
 test('navigation preserves the network query and reuses the cached page across queries', async () => {

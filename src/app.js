@@ -200,7 +200,10 @@ function settingsPage(){return firebaseSettings({state,bootTiming:boot.marks,pro
 let migrationModule;
 function migrationReport(r){const {KIND_LABELS}=migrationModule;return `<div class="migration-report"><p class="migration-title"><strong>${esc(r.email||r.uid)}</strong> <span class="${r.match?'ok':'bad'}">${r.match?'Khớp hoàn toàn':'Chưa khớp'}</span></p><div class="chart-table-scroll"><table class="migration-table"><thead><tr><th scope="col">Loại</th><th scope="col">Firestore</th><th scope="col">Cloudflare</th><th scope="col">Mới chép</th><th scope="col">Đối chiếu</th></tr></thead><tbody>${Object.entries(r.kinds).map(([k,v])=>`<tr><th scope="row">${KIND_LABELS[k]}</th><td>${fmt(v.source)}</td><td>${fmt(v.target)}</td><td>${fmt(v.saved)}</td><td class="${v.match?'ok':'bad'}">${v.match?'Khớp':`Thiếu ${v.diff.missing.length}, khác ${v.diff.changed.length}, dư ${v.diff.extra.length}`}</td></tr>`).join('')}</tbody></table></div>${Object.entries(r.kinds).filter(([,v])=>!v.match).map(([k,v])=>`<p class="form-note">${KIND_LABELS[k]}: ${esc([...v.diff.missing.map(id=>'thiếu '+id),...v.diff.changed.map(id=>'khác '+id),...v.diff.extra.map(id=>'dư '+id)].slice(0,8).join(', '))}</p>`).join('')}</div>`;}
 function migrationCard(){if(!BACKEND.apiBase||!state.connected||state.repo?.ownerUid!==state.repo?.uid)return '';const admin=isAdmin(state.repo?.s.auth.currentUser);return `<div class="settings-simple">${card('Chuyển dữ liệu sang Cloudflare',BACKEND.kind==='cloudflare'?'Đang dùng Cloudflare. Chạy lại chỉ để bổ sung mục còn trên Firestore.':'Firestore vẫn là nơi lưu chính cho tới khi chuyển chính thức.',`<p class="form-note">Sao chép nhật ký, hồ sơ, tư liệu và thư viện món từ Firestore sang Cloudflare D1, giữ nguyên ID và chủ sở hữu. Không xoá gì trên Firestore. Chạy lại an toàn: mục đã có chỉ được cập nhật khi Firestore có bản mới hơn. Ảnh món không được chuyển; ảnh mới được giữ trên Cloudflare 7 ngày.</p><div class="page-tools">${button('Chuyển dữ liệu của tôi','cf-migrate','primary','cloud')}${admin?button('Chuyển mọi tài khoản','cf-migrate-all','','cloud'):''}</div><p class="form-note" id="cf-progress" role="status"></p>${(state.migration||[]).map(migrationReport).join('')}`)}</div>`;}
-function archivePage(){const rows=active(state.data.Archive||[]).sort((a,b)=>b.date.localeCompare(a.date));const labels={report:'Báo cáo cũ',workout_plan:'Giáo án tập',diet_plan:'Giáo án ăn',review:'Cần rà lại'};return heading('','Tư liệu','Nội dung chuyển từ Sheets; các báo cáo phản ánh đánh giá tại thời điểm tạo.')+Object.entries(labels).map(([type,label])=>card(label,rows.filter(r=>r.type===type).length+' mục',rows.some(r=>r.type===type)?rows.filter(r=>r.type===type).map(r=>`${state.connected&&isAdmin(state.repo?.s.auth.currentUser)?`<div class="page-tools">${button('Sửa','edit','','edit',`data-table="Archive" data-id="${esc(r.id)}"`)}${button('Xóa','delete','','trash',`data-table="Archive" data-id="${esc(r.id)}"`)}</div>`:''}<details class="archive-entry"><summary>${esc(r.title)} <span class="subtle">${type==='report'?dateLabel(r.date):''}</span></summary><dl>${Object.entries(r.payload||{}).map(([key,val])=>`<dt>${esc(key)}</dt><dd>${esc(val)}</dd>`).join('')}</dl></details>`).join(''):'<p class="card-sub">Chưa có dữ liệu.</p>')).join('');}
+function archivePage(){const rows=active(state.data.Archive||[]).sort((a,b)=>b.date.localeCompare(a.date));const labels={report:'Báo cáo cũ',workout_plan:'Giáo án tập',diet_plan:'Giáo án ăn',review:'Cần rà lại'};
+  const repo=state.repo,unconfirmed=state.cached&&!state.initialized||repo?.ensureArchive&&repo.archiveStatus!=='ready';
+  const status=!unconfirmed?'':repo?.archiveStatus==='error'?'Chưa tải được tư liệu.':!state.initialized?'Đang hiển thị bản lưu trên thiết bị.':'Đang tải tư liệu…';
+  return heading('','Tư liệu','Nội dung chuyển từ Sheets; các báo cáo phản ánh đánh giá tại thời điểm tạo.')+(status?`<p role="status">${status} ${repo?.archiveStatus==='error'?button('Thử lại','account-refresh','','refresh'):''}</p>`:'')+Object.entries(labels).filter(([type])=>!unconfirmed||rows.some(r=>r.type===type)).map(([type,label])=>card(label,rows.filter(r=>r.type===type).length+' mục',rows.some(r=>r.type===type)?rows.filter(r=>r.type===type).map(r=>`${state.connected&&isAdmin(state.repo?.s.auth.currentUser)?`<div class="page-tools">${button('Sửa','edit','','edit',`data-table="Archive" data-id="${esc(r.id)}"`)}${button('Xóa','delete','','trash',`data-table="Archive" data-id="${esc(r.id)}"`)}</div>`:''}<details class="archive-entry"><summary>${esc(r.title)} <span class="subtle">${type==='report'?dateLabel(r.date):''}</span></summary><dl>${Object.entries(r.payload||{}).map(([key,val])=>`<dt>${esc(key)}</dt><dd>${esc(val)}</dd>`).join('')}</dl></details>`).join(''):'<p class="card-sub">Chưa có dữ liệu.</p>')).join('');}
 
 function field(label,name,type='text',value='',placeholder='',extra=''){return `<label class="field">${label}<input name="${name}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}" ${extra}></label>`;}
 function selectField(label,name,options,value){return `<label class="field">${label}<select name="${name}">${Object.entries(options).map(([key,text])=>`<option value="${key}" ${key===value?'selected':''}>${text}</option>`).join('')}</select></label>`;}
@@ -279,7 +282,7 @@ async function activateFirebase(service,verifiedUser=null){
     }else await verifySession(service);
   }catch(e){if(keepForRetry(service,e)){state.authRestoring=false;state.connectionError=firebaseError(e);resumeRetry.failed();render();}throw e;}
   if(previousVersion!==authVersion||state.mode!=='firebase')return;state.retrySession=null;
-  liveSync.stop();adminUsers=[];const generation=++authVersion;
+  liveSync.stop();adminUsers=[];state.migration=null;const generation=++authVersion;
   state.mode='firebase';state.repo=createRepository(service);const repo=state.repo;
   state.connected=true;state.authRestoring=false;state.initialized=false;state.connectionError='';if(state.cached?.uid!==repo.uid){dropCache();state.data=emptyData();}localError='';remember();render();
   try{
@@ -289,7 +292,14 @@ async function activateFirebase(service,verifiedUser=null){
     state.data=data;state.accountProfile=latestProfile(data.WebProfile);state.initialized=true;state.cached=null;dataChanged();resumeRetry.reset();clearTimeout(expiryTimer);expiryTimer=setTimeout(expireSession,Math.max(0,service.sessionExpiresAt-Date.now()));if(document.visibilityState!=='hidden')liveSync.start(repo);await updateLocalPending();render();showRouteArchive();
   }catch(e){if(generation!==authVersion||state.repo!==repo)return;state.connectionError=e.message;state.initialized=false;resumeRetry.failed();render();throw e;}
 }
-async function updateLocalPending(){const repo=state.repo;if(state.mode!=='firebase'||!state.connected||repo?.ownerUid!==repo?.uid){state.localPending=0;return;}try{const local=await new LocalRepository(localStorage).load();if(state.repo===repo)state.localPending=localMissingCount(local,state.data);}catch{if(state.repo===repo)state.localPending=0;}}
+async function updateLocalPending({verifyArchive=false}={}){
+  const repo=state.repo;if(state.mode!=='firebase'||!state.connected||repo?.ownerUid!==repo?.uid){state.localPending=0;return;}
+  try{
+    const local=await new LocalRepository(localStorage).load();if(state.repo!==repo)return;
+    if(verifyArchive&&local.Archive?.length&&repo.ensureArchive)await ensureArchive(repo);
+    if(state.repo===repo)state.localPending=localMissingCount(local,state.data);
+  }catch{if(state.repo===repo)state.localPending=0;}
+}
 let restoreTask=null;
 function restoreFirebase(){if(!restoreTask)restoreTask=restoreFirebaseOnce().finally(()=>{restoreTask=null;});return restoreTask;}
 async function restoreFirebaseOnce(){
@@ -298,10 +308,13 @@ async function restoreFirebaseOnce(){
   try{
     service=await firebaseService();if(generation!==authVersion)return;boot.mark('firebase');
     let verifiedUser=service.auth.currentUser;
+    const discardOtherSnapshot=()=>{if(state.cached&&state.cached.uid!==service.auth.currentUser?.uid){dropCache();state.data=emptyData();state.accountProfile={};render();}};
+    discardOtherSnapshot();
     if(verifiedUser){
       try{await verifySession(service);boot.mark('token');}
       catch(e){
-        if(TRANSIENT.includes(e.code)||generation!==authVersion)throw e;
+        if(generation!==authVersion)throw e;
+        if(TRANSIENT.includes(e.code)){discardOtherSnapshot();throw e;}
         verifiedUser=null;dropCache();state.data=emptyData();state.accountProfile={};
         await withTimeout(()=>service.authSDK.signOut(service.auth)).catch(()=>{});state.connectionError=e.message;
       }
@@ -313,8 +326,11 @@ async function restoreFirebaseOnce(){
     const activation=verifiedUser&&state.mode==='firebase'&&state.repo?.uid!==verifiedUser.uid?activateFirebase(service,verifiedUser):null;
     authWatch=service.authSDK.onAuthStateChanged(service.auth,user=>{
       if(state.mode!=='firebase')return;
-      if(!user){dropCache();resumeRetry.reset();state.retrySession=null;liveSync.stop();++authVersion;state.connected=false;state.initialized=false;state.repo=null;state.data=emptyData();state.accountProfile={};clearTimeout(expiryTimer);state.localPending=0;render();}
-      else if(state.repo?.uid!==user.uid){activateFirebase(service).catch(e=>{if(e.code==='auth/session-expired')expireSession();else{state.connectionError=e.message;render();toast(e.message,true);}});}
+      if(!user||state.repo&&state.repo.uid!==user.uid){
+        if(state.repo){document.querySelectorAll('dialog[open]').forEach(d=>d.close());editorContext=null;pendingImport=null;}
+        dropCache();resumeRetry.reset();state.retrySession=null;liveSync.stop();++authVersion;state.connected=false;state.initialized=false;state.repo=null;state.data=emptyData();state.accountProfile={};clearTimeout(expiryTimer);state.localPending=0;render();
+      }
+      if(user&&state.repo?.uid!==user.uid){activateFirebase(service).catch(e=>{if(service.auth.currentUser?.uid!==user.uid)return;if(e.code==='auth/session-expired')expireSession();else{state.connectionError=e.message;render();toast(e.message,true);}});}
     });
     if(activation)await activation;
     else{resumeRetry.reset();render();}
@@ -337,8 +353,8 @@ async function loadRouteArchive(options){
 }
 async function showRouteArchive(options){
   const repo=state.repo;
-  try{if(await loadRouteArchive(options)&&route()==='archive')render();}
-  catch(e){if(state.repo===repo&&route()==='archive')toast(e.message,true);}
+  try{if(await loadRouteArchive(options)){await updateLocalPending();if(state.repo===repo)render();}}
+  catch(e){if(state.repo===repo&&route()==='archive'){render();toast(e.message,true);}}
 }
 async function archiveForEdit(){
   const repo=state.repo;
@@ -346,7 +362,7 @@ async function archiveForEdit(){
   if(repo.ensureArchive)await ensureArchive(repo);
   return state.repo===repo&&writable()&&isAdmin(repo.s.auth.currentUser);
 }
-async function exportData(){if(state.repo?.loadAll){const repo=state.repo,all=await repo.loadAll();if(state.repo!==repo)return;state.data=all;dataChanged();}const data=Object.fromEntries(Object.keys(SCHEMAS).map(t=>[t,state.data[t].map(r=>cleanRecord(t,r))]));data.Archive=(state.data.Archive||[]).map(r=>cleanRecord('Archive',r));const blob=new Blob([JSON.stringify({app:'GymBro Web',version:2,mode:state.mode,exported_at:new Date().toISOString(),timezone:'Asia/Ho_Chi_Minh',data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gymbro-'+state.mode+'-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+async function exportData(){const repo=state.repo,source=repo?.loadAll?await repo.loadAll():state.data;if(state.repo!==repo)return;const data=Object.fromEntries(Object.keys(SCHEMAS).map(t=>[t,source[t].map(r=>cleanRecord(t,r))]));data.Archive=(source.Archive||[]).map(r=>cleanRecord('Archive',r));const blob=new Blob([JSON.stringify({app:'GymBro Web',version:2,mode:state.mode,exported_at:new Date().toISOString(),timezone:'Asia/Ho_Chi_Minh',data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gymbro-'+state.mode+'-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 async function action(el){const a=el.dataset.action;if(el.closest('.account-menu'))state.accountOpen=false;if(state.busy&&a!=='cancel-confirm')return;if(['local','demo'].includes(a))throw Error('Cần đăng nhập Firebase để sử dụng.');if(!['retry-connect','firebase-login','firebase-login-anyway','copy-link','disconnect','close-editor','cancel-confirm','chart-day','cal-prev','cal-next','cal-today','cal-day','cal-log','account-view','account-settings','account-admin','account-refresh'].includes(a)){if(!writable({profile:['new-profile','estimate-energy'].includes(a)||el.closest('#entry-form')&&editorContext?.table==='WebProfile'}))return;}
   if(a==='retry-connect'){toast('Đang kết nối lại…');return resumeFirebase();}
@@ -377,10 +393,21 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   if(a==='chinup-preset'){const f=$('#entry-form');f.elements.exercise.value='Kneeling easy chin-up';f.elements.kind.value='assisted';$('#sets-container').innerHTML=Array.from({length:3},(_,i)=>setInput({weight_kg:27.2,reps:12},i)).join('');updateForm();saveDraft();return;}
   if(a==='add-set'){const rows=[...document.querySelectorAll('.set-row')];if(rows.length>=50)return toast('Tối đa 50 set cho một lần lưu.',true);const last=rows.at(-1);$('#sets-container').insertAdjacentHTML('beforeend',setInput({weight_kg:last?.querySelector('.set-weight').value||'',reps:last?.querySelector('.set-reps').value||''},rows.length));updateForm();saveDraft();return;}
   if(a==='remove-set'){if(document.querySelectorAll('.set-row').length<=1)return toast('Cần giữ ít nhất một set.',true);el.closest('.set-row').remove();renumberSets();saveDraft();return;}
-  if(a==='cf-migrate'||a==='cf-migrate-all'){const s=state.repo.s,on=m=>{const p=$('#cf-progress');if(p)p.textContent=m;};state.busy=true;try{const {migrateOwner,migrateAll}=migrationModule??=await import('./data/migrate-cloudflare.js');state.migration=a==='cf-migrate'?[{...await migrateOwner({service:s,uid:s.auth.currentUser.uid,apiBase:BACKEND.apiBase,onProgress:on}),email:s.auth.currentUser.email}]:await migrateAll({service:s,apiBase:BACKEND.apiBase,onProgress:on});}catch(e){on('');throw Error(firebaseError(e));}finally{state.busy=false;}render();const ok=state.migration.every(r=>r.match);return toast(ok?'Đã chuyển và đối chiếu khớp hoàn toàn.':'Đã chuyển, nhưng còn mục chưa khớp. Xem bảng đối chiếu.',!ok);}
+  if(a==='cf-migrate'||a==='cf-migrate-all'){
+    const repo=state.repo,s=repo.s,on=m=>{const p=$('#cf-progress');if(p&&state.repo===repo)p.textContent=m;};state.busy=true;
+    try{
+      try{migrationModule??=await import('./data/migrate-cloudflare.js');}catch{throw Error('Chưa tải được công cụ chuyển dữ liệu. Kiểm tra kết nối rồi thử lại.');}
+      if(state.repo!==repo)return;repo.check();
+      const {migrateOwner,migrateAll}=migrationModule,reports=a==='cf-migrate'?[{...await migrateOwner({service:s,uid:repo.uid,apiBase:BACKEND.apiBase,onProgress:on}),email:s.auth.currentUser.email}]:await migrateAll({service:s,apiBase:BACKEND.apiBase,onProgress:on});
+      if(state.repo!==repo)return;state.migration=reports;
+    }catch(e){on('');throw Error(firebaseError(e));}finally{state.busy=false;}
+    render();const ok=state.migration.every(r=>r.match);return toast(ok?'Đã chuyển và đối chiếu khớp hoàn toàn.':'Đã chuyển, nhưng còn mục chưa khớp. Xem bảng đối chiếu.',!ok);
+  }
   if(a==='export')return exportData();
   if(a==='admin-refresh'){adminUsers=await state.repo.listUsers();render();return;}
-  if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const repo=createRepository(state.repo.s,el.dataset.uid);const data=await repo.load();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;dataChanged();liveSync.start(repo);state.localPending=0;state.historyFrom=shiftDate(today(),-29);state.historyTo=today();location.hash='history';render();return;}
+  if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const previous=state.repo,repo=createRepository(previous.s,el.dataset.uid);state.busy=true;try{
+    const snap=repo.ownerUid===repo.uid?readSnapshot(localStorage):null,data=await repo.load({cachedArchive:snap?.uid===repo.uid?snap.data.Archive:undefined});if(state.repo!==previous)return;repo.check();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;dataChanged();liveSync.start(repo);state.localPending=0;state.historyFrom=shiftDate(today(),-29);state.historyTo=today();location.hash='history';render();
+  }finally{state.busy=false;}return;}
   if(a==='firebase-login')return connect();
   if(a==='import-bundle'){
     if(!pendingImport||!writable())return;const bundle=pendingImport,repo=state.repo;if(repo.ownerUid!==repo.uid)throw Error('Quay về dữ liệu của mình trước khi migrate.');
@@ -411,7 +438,7 @@ document.addEventListener('submit',e=>{if(e.target.id==='entry-form')submitEntry
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='dashboard-date'){try{state.dashboardDate=chooseDashboardDate(t.value);render();ensureDashboardRange();}catch(e){toast(e.message,true);}return;}if(t.id==='migration-file'){selectImport(t.files[0]);return;}if(t.closest('#entry-form')){updateForm();saveDraft();return;}if(t.id==='log-date'){if(t.value)state.date=t.value;return render();}if(t.id==='progress-exercise'){state.exercise=t.value;return render();}if(t.id==='cal-month'){if(validMonth(t.value)&&t.value<=monthOf(today())){state.calMonth=t.value;state.calDay=null;render();ensureRange(shiftMonth(t.value,-1)+'-01');}return;}});
 document.addEventListener('input',e=>{if(e.target.closest('#entry-form')){if(e.target.name==='exercise')updateForm();saveDraft();}if(e.target.id==='history-search'){state.search=e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(updateHistoryResults,180);}});
 $('#editor').addEventListener('cancel',e=>{e.preventDefault();closeEditor();});$('#confirm-dialog').addEventListener('cancel',e=>{if(state.busy)e.preventDefault();});
-async function refreshData(){if(state.busy)return;if(['cached','error'].includes(accessStage(state))){resumeFirebase();return;}if(!writable({profile:true}))return;if(state.mode==='firebase'&&!state.connected){location.hash='settings';return toast('Đăng nhập Google để làm mới dữ liệu.',true);}state.busy=true;try{await load({force:true});await loadRouteArchive({force:true});state.connectionError='';if(state.mode==='firebase'){state.initialized=true;liveSync.start(state.repo);await updateLocalPending();}render();toast('Đã làm mới dữ liệu.');}catch(e){state.connectionError=e.message;render();toast(e.message,true);}finally{state.busy=false;}}
+async function refreshData(){if(state.busy)return;if(['cached','error'].includes(accessStage(state))){resumeFirebase();return;}if(!writable({profile:true}))return;if(state.mode==='firebase'&&!state.connected){location.hash='settings';return toast('Đăng nhập Google để làm mới dữ liệu.',true);}const repo=state.repo;state.busy=true;try{await load({force:true});if(state.repo!==repo)return;await loadRouteArchive({force:true});if(state.repo!==repo)return;state.connectionError='';if(state.mode==='firebase'){state.initialized=true;liveSync.start(state.repo);await updateLocalPending();}render();toast('Đã làm mới dữ liệu.');}catch(e){if(state.repo!==repo)return;state.connectionError=e.message;render();toast(e.message,true);}finally{state.busy=false;}}
 // Account menu: toggle on the avatar, close on outside click or Escape.
 document.addEventListener('click',e=>{if(e.target.closest('#account-button')){state.accountOpen=!state.accountOpen;renderChrome();return;}if(state.accountOpen&&!e.target.closest('.account-menu'))closeAccount();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.accountOpen){closeAccount();$('#account-button')?.focus();}});
@@ -444,7 +471,7 @@ async function resumeFirebase(){
       if(repo.ensureArchive&&route()==='archive')await showRouteArchive({force});
       if(state.repo!==repo)return;
       await updateLocalPending();
-      if(state.repo===repo&&state.localPending!==pending)renderChrome();
+      if(state.repo===repo&&state.localPending!==pending){if(route()==='settings')render();else renderChrome();}
     }catch(e){if(generation!==authVersion)return;if(e.code==='auth/session-expired'){expireSession();return;}state.connectionError=e.message;resumeRetry.failed();render();}
   })();try{await resumeInFlight;}finally{resumeInFlight=null;}
 }

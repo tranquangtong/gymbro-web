@@ -16,28 +16,30 @@ self.addEventListener('fetch',e=>{
   const navigation=req.mode==='navigate';
   // Navigation requests cannot be reissued with a cache override.
   const network=navigation
-    ? fetch(new Request(url.href,{cache:'no-cache',credentials:'same-origin'}))
+    ? fetch(new Request(url.href,{cache:'no-cache',credentials:'same-origin',redirect:req.redirect}))
     : fetch(req,{cache:'no-cache'});
   if(navigation)url.search='';
   const key=navigation?url.href:req;
 
   e.waitUntil(network.then(async res=>{
-    if(!res.ok||res.type!=='basic')return;
+    if(!res.ok||res.type!=='basic'||res.redirected)return;
     const copy=res.clone();
     const cache=await caches.open(CACHE_NAME);
     await cache.put(key,copy);
   }).catch(()=>{}));
 
-  e.respondWith(network.catch(async error=>{
+  e.respondWith(network.catch(async ()=>{
     const options={cacheName:CACHE_NAME};
-    const cached=await caches.match(key,options);
-    if(cached)return cached;
-    if(navigation){
-      for(const path of ['./','./index.html']){
-        const shell=await caches.match(new URL(path,self.registration.scope).href,options);
-        if(shell)return shell;
+    try{
+      const cached=await caches.match(key,options);
+      if(cached)return cached;
+      if(navigation){
+        for(const path of ['./','./index.html']){
+          const shell=await caches.match(new URL(path,self.registration.scope).href,options);
+          if(shell)return shell;
+        }
       }
-    }
-    throw error;
+    }catch{} // Cache Storage can be unavailable even when the HTTP cache works.
+    return fetch(req);
   }));
 });
