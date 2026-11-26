@@ -32,10 +32,14 @@ let preferences={};try{preferences=JSON.parse(localStorage.getItem(STORE)||'{}')
 const state={mode:startupMode(preferences),data:emptyData(),repo:null,connected:false,dashboardDate:null,date:today(),historyFrom:shiftDate(today(),-6),historyTo:today(),historyType:'all',historyOpen:new Set(),historyTouched:new Set(),search:'',exercise:'',busy:false,connectionError:'',initialized:false,authRestoring:true,localPending:0,accountProfile:{}};
 // Phones get a chart that fits the card; re-render when crossing the breakpoint (rotation, resize).
 const phoneChart=matchMedia('(max-width:620px)');phoneChart.addEventListener?.('change',()=>render());
-function dropCache(){state.cached=null;clearSnapshot(localStorage);}
+function dropCache(){clearTimeout(persistTimer);state.cached=null;clearSnapshot(localStorage);}
 // Save the signed-in account's data shortly after it changes, for an instant next start.
 let persistTimer=null;
-function schedulePersist(){clearTimeout(persistTimer);persistTimer=setTimeout(()=>{const r=state.repo;if(state.mode==='firebase'&&state.connected&&state.initialized&&r&&r.ownerUid===r.uid)writeSnapshot(localStorage,{uid:r.uid,sessionExpiresAt:r.s.sessionExpiresAt,data:state.data,user:accountUser()});},1500);}
+function dataChanged(){
+  const repo=state.repo,canPersist=()=>state.mode==='firebase'&&state.connected&&state.initialized&&state.repo===repo&&repo&&repo.ownerUid===repo.uid&&repo.s.auth.currentUser?.uid===repo.uid;
+  if(!canPersist())return;
+  clearTimeout(persistTimer);persistTimer=setTimeout(()=>{if(canPersist())writeSnapshot(localStorage,{uid:repo.uid,sessionExpiresAt:repo.s.sessionExpiresAt,data:state.data,user:accountUser()});},1500);
+}
 let expiryTimer=null;let toastTimer,editorContext=null,localError='',authVersion=0,authWatch=null;let pendingImport=null;let adminUsers=[];
 function toast(message,error=false){clearTimeout(toastTimer);$('#toast').className='toast'+(error?' error':'');$('#toast').textContent=message;toastTimer=setTimeout(()=>{$('#toast').textContent='';$('#toast').className='';},6500);}
 function route(){if(location.hash==='#admin'&&state.connected&&isAdmin(state.repo?.s.auth.currentUser))return 'admin';return nav.some(n=>n[0]===location.hash.slice(1))?location.hash.slice(1):'dashboard';}
@@ -78,7 +82,7 @@ function renderChrome(){
   const banner=$('#storage-banner');banner.className='storage-banner'+(state.mode==='demo'?' demo':'')+(state.connectionError||localError?' error':'');
   banner.textContent=state.connected&&state.repo?.ownerUid!==state.repo?.uid?'Quản trị: đang xem và sửa dữ liệu UID '+state.repo.ownerUid+'. Vào Quản trị để quay lại tài khoản mình.':localError||state.connectionError||(state.mode==='demo'?'Đang xem dữ liệu minh họa. Các số liệu này không phải nhật ký thật của bạn.':state.mode==='local'?'Lưu trên trình duyệt này · Chưa đồng bộ Firebase. Xuất bản sao để giữ dữ liệu khi đổi thiết bị.':state.connected?(state.localPending?`Có ${state.localPending} log trên thiết bị chưa có trên máy chủ. Vào Thêm → Chuyển log trên thiết bị.`:''):state.authRestoring?'Đang khôi phục tài khoản Firebase…':'Đăng nhập Google trong Thêm để đồng bộ nhật ký.');
 }
-async function load(options={}){if(!state.repo){state.data=emptyData();return;}if(await loadCurrentData(state,options)){if(state.mode==='firebase'){if(state.repo.ownerUid===state.repo.uid)state.accountProfile=latestProfile(state.data.WebProfile);state.connectionError='';state.initialized=true;}}}
+async function load(options={}){if(!state.repo){state.data=emptyData();return;}if(await loadCurrentData(state,options)){if(state.mode==='firebase'){if(state.repo.ownerUid===state.repo.uid)state.accountProfile=latestProfile(state.data.WebProfile);state.connectionError='';state.initialized=true;dataChanged();}}}
 function appLink(){return location.origin+location.pathname;}
 // Sign-in screen. Inside an in-app browser (e.g. Zalo) Google sign-in cannot complete, so the
 // screen explains how to open GymBro in the real browser instead of offering a broken button.
@@ -90,7 +94,6 @@ function loginPage(){
   return `<section class="access-card"><p class="eyebrow">GymBro</p><h1>Nhật ký riêng của bạn.</h1><p>Đăng nhập Google để bắt đầu. Nhật ký được lưu trên máy chủ GymBro theo tài khoản Google của bạn.</p>${button('Đăng nhập bằng Google','firebase-login','primary','cloud')}${note}<p class="form-note">Phiên ứng dụng được giữ tối đa 14 ngày kể từ lần đăng nhập, sau đó cần đăng nhập lại.</p></section>`;}
 function profileGate(){return `<section class="access-card"><p class="eyebrow">Bước đầu tiên</p><h1>Hoàn tất hồ sơ của bạn.</h1><p>Thêm cân nặng, chiều cao, BMR/TDEE, cân nặng mục tiêu và mục tiêu tập luyện trước khi ghi nhật ký.</p>${button('Nhập thông tin cá nhân','new-profile','primary','scale')}<p class="form-note">BMR/TDEE có thể nhập số đã biết hoặc ước tính rồi chỉnh lại. Bạn có thể cập nhật hồ sơ bất kỳ lúc nào.</p>${button('Đăng xuất','disconnect','text-button','')}</section>`;}
 function render({resetChart=false}={}){
-  schedulePersist();
   const oldChart=$('.energy-chart-scroll'),previousChart=!resetChart&&oldChart?{key:oldChart.dataset.chartKey,left:oldChart.scrollLeft}:null;
   renderChrome();const stage=accessStage(state);document.body.classList.toggle('access-locked',['restoring','loading','login','error'].includes(stage));
   if(stage==='login'){$('#main').innerHTML=loginPage();return;}
@@ -240,7 +243,7 @@ async function activateFirebase(service){
     // /v1/me only keeps the admin's account directory current; reads do not depend on it.
     repo.registerOwner().catch(()=>{});const data=await repo.load();boot.mark('data');
     if(generation!==authVersion||state.mode!=='firebase'||state.repo!==repo)return;
-    state.data=data;state.accountProfile=latestProfile(data.WebProfile);state.initialized=true;state.cached=null;resumeRetry.reset();clearTimeout(expiryTimer);expiryTimer=setTimeout(expireSession,Math.max(0,service.sessionExpiresAt-Date.now()));if(document.visibilityState!=='hidden')liveSync.start(repo);await updateLocalPending();render();
+    state.data=data;state.accountProfile=latestProfile(data.WebProfile);state.initialized=true;state.cached=null;dataChanged();resumeRetry.reset();clearTimeout(expiryTimer);expiryTimer=setTimeout(expireSession,Math.max(0,service.sessionExpiresAt-Date.now()));if(document.visibilityState!=='hidden')liveSync.start(repo);await updateLocalPending();render();
   }catch(e){if(generation!==authVersion||state.repo!==repo)return;state.connectionError=e.message;state.initialized=false;resumeRetry.failed();render();throw e;}
 }
 async function updateLocalPending(){const repo=state.repo;if(state.mode!=='firebase'||!state.connected||repo?.ownerUid!==repo?.uid){state.localPending=0;return;}try{const local=await new LocalRepository(localStorage).load();if(state.repo===repo)state.localPending=localMissingCount(local,state.data);}catch{if(state.repo===repo)state.localPending=0;}}
@@ -265,9 +268,9 @@ async function restoreFirebaseOnce(){
 async function selectImport(file){pendingImport=null;const target=$('#migration-preview');if(!file||!target)return;try{if(file.size>15000000)throw Error('File quá lớn, tối đa 15 MB.');pendingImport=validateBundle(JSON.parse(await file.text()));const totals=Object.entries(pendingImport.data).map(([t,rows])=>`${t}: ${rows.length}`).join(' · ');target.innerHTML=`<div class="help-box">${esc(totals)}<br>Chỉ nhập vào tài khoản ${esc(state.repo?.s.auth.currentUser?.email||'')}.</div><br>${button('Nhập dữ liệu vào '+backendName(),'import-bundle','primary','cloud')}<p id="import-progress" class="form-note"></p>`;}catch(e){target.textContent=e.message;}}
 
 // Cloudflare loads a recent window; older dates are paged in only when a view needs them.
-async function ensureRange(from){const repo=state.repo;if(!repo?.ensureRange)return;try{const data=await repo.ensureRange(from);if(data&&state.repo===repo){state.data=data;render();}}catch(e){toast(e.message,true);}}
+async function ensureRange(from){const repo=state.repo;if(!repo?.ensureRange)return;try{const data=await repo.ensureRange(from);if(data&&state.repo===repo){state.data=data;dataChanged();render();}}catch(e){toast(e.message,true);}}
 function ensureDashboardRange(){const t=state.dashboardDate||today();return ensureRange(shiftDate(t,1-DASHBOARD_DAYS));}
-async function exportData(){if(state.repo?.loadAll){const repo=state.repo,all=await repo.loadAll();if(state.repo===repo)state.data=all;}const data=Object.fromEntries(Object.keys(SCHEMAS).map(t=>[t,state.data[t].map(r=>cleanRecord(t,r))]));data.Archive=(state.data.Archive||[]).map(r=>cleanRecord('Archive',r));const blob=new Blob([JSON.stringify({app:'GymBro Web',version:2,mode:state.mode,exported_at:new Date().toISOString(),timezone:'Asia/Ho_Chi_Minh',data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gymbro-'+state.mode+'-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+async function exportData(){if(state.repo?.loadAll){const repo=state.repo,all=await repo.loadAll();if(state.repo===repo){state.data=all;dataChanged();}}const data=Object.fromEntries(Object.keys(SCHEMAS).map(t=>[t,state.data[t].map(r=>cleanRecord(t,r))]));data.Archive=(state.data.Archive||[]).map(r=>cleanRecord('Archive',r));const blob=new Blob([JSON.stringify({app:'GymBro Web',version:2,mode:state.mode,exported_at:new Date().toISOString(),timezone:'Asia/Ho_Chi_Minh',data},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gymbro-'+state.mode+'-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 async function action(el){const a=el.dataset.action;if(el.closest('.account-menu'))state.accountOpen=false;if(state.busy&&a!=='cancel-confirm')return;if(['local','demo'].includes(a))throw Error('Cần đăng nhập Firebase để sử dụng.');if(!['retry-connect','firebase-login','firebase-login-anyway','copy-link','disconnect','close-editor','cancel-confirm','chart-day','cal-prev','cal-next','cal-today','cal-day','cal-log','account-view','account-settings','account-admin','account-refresh'].includes(a)){if(!writable({profile:['new-profile','estimate-energy'].includes(a)||el.closest('#entry-form')&&editorContext?.table==='WebProfile'}))return;}
   if(a==='retry-connect'){toast('Đang kết nối lại…');return resumeFirebase();}
@@ -300,7 +303,7 @@ async function action(el){const a=el.dataset.action;if(el.closest('.account-menu
   if(a==='cf-migrate'||a==='cf-migrate-all'){const s=state.repo.s,on=m=>{const p=$('#cf-progress');if(p)p.textContent=m;};state.busy=true;try{state.migration=a==='cf-migrate'?[{...await migrateOwner({service:s,uid:s.auth.currentUser.uid,apiBase:BACKEND.apiBase,onProgress:on}),email:s.auth.currentUser.email}]:await migrateAll({service:s,apiBase:BACKEND.apiBase,onProgress:on});}catch(e){on('');throw Error(firebaseError(e));}finally{state.busy=false;}render();const ok=state.migration.every(r=>r.match);return toast(ok?'Đã chuyển và đối chiếu khớp hoàn toàn.':'Đã chuyển, nhưng còn mục chưa khớp. Xem bảng đối chiếu.',!ok);}
   if(a==='export')return exportData();
   if(a==='admin-refresh'){adminUsers=await state.repo.listUsers();render();return;}
-  if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const repo=createRepository(state.repo.s,el.dataset.uid);const data=await repo.load();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;liveSync.start(repo);state.localPending=0;state.historyFrom=shiftDate(today(),-29);state.historyTo=today();location.hash='history';render();return;}
+  if(a==='admin-owner'){if(!isAdmin(state.repo?.s.auth.currentUser))throw Error('Chỉ admin được quản trị.');const repo=createRepository(state.repo.s,el.dataset.uid);const data=await repo.load();state.repo=repo;state.data=data;state.connectionError='';state.initialized=true;dataChanged();liveSync.start(repo);state.localPending=0;state.historyFrom=shiftDate(today(),-29);state.historyTo=today();location.hash='history';render();return;}
   if(a==='firebase-login')return connect();
   if(a==='import-bundle'){
     if(!pendingImport||!writable())return;const bundle=pendingImport,repo=state.repo;if(repo.ownerUid!==repo.uid)throw Error('Quay về dữ liệu của mình trước khi migrate.');
@@ -340,7 +343,7 @@ document.addEventListener('error',e=>{if(e.target.classList?.contains('avatar-im
 window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0});$('.shell').scrollTop=0;});
 window.addEventListener('storage',async e=>{if(state.mode!=='firebase'&&e.key===state.repo?.key){try{await load();render();}catch(e){toast(e.message,true);}}});
 const resumeRetry=createResumeRetry({run:()=>resumeFirebase(),visible:()=>document.visibilityState!=='hidden',blocked:()=>state.busy||['#editor','#confirm-dialog','#quick-dialog'].some(id=>$(id).open)});
-const liveSync=createLiveSync({isCurrent:repo=>state.mode==='firebase'&&state.connected&&state.repo===repo,onRows:(table,rows)=>{state.data[table]=rows;if(table==='WebProfile'&&state.repo?.ownerUid===state.repo?.uid)state.accountProfile=latestProfile(rows);render();},onError:e=>{state.connectionError='Tự đồng bộ tạm dừng: '+e.message;if(e.code==='auth/session-expired')expireSession();else resumeRetry.failed();render();}});
+const liveSync=createLiveSync({isCurrent:repo=>state.mode==='firebase'&&state.connected&&state.repo===repo,onRows:(table,rows)=>{state.data[table]=rows;if(table==='WebProfile'&&state.repo?.ownerUid===state.repo?.uid)state.accountProfile=latestProfile(rows);dataChanged();render();},onError:e=>{state.connectionError='Tự đồng bộ tạm dừng: '+e.message;if(e.code==='auth/session-expired')expireSession();else resumeRetry.failed();render();}});
 const quick=createQuickUI({getState:()=>state,esc,fmt,icon,toast,writable,reload:load,render,openDetailed:openEditor,saveMessage:count=>saveMessage(state,count)});
 setRepo(state.mode);try{await load();}catch(e){localError=e.message;}
 {const snap=state.mode==='firebase'?readSnapshot(localStorage):null;if(snap){state.cached=snap;state.data=snap.data;state.accountProfile=latestProfile(snap.data.WebProfile);}}
@@ -359,7 +362,7 @@ async function resumeFirebase(){
       if(!state.initialized){await activateFirebase(state.repo.s);return;}
       const repo=state.repo,force=hiddenAt!==null&&Date.now()-hiddenAt>RESUME_RELOAD_MS;if(force)liveSync.stop();
       const data=await repo.load({force});if(state.repo!==repo||state.mode!=='firebase')return;
-      state.data=data;state.connectionError='';if(document.visibilityState!=='hidden')hiddenAt=null;resumeRetry.reset();if(repo.ownerUid===repo.uid)state.accountProfile=latestProfile(data.WebProfile);if(document.visibilityState!=='hidden')liveSync.start(repo);render();await updateLocalPending();render();
+      state.data=data;state.connectionError='';if(document.visibilityState!=='hidden')hiddenAt=null;resumeRetry.reset();if(repo.ownerUid===repo.uid)state.accountProfile=latestProfile(data.WebProfile);dataChanged();if(document.visibilityState!=='hidden')liveSync.start(repo);render();await updateLocalPending();render();
     }catch(e){if(generation!==authVersion)return;if(e.code==='auth/session-expired'){expireSession();return;}state.connectionError=e.message;resumeRetry.failed();render();}
   })();try{await resumeInFlight;}finally{resumeInFlight=null;}
 }
