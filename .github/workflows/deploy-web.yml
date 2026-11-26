@@ -1,0 +1,75 @@
+name: Deploy Cloudflare Web
+# Workers Static Assets on the Free plan. See docs/cloudflare.md for the required secrets.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, next]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'worker/**'
+permissions:
+  contents: read
+concurrency:
+  group: deploy-cloudflare-web-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check secrets
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+      - name: Run checks and tests
+        run: |
+          npm run check
+          npm test
+      - name: Build frontend
+        run: |
+          mkdir dist
+          cp -R -- index.html sw.js manifest.webmanifest _headers assets src dist/
+      - name: Install Wrangler
+        run: npm install --no-save --no-audit --no-fund wrangler@4
+      - name: Deploy Workers Static Assets
+        id: deploy
+        shell: bash
+        run: |
+          case "$GITHUB_REF_NAME" in
+            main) worker_name=gymbro-web ;;
+            next) worker_name=gymbro-web-next ;;
+            *) exit 1 ;;
+          esac
+          npx wrangler deploy --config web/wrangler.jsonc --name "$worker_name"
+          echo "url=https://${worker_name}.tongquangtran.workers.dev/" >> "$GITHUB_OUTPUT"
+      - name: Health check
+        env:
+          WEB_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if body="$(curl -fsS --max-time 15 "$WEB_URL")" \
+              && [[ "$body" == *'<title>GymBro · Nhật ký mỗi ngày</title>'* ]] \
+              && headers="$(curl -fsSI --max-time 15 "${WEB_URL}sw.js")" \
+              && grep -iqx $'Cache-Control: no-cache\r' <<< "$headers" \
+              && status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "${WEB_URL}_headers")" \
+              && [[ "$status" == 404 ]]; then
+              echo "GymBro đã triển khai tại $WEB_URL" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$attempt" -lt 6 ]; then sleep 5; fi
+          done
+          echo "::error::GymBro health check failed for $WEB_URL (expected app title, sw.js Cache-Control: no-cache, and /_headers 404)."
+          exit 1

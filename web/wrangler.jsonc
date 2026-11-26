@@ -1,0 +1,10 @@
+{
+  "name": "gymbro-web",
+  "compatibility_date": "2025-06-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "../dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

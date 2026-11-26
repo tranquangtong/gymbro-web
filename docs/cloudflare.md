@@ -64,6 +64,31 @@ stays untouched as a read-only copy; the app no longer loads the Firestore SDK e
 tool. To roll back, set `kind: 'firebase'` again (logs written to D1 after the switch would then need
 copying back).
 
+## Cloudflare Workers (bản sao song song)
+
+GitHub Pages tiếp tục phục vụ tại `https://tranquangtong.github.io/gymbro-web/`. Workflow **Deploy Cloudflare Web** dùng Wrangler 4 để triển khai frontend lên Workers Static Assets theo gói Free. Cả `npm run check` và `npm test` phải thành công trước khi triển khai.
+
+| Nhánh | Worker | Địa chỉ |
+|---|---|---|
+| `main` | `gymbro-web` | `https://gymbro-web.tongquangtran.workers.dev/` |
+| `next` | `gymbro-web-next` | `https://gymbro-web-next.tongquangtran.workers.dev/` |
+
+Workflow chạy khi push vào hai nhánh trên hoặc khi chọn **Actions → Deploy Cloudflare Web → Run workflow** và chọn nhánh tương ứng. Wrangler tạo Worker của nhánh trong lần triển khai đầu tiên. Phần tổng kết hiển thị URL sau khi kiểm tra trang chủ và các quy tắc `_headers`.
+
+Workflow dùng lại `CLOUDFLARE_API_TOKEN` và `CLOUDFLARE_ACCOUNT_ID`. Quyền Workers Scripts hiện có của token đã đủ cho frontend.
+
+1. Trong Firebase Console của dự án `gymbro-web`, mở **Authentication → Settings → Authorized domains** và thêm `gymbro-web.tongquangtran.workers.dev` cùng `gymbro-web-next.tongquangtran.workers.dev`. Giữ tên miền `tranquangtong.github.io` trong thời gian chạy song song.
+2. Chờ workflow **Deploy Cloudflare API** trên `main` áp dụng `ALLOWED_ORIGINS` mới, rồi kiểm tra đăng nhập Google và tải nhật ký ở cả hai địa chỉ `workers.dev`.
+
+Ba địa chỉ dùng chung Worker `gymbro-api` và cơ sở dữ liệu D1 production. Các thao tác ghi từ `next` cập nhật dữ liệu thật. `localStorage` thuộc từng origin, nên hãy xử lý bản nháp, dữ liệu cục bộ và phiên đăng nhập tại địa chỉ đã dùng để lưu chúng.
+
+### Khi chuyển hẳn sang Cloudflare Workers
+
+- Mở URL GitHub Pages cũ, đăng nhập và đồng bộ dữ liệu còn trên thiết bị. Xác nhận nhật ký đã có tại URL `gymbro-web.tongquangtran.workers.dev`.
+- Cài lại PWA từ URL production mới rồi gỡ biểu tượng PWA cũ.
+- Cập nhật các liên kết tới app và tắt GitHub Pages trong cài đặt repository.
+- Xóa `https://tranquangtong.github.io` khỏi `ALLOWED_ORIGINS` trong `worker/wrangler.toml` và triển khai lại Worker.
+
 ## Local development
 
 ```bash
