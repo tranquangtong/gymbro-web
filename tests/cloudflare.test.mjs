@@ -11,6 +11,7 @@ async function service(claims = {}) {
   return { sessionExpiresAt: Date.now() + 3600e3, auth: { currentUser: { uid: claims.sub || 'user-a', email: claims.email || 'a@example.com', emailVerified: true, getIdToken: async () => tok } } };
 }
 const repoFor = async (e, claims, target = null, opts = {}) => new CloudflareRepository(await service(claims), target, { apiBase: 'https://api.test/', fetchImpl: workerFetch(e), ...opts });
+const archive = (id, extra = {}) => ({ id, date: today(), type: 'report', title: id, payload: {}, created_at: 'c', updated_at: 'u-' + id, deleted: false, ...extra });
 
 test('loads a recent window, pages older dates on demand and never sends other owners data', async () => {
   const e = env(), repo = await repoFor(e, {}, null, { windowDays: 10 });
@@ -41,6 +42,107 @@ test('save keeps optimistic revisions, polling picks up writes from another devi
   await laptop.poll().then(t => assert.deepEqual([...t], ['WebMeals']));
   assert.equal((await laptop.load()).WebMeals[0].kcal, 650);
   stop();
+});
+
+test('Archive is fetched on demand, retained across base refresh and included in exports', async () => {
+  const e = env(), writer = await repoFor(e), fetchWorker = workerFetch(e);
+  let archiveReads = 0;
+  const repo = await repoFor(e, {}, null, { fetchImpl: (url, init) => {
+    if (init.method === 'GET' && new URL(url).searchParams.get('kind') === 'Archive') archiveReads++;
+    return fetchWorker(url, init);
+  } });
+  await writer.save('Archive', archive('first'), { insertOnly: true });
+  const cachedArchive = [archive('cached')];
+  assert.deepEqual((await repo.load({ cachedArchive })).Archive, cachedArchive);
+  await writer.save('Archive', archive('second'), { insertOnly: true });
+  assert.equal((await repo.poll()).has('Archive'), false);
+  assert.deepEqual((await repo.ensureRange('2000-01-01')).Archive, cachedArchive);
+  assert.equal(archiveReads, 0);
+
+  const [rows, sameRows] = await Promise.all([repo.ensureArchive(), repo.ensureArchive()]);
+  assert.deepEqual(rows.map(r => r.id), ['first', 'second']);
+  assert.deepEqual(sameRows, rows);
+  assert.equal(archiveReads, 1);
+  await writer.save('Archive', { ...rows[0], deleted: true, updated_at: 'deleted' });
+  assert.deepEqual((await repo.load({ force: true })).Archive, rows);
+  assert.equal(archiveReads, 1);
+  assert.equal((await repo.poll()).has('Archive'), true);
+  assert.equal((await repo.load()).Archive[0].deleted, true);
+  assert.deepEqual((await repo.loadAll()).Archive.map(r => r.id), ['first', 'second']);
+  assert.equal(archiveReads, 2);
+
+  const exportOnly = await repoFor(e);
+  assert.deepEqual((await exportOnly.loadAll()).Archive.map(r => r.id), ['first', 'second']);
+
+  await repo.importBundle({ data: { Archive: [archive('imported')] } });
+  assert.deepEqual((await repo.load()).Archive.map(r => r.id), ['first', 'second', 'imported']);
+  assert.equal(archiveReads, 2);
+});
+
+test('a change polled during the first Archive fetch is picked up after the pages arrive', { timeout: 2000 }, async () => {
+  const e = env(), writer = await repoFor(e), fetchWorker = workerFetch(e);
+  let release, markPageRead;
+  const held = new Promise(resolve => { release = resolve; });
+  const pageRead = new Promise(resolve => { markPageRead = resolve; });
+  const repo = await repoFor(e, {}, null, { fetchImpl: async (url, init) => {
+    const result = await fetchWorker(url, init);
+    if (new URL(url).searchParams.get('kind') === 'Archive') { markPageRead(); await held; }
+    return result;
+  } });
+  await repo.load();
+  const loading = repo.ensureArchive();
+  try {
+    await pageRead;
+    await writer.save('Archive', archive('new'), { insertOnly: true });
+    assert.equal((await repo.poll()).has('Archive'), false);
+  } finally { release(); }
+  assert.deepEqual(await loading, []);
+  assert.equal((await repo.poll()).has('Archive'), true);
+  assert.deepEqual((await repo.load()).Archive.map(r => r.id), ['new']);
+});
+
+test('an admin editing Archive loads the target owner’s Archive on demand', async () => {
+  const e = env(), writer = await repoFor(e), admin = await repoFor(e, { sub: 'admin', email: ADMIN }, 'user-a');
+  await writer.save('Archive', archive('first'), { insertOnly: true });
+  await writer.save('Archive', archive('second'), { insertOnly: true });
+  assert.deepEqual((await admin.load()).Archive, []);
+  await admin.save('Archive', archive('first', { title: 'Updated', updated_at: 'edited', _originalUpdatedAt: 'u-first' }));
+  assert.deepEqual((await admin.load()).Archive.map(r => r.title), ['Updated', 'second']);
+});
+
+test('export reads every date and includes remote writes made since the last poll',async()=>{
+  const e=env(),writer=await repoFor(e),reader=await repoFor(e);
+  await reader.load();
+  await writer.saveMany('WebMeals',[meal('early','1999-12-31'),meal('today',today())]);
+  await writer.save('Archive',archive('report'),{insertOnly:true});
+  const exported=await reader.loadAll();
+  assert.deepEqual(exported.WebMeals.map(row=>row.id),['early','today']);
+  assert.deepEqual(exported.Archive.map(row=>row.id),['report']);
+  assert.equal(reader.loadedFrom,shiftDate(today(),-reader.windowDays),'export preserves the dashboard window');
+});
+
+test('cached reads recheck the session, signed-in UID, and admin access to the selected owner',async()=>{
+  const repo=await repoFor(env(),{sub:'admin',email:ADMIN},'other');
+  await repo.load();await repo.ensureArchive();
+  const user=repo.s.auth.currentUser;
+  user.emailVerified=false;await assert.rejects(repo.load(),/Chỉ admin/);
+  user.emailVerified=true;user.uid='changed';await assert.rejects(repo.load(),/Tài khoản đã thay đổi/);
+  user.uid='admin';repo.s.sessionExpiresAt=Date.now()-1;
+  await assert.rejects(repo.load(),{code:'auth/session-expired'});
+  await assert.rejects(repo.ensureArchive(),{code:'auth/session-expired'});
+});
+
+test('a suspended poll leaves a late Archive change for the resumed subscription',async()=>{
+  const e=env(),reader=await repoFor(e),writer=await repoFor(e);
+  await reader.load();await reader.ensureArchive();
+  await writer.save('Archive',archive('late'),{insertOnly:true});
+  let subscribed=true;
+  const before=reader.seq,pending=reader.poll(()=>subscribed);
+  subscribed=false;
+  assert.equal((await pending).size,0);
+  assert.equal(reader.seq,before);
+  assert.equal((await reader.poll()).has('Archive'),true);
+  assert.deepEqual((await reader.load()).Archive.map(r=>r.id),['late']);
 });
 
 test('admin reads another owner; ordinary users cannot', async () => {

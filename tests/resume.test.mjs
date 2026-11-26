@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {createResumeRetry} from '../src/data/resume-retry.js';
+import {createAppEnv} from './app-env.mjs';
 
 // Exercise the app's resume controller without booting its DOM/Firebase imports.
 const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
@@ -22,6 +23,110 @@ test('long background resume forces fresh data and restarts live sync; short res
   assert.equal(calls[0],'stop');assert.equal(calls[1].force,true);assert.equal(calls[2],'start');
   calls.length=0;context.hideAt(Date.now()-60000);await context.resume();
   assert.equal(calls[0].force,false);assert.equal(calls[1],'start');
+});
+
+test('resume renders promptly and updates only the banner when pending records change',async()=>{
+  const {context,state}=setup();
+  let renders=0,chrome=0,finish;
+  state.localPending=2;
+  context.render=()=>{renders++;};
+  context.renderChrome=()=>{chrome++;};
+  context.route=()=>'dashboard';
+  let pendingStarted;
+  const pending=new Promise(resolve=>{pendingStarted=resolve;});
+  context.updateLocalPending=()=>new Promise(resolve=>{finish=resolve;pendingStarted();});
+  const resumed=context.resume();
+  await pending;
+  assert.equal(renders,1);
+  finish();await resumed;
+  assert.equal(renders,1);
+  assert.equal(chrome,0);
+  context.updateLocalPending=async()=>{state.localPending=3;};
+  await context.resume();
+  assert.equal(renders,2);
+  assert.equal(chrome,1);
+  context.route=()=>'settings';
+  context.updateLocalPending=async()=>{state.localPending=0;};
+  await context.resume();
+  assert.equal(renders,4,'Settings redraws its transfer card when pending changes');
+  assert.equal(chrome,1);
+});
+
+test('migration code is loaded only when the user starts a migration',()=>{
+  const references=app.split('\n').filter(line=>line.includes('./data/migrate-cloudflare.js'));
+  assert.equal(references.length,1);
+  assert.match(references[0],/await import\('\.\/data\/migrate-cloudflare\.js'\)/);
+});
+
+test('an unavailable migration module reports a retryable message and releases the action lock',async()=>{
+  const {ctx,state}=createAppEnv({sessionValid:()=>true,navigator:{onLine:true},firebaseError:e=>e.message});
+  Object.assign(state,{connected:true,repo:{s:{sessionExpiresAt:Date.now()+60000}}});
+  await assert.rejects(ctx.action({dataset:{action:'cf-migrate'},closest:()=>null}),/Chưa tải được công cụ.*thử lại/);
+  assert.equal(state.busy,false);
+});
+
+test('an offline verification for a different signed-in account clears the previous snapshot',async()=>{
+  const {SESSION_MS,sessionValid}=await import('../src/data/access.js');
+  const service={auth:{currentUser:{uid:'new',metadata:{lastSignInTime:new Date().toISOString()}}}};
+  const state={mode:'firebase',cached:{uid:'previous'},data:{Archive:[{id:'private'}]}};
+  const ctx=vm.createContext({state,SESSION_MS,sessionValid,authVersion:0,authWatch:null,
+    firebaseService:async()=>service,boot:{mark(){}},render(){},dropCache(){state.cached=null;},emptyData:()=>({}),
+    verifySession:async()=>{assert.equal(state.cached,null);throw Object.assign(Error('offline'),{code:'unavailable'});},
+    firebaseError:e=>e.message,TRANSIENT:['unavailable'],resumeRetry:{failed(){}}});
+  vm.runInContext(app.slice(app.indexOf('function keepForRetry('),app.indexOf('async function selectImport')),ctx);
+  await ctx.restoreFirebase();
+  assert.deepEqual(state.data,{});
+  assert.equal(state.retrySession.service,service);
+});
+
+test('cold boot verifies once and rejects expired, malformed or mismatched credentials',async t=>{
+  const {SESSION_MS,sessionValid,assertSession,verifySession}=await import('../src/data/access.js');
+  const source=app.slice(app.indexOf('function keepForRetry('),app.indexOf('async function selectImport'));
+  for(const scenario of ['valid','expired','malformed','mismatch'])await t.test(scenario,async()=>{
+    const auth={currentUser:{uid:'owner'}},state={mode:'firebase',connected:false,initialized:false,cached:{uid:'owner',data:{}}};
+    let verifications=0,reads=0,signedOut=0;
+    const service={auth,authSDK:{
+      getIdTokenResult:async()=>{
+        verifications++;
+        if(scenario==='mismatch')auth.currentUser={uid:'different'};
+        return {authTime:scenario==='malformed'?'invalid':new Date(Date.now()-(scenario==='expired'?SESSION_MS+1000:0)).toISOString()};
+      },
+      signOut:async()=>{signedOut++;auth.currentUser=null;},
+      onAuthStateChanged:(auth,callback)=>{callback(auth.currentUser);return ()=>{};},
+    }};
+    const repo={s:service,uid:'owner',load:async()=>{reads++;return {WebProfile:[]};},registerOwner:async()=>{}};
+    const context=vm.createContext({
+      state,authVersion:0,authWatch:null,SESSION_MS,sessionValid,assertSession,verifySession,TRANSIENT:[],
+      firebaseService:async()=>service,boot:{mark(){}},resumeRetry:{reset(){}},withTimeout:run=>run(),
+      dropCache:()=>{state.cached=null;},emptyData:()=>({}),liveSync:{start(){},stop(){}},render(){},
+      createRepository:s=>{assert.equal(s,service);return repo;},remember(){},dataChanged(){},expiryTimer:null,expireSession(){},
+      document:{visibilityState:'visible'},clearTimeout(){},setTimeout(){},latestProfile:()=>({}),showRouteArchive(){},
+    });
+    vm.runInContext(source+'\nglobalThis.restore=restoreFirebase;',context);
+    await context.restore();
+    assert.equal(verifications,1);
+    assert.equal(reads,scenario==='valid'?1:0);
+    assert.equal(signedOut,scenario==='valid'?0:1);
+    assert.equal(state.initialized,scenario==='valid');
+    assert.equal(state.connected,scenario==='valid');
+    assert.equal(state.cached,null);
+    if(scenario!=='valid')assert.equal(state.repo,null);
+  });
+});
+
+test('auth observer keeps the admin selection on an echo and clears it before activating a different UID',async()=>{
+  let observe,activated=0;
+  const service={auth:{currentUser:{uid:'admin'}},authSDK:{onAuthStateChanged:(_auth,callback)=>{observe=callback;return ()=>{};}}};
+  const repo={uid:'admin',ownerUid:'selected-owner',s:service};
+  const state={mode:'firebase',connected:true,initialized:true,repo,data:{Archive:[{id:'selected-private'}]}};
+  const ctx=vm.createContext({state,authVersion:0,authWatch:null,expiryTimer:null,clearTimeout(){},boot:{mark(){}},render(){},
+    firebaseService:async()=>service,verifySession:async()=>{},resumeRetry:{reset(){}},dropCache(){},emptyData:()=>({}),
+    liveSync:{stop(){}},document:{querySelectorAll:()=>[]},activateFirebase:async()=>{activated++;assert.equal(state.repo,null);}});
+  vm.runInContext(app.slice(app.indexOf('let restoreTask='),app.indexOf('async function selectImport')),ctx);
+  await ctx.restoreFirebase();observe(service.auth.currentUser);
+  assert.equal(activated,0);assert.equal(state.repo,repo);
+  service.auth.currentUser={uid:'other-user'};observe(service.auth.currentUser);
+  assert.equal(activated,1);assert.equal(state.connected,false);assert.deepEqual(state.data,{});
 });
 
 test('resume defers refresh while a dialog is open and retains the long sleep deadline',async()=>{
