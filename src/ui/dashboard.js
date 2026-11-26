@@ -19,10 +19,16 @@ export function macroProgress(rows,profile={}){
   for(const m of items)if(factor[m.key]&&kcal>0&&m.value!==null)m.energyShare=m.value*factor[m.key]/kcal*100;
   return items;
 }
+export function byDate(rows,from='',to=''){
+  const map=new Map();
+  for(const r of rows){const d=r.date;if(!d||(from&&d<from)||(to&&d>to))continue;let list=map.get(d);if(!list){list=[];map.set(d,list);}list.push(r);}
+  return map;
+}
 export function energyDays(data,end,range=DASHBOARD_DAYS){
   if(!Number.isInteger(range)||range<1||range>28)throw Error('Khoảng biểu đồ không hợp lệ.');
-  const meals=active(data.WebMeals||[]).filter(r=>!skipped(r)),workouts=active(data.WebWorkouts||[]);
-  return Array.from({length:range},(_,i)=>dayEnergy(meals,workouts,shiftDate(end,i-range+1)));
+  const start=shiftDate(end,1-range);
+  const meals=byDate(active(data.WebMeals||[]).filter(r=>!skipped(r)),start,end),workouts=byDate(active(data.WebWorkouts||[]),start,end);
+  return Array.from({length:range},(_,i)=>{const date=shiftDate(end,i-range+1);return dayEnergy(meals.get(date)||[],workouts.get(date)||[],date);});
 }
 // Totals for one date from active meals/workouts: null = nothing known, * flags = partial.
 export function dayEnergy(meals,workouts,date){
@@ -142,6 +148,7 @@ export function energyStats(days){
 }
 const shortKcal=v=>v>=1000?format(v/1000,2)+'k':format(v);
 const percentOf=(v,goal)=>v!==null&&goal?Math.round(v/goal*100)+'% mục tiêu':'';
+const compactReadout=(sel,{currentDate,goal,proteinGoal,hasProtein})=>{const star=flag=>flag?'*':'';return `<strong>${dateLabel(sel.date)}${sel.date===currentDate?' · Hôm nay':''}</strong><span class="intake">Ăn ${format(num(sel.intake))}${star(sel.intakeIncomplete)}${goal?' / '+format(goal):''} kcal</span>${hasProtein?`<span class="protein">Protein ${format(num(sel.protein),1)}${star(sel.proteinIncomplete)}${proteinGoal?' / '+format(proteinGoal):''} g</span>`:''}<span class="burn">Tập ${sel.rest&&!num(sel.burned)?'nghỉ':format(num(sel.burned))+star(sel.burnIncomplete)+' kcal'}</span>`;};
 // Phone layout: fits the card width for every range, one left axis, no per-bar numbers.
 // Protein and workout kcal keep their own zero-based scales; tapping a day shows its values.
 export function renderEnergyChartCompact(days,{currentDate=today(),target=null,proteinTarget=null,selectedDate=null}={}){
@@ -170,21 +177,41 @@ export function renderEnergyChartCompact(days,{currentDate=today(),target=null,p
     +days.map((d,i)=>d.date===currentDate&&d.date!==selected?slot(i,'today-highlight'):'').join('')
     +days.map((d,i)=>d.date===selected?glass(i):'').join('')
     +[0,.5,1].map(f=>`<line class="energy-grid" x1="${left}" x2="${right}" y1="${yKcal(f*maxKcal)}" y2="${yKcal(f*maxKcal)}"/><text class="intake-axis" x="${left-5}" y="${yKcal(f*maxKcal)+4}" text-anchor="end">${shortKcal(f*maxKcal)}</text>`).join('')
-    +days.map((d,i)=>`${num(d.intake)!==null?`<rect class="intake-bar${d.date===selected?' today':''}${d.intakeIncomplete?' partial':''}" x="${intakeX(i)}" y="${yKcal(d.intake)}" width="${bw}" height="${Math.max(d.intake===0?1.5:0,bottom-yKcal(d.intake))}" rx="${Math.min(3,bw/3)}"/>${gloss(intakeX(i),yKcal(d.intake),bw,bottom-yKcal(d.intake))}`:''}${num(d.protein)!==null?`<rect class="protein-bar${d.proteinIncomplete?' partial':''}" x="${proteinX(i)}" y="${yProtein(d.protein)}" width="${bw}" height="${Math.max(d.protein===0?1.5:0,bottom-yProtein(d.protein))}" rx="${Math.min(3,bw/3)}"/>${gloss(proteinX(i),yProtein(d.protein),bw,bottom-yProtein(d.protein))}`:''}`).join('')
+    +days.map((d,i)=>`${num(d.intake)!==null?`<rect class="intake-bar${d.date===selected?' today':''}${d.intakeIncomplete?' partial':''}" x="${intakeX(i)}" y="${yKcal(d.intake)}" width="${bw}" height="${Math.max(d.intake===0?1.5:0,bottom-yKcal(d.intake))}" rx="${Math.min(3,bw/3)}" data-date="${d.date}"/>${gloss(intakeX(i),yKcal(d.intake),bw,bottom-yKcal(d.intake))}`:''}${num(d.protein)!==null?`<rect class="protein-bar${d.proteinIncomplete?' partial':''}" x="${proteinX(i)}" y="${yProtein(d.protein)}" width="${bw}" height="${Math.max(d.protein===0?1.5:0,bottom-yProtein(d.protein))}" rx="${Math.min(3,bw/3)}"/>${gloss(proteinX(i),yProtein(d.protein),bw,bottom-yProtein(d.protein))}`:''}`).join('')
     +(goal?`<line class="energy-target" x1="${left}" x2="${right}" y1="${yKcal(goal)}" y2="${yKcal(goal)}"/>`:'')
     +(proteinGoal?`<line class="protein-target" x1="${left}" x2="${right}" y1="${yProtein(proteinGoal)}" y2="${yProtein(proteinGoal)}"/>`:'')
     // Same as the desktop chart: the line joins every known value (0 on rest days) and breaks on missing days.
     +segments.filter(s=>s.length>1).map(s=>`<polyline class="burn-line" points="${s.join(' ')}"/>`).join('')
-    +days.map((d,i)=>num(d.burned)!==null?`<circle class="burn-point${d.burnIncomplete?' partial':''}${d.date===selected?' today':''}" cx="${x(i)}" cy="${yBurn(d.burned)}" r="${n>14?3:4}"/>`:'').join('')
+    +days.map((d,i)=>num(d.burned)!==null?`<circle class="burn-point${d.burnIncomplete?' partial':''}${d.date===selected?' today':''}" cx="${x(i)}" cy="${yBurn(d.burned)}" r="${n>14?3:4}" data-date="${d.date}"/>`:'').join('')
     +days.map((d,i)=>showDate(i)?`<text class="chart-date${d.date===currentDate?' today':''}" x="${x(i)+16>width?width-1:x(i)}" y="${bottom+20}" text-anchor="${x(i)+16>width?'end':'middle'}">${dateLabel(d.date)}</text>`:'').join('')
     +days.map((d,i)=>`<rect class="chart-hit" data-action="chart-day" data-date="${d.date}" x="${x(i)-step/2}" y="0" width="${step}" height="${height}"><title>${escape(describe(d))}</title></rect>`).join('')
     +`</svg>`;
   const stats=energyStats(days),tile=(cls,label,value,unit,note)=>`<div class="chart-stat ${cls}"><small>${label}</small><strong>${value}<em>${unit}</em></strong>${note?`<span>${note}</span>`:''}</div>`;
   const statRow=`<div class="chart-stats">${tile('intake','Ăn vào TB',format(stats.intake.avg),'kcal',percentOf(stats.intake.avg,goal))}${hasProtein?tile('protein','Protein TB',format(stats.protein.avg),'g',percentOf(stats.protein.avg,proteinGoal)):''}${tile('burn','Tập luyện TB',format(stats.burned.avg),'kcal',stats.burned.count+' buổi tập')}</div><p class="chart-stats-note">Trung bình trên ${stats.intake.count}/${n} ngày có ghi ăn uống${stats.incomplete?', gồm cả ngày chưa đầy đủ (*)':''}.</p>`;
-  const star=flag=>flag?'*':'';
-  const readout=`<div class="chart-readout" aria-live="polite"><strong>${dateLabel(selected)}${selected===currentDate?' · Hôm nay':''}</strong><span class="intake">Ăn ${format(num(sel.intake))}${star(sel.intakeIncomplete)}${goal?' / '+format(goal):''} kcal</span>${hasProtein?`<span class="protein">Protein ${format(num(sel.protein),1)}${star(sel.proteinIncomplete)}${proteinGoal?' / '+format(proteinGoal):''} g</span>`:''}<span class="burn">Tập ${sel.rest&&!num(sel.burned)?'nghỉ':format(num(sel.burned))+star(sel.burnIncomplete)+' kcal'}</span></div>`;
+  const readout=`<div class="chart-readout" aria-live="polite">${compactReadout(sel,{currentDate,goal,proteinGoal,hasProtein})}</div>`;
   const legend=`<div class="energy-legend compact-legend"><span><i class="intake-key"></i>Ăn vào</span>${hasProtein?'<span><i class="protein-key"></i>Protein</span>':''}${hasBurn?'<span><i class="burn-key"></i>Tập luyện (kcal)</span>':''}${goal?'<span><i class="target-key"></i>Mục tiêu kcal</span>':''}${proteinGoal?'<span><i class="protein-target-key"></i>Mục tiêu protein</span>':''}</div>`;
   return statRow+readout+svg+legend+`<p class="form-note">Chạm vào một ngày để xem số. Trục trái là kcal ăn vào; protein và kcal tập luyện dùng thang riêng, đều từ 0. Kcal tập luyện là ước tính, chưa trừ vào kcal ăn vào.</p>`+energyTable(days);
+}
+export function selectCompactChartDay(root,days,{currentDate=today(),target=null,proteinTarget=null,selectedDate=null}={}){
+  const svg=root.querySelector('.compact-chart'),readout=root.querySelector('.chart-readout'),glassCol=svg?.querySelector('.glass-col');
+  if(!svg||!readout||!glassCol||!days?.length)return false;
+  const selected=days.some(d=>d.date===selectedDate)?selectedDate:energyFocusDate(days,currentDate),idx=days.findIndex(d=>d.date===selected);
+  if(idx<0)return false;
+  const n=days.length,width=340,height=192,left=34,right=width-4,top=10,step=(right-left)/n,x=i=>left+(i+.5)*step;
+  const colY=top-6,colH=height-colY-3,colR=Math.min(10,step/2.4),gx=String(x(idx)-step/2+1.5);
+  for(const r of glassCol.querySelectorAll('rect'))r.setAttribute('x',gx);
+  const todayIdx=days.findIndex(d=>d.date===currentDate),todayEl=svg.querySelector('.today-highlight');
+  if(todayIdx>=0&&selected!==currentDate){
+    if(!todayEl){
+      const doc=svg.ownerDocument||root,rect=doc.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('class','today-highlight');rect.setAttribute('x',String(x(todayIdx)-step/2+1));rect.setAttribute('y',String(colY));rect.setAttribute('width',String(Math.max(1,step-2)));rect.setAttribute('height',String(colH));rect.setAttribute('rx',String(colR));
+      glassCol.parentNode.insertBefore(rect,glassCol);
+    }
+  }else if(todayEl)todayEl.remove();
+  for(const el of svg.querySelectorAll('.intake-bar,.burn-point'))el.classList.toggle('today',el.getAttribute('data-date')===selected);
+  const hasProtein=days.some(d=>num(d.protein)!==null)||num(proteinTarget)>0,goal=num(target)>0?num(target):null,proteinGoal=num(proteinTarget)>0?num(proteinTarget):null;
+  readout.innerHTML=compactReadout(days[idx],{currentDate,goal,proteinGoal,hasProtein});
+  return true;
 }
 
 // Name-based hints only; unknown exercises remain explicit and do not imply a body split.

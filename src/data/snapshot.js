@@ -6,6 +6,7 @@ import {SCHEMAS} from '../core/core.js';
 
 export const SNAPSHOT_KEY='gymbro.snapshot.v1';
 export const SNAPSHOT_MAX_BYTES=2_500_000;
+// The cached #archive route displays these rows while the server is still loading.
 const TABLES=[...Object.keys(SCHEMAS),'Archive'];
 
 export function writeSnapshot(storage,{uid,sessionExpiresAt,data,user=null},now=Date.now()){

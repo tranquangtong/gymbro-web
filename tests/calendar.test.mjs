@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {monthDates,shiftMonth,validMonth,monthLabel,kcalStatus,calendarMonth,monthStats,monthInsights,renderCalendar,renderDayHeadline} from '../src/ui/calendar.js';
+import {dayEnergy} from '../src/ui/dashboard.js';
+import {active} from '../src/core/core.js';
 
 const meal=(date,kcal,protein,extra={})=>({id:`m-${date}-${kcal}`,date,meal:'lunch',food:'x',kcal,protein,created_at:date,updated_at:date,deleted:false,...extra});
 const lift=(date,kcal,extra={})=>({id:`w-${date}`,date,kind:'strength',exercise:'Squat',sets_json:JSON.stringify([{weight_kg:60,reps:8},{weight_kg:60,reps:8}]),kcal_burned_est:kcal,created_at:date,updated_at:date,deleted:false,...extra});
@@ -62,4 +64,36 @@ test('Calendar markup: Monday-first padding, disabled future days, status classe
   assert.match(html,/<b class="full">2\.500<\/b><b class="short">2,5k<\/b>/);
   assert.match(renderCalendar({month:'2026-10',days:calendarMonth({},'2026-10',{current:'2026-11-05'}),stats:monthStats([]),insights:[],current:'2026-11-05'}),/Tháng này/);
   assert.match(renderDayHeadline(days[1],T),/2\.500<\/strong><span>\/ 2\.000 kcal · 125% · vượt/);
+});
+
+test('calendarMonth buckets rows by date and matches per-day dayEnergy outputs identically',()=>{
+  const data={
+    Archive:[meal('2026-11-02',9000,300)],
+    WebMeals:[
+      meal('2026-10-31',2000,100),
+      meal('2026-11-02',600,40,{id:'m1'}),
+      meal('2026-11-02',700,50,{id:'m2'}),
+      meal('2026-11-02',500,20,{id:'m3',skipped:true}),
+      meal('2026-11-02',500,20,{id:'m4',deleted:true}),
+      meal('2026-11-04',800,'',{id:'m5'}),
+      meal('2026-12-01',1800,90)
+    ],
+    WebWorkouts:[
+      lift('2026-10-31',400,{id:'w0'}),
+      lift('2026-11-02',250,{id:'w1'}),
+      lift('2026-11-02',150,{id:'w2'}),
+      {id:'w3',date:'2026-11-02',kind:'rest',created_at:'',updated_at:'',deleted:false},
+      {id:'w4',date:'2026-11-03',kind:'rest',created_at:'',updated_at:'',deleted:false},
+      lift('2026-11-04',300,{id:'w5',deleted:'TRUE'})
+    ]
+  };
+  const days=calendarMonth(data,'2026-11',{current:'2026-11-05',...T});
+  const activeMeals=active(data.WebMeals).filter(r=>String(r.skipped).toLowerCase()!=='true'),activeWorkouts=active(data.WebWorkouts);
+  for(const d of days){
+    const expected=dayEnergy(activeMeals,activeWorkouts,d.date);
+    for(const k of Object.keys(expected))assert.equal(d[k],expected[k],`${d.date}.${k}`);
+  }
+  assert.equal(days[1].intake,1300);assert.equal(days[1].protein,90);assert.equal(days[1].burned,400);assert.equal(days[1].sets,4);assert.equal(days[1].rest,false);
+  assert.equal(days[2].rest,true);assert.equal(days[2].burned,0);
+  assert.equal(days[3].intake,800);assert.equal(days[3].protein,null);assert.equal(days[3].burned,null);
 });
