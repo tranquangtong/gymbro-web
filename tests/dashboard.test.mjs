@@ -188,6 +188,7 @@ test('Phone chart day columns stay inside the viewBox, and the selected day is a
 
 test('energyDays buckets rows by date once and matches per-day dayEnergy across range boundaries',()=>{
  const data={
+  Archive:[meal({date:'2026-10-29',kcal:9999})],
   WebMeals:[meal({id:'out-early',date:'2026-10-18',kcal:999}),meal({id:'a',date:'2026-10-29',kcal:400,protein:25}),meal({id:'b',date:'2026-10-29',kcal:600,protein:''}),meal({id:'skip',date:'2026-10-29',kcal:500,skipped:true}),meal({id:'del',date:'2026-10-29',kcal:500,deleted:true}),meal({id:'out-late',date:'2026-10-31',kcal:999})],
   WebWorkouts:[workout({id:'w-out',date:'2026-10-18',kcal_burned_est:500}),workout({id:'w1',date:'2026-10-29',kcal_burned_est:150}),workout({id:'w2',date:'2026-10-29',kcal_burned_est:200}),workout({id:'r',date:'2026-10-28',kind:'rest'})]
  };
