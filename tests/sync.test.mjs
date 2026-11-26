@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {FirebaseRepository} from '../src/data/firebase.js';
-import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData} from '../src/data/sync.js';
+import {startupMode,saveMessage,localMissingCount,loadCurrentData,createLiveSync,transferLocalData,rememberRepoMode,updateLocalPending} from '../src/data/sync.js';
 import {emptyData} from '../src/core/core.js';
 import {parseMeals,DEFAULT_FOODS} from '../src/core/quick.js';
 
@@ -9,6 +9,39 @@ test('A persisted local/demo preference cannot silently disable Firebase after a
  for(const preferences of [{},{mode:'local'},{mode:'demo'},{mode:'firebase'}])assert.equal(startupMode(preferences),'firebase');
  assert.match(saveMessage({mode:'local'},2),/Chưa đồng bộ Firebase/);
  assert.match(saveMessage({mode:'firebase',repo:{s:{auth:{currentUser:{email:'owner@example.test'}}}}},2),/2 mục vào Firebase · owner@example.test/);
+});
+test('repository mode writes only when it changes and preserves other preferences',()=>{
+ const writes=[],storage={setItem:(...args)=>writes.push(args)},previous={mode:'local',theme:'dark'};
+ const updated=rememberRepoMode(storage,'prefs',previous,'firebase');
+ assert.deepEqual(updated,{mode:'firebase',theme:'dark'});
+ assert.equal(rememberRepoMode(storage,'prefs',updated,'firebase'),updated);
+ assert.deepEqual(writes,[['prefs',JSON.stringify(updated)]]);
+});
+
+test('pending device logs defer reading storage, skip empty storage, and ignore a replaced repository',async t=>{
+ let scheduled,reads=0;
+ t.mock.method(globalThis,'setTimeout',fn=>{scheduled=fn;});
+ const owner={uid:'u',ownerUid:'u'};
+ const state={repo:owner,mode:'firebase',connected:true,localPending:0,data:emptyData()};
+ const local=emptyData();local.WebMeals=[{id:'device-meal'}];
+ const storage={getItem:key=>{assert.equal(key,'gymbro.v1.local');reads++;return JSON.stringify(local);}};
+ const pending=updateLocalPending(state,storage,{defer:true});
+ assert.equal(reads,0);
+ scheduled();
+ assert.equal(await pending,true);
+ assert.equal(state.localPending,1);
+
+ const stale=updateLocalPending(state,storage,{defer:true});
+ state.repo={uid:'other',ownerUid:'other'};state.localPending=0;
+ scheduled();
+ assert.equal(await stale,false);
+ assert.equal(reads,1);
+
+ let remoteReads=0;
+ state.data=new Proxy({}, {get:()=>{remoteReads++;}});
+ assert.equal(await updateLocalPending(state,{getItem:()=>null}),false);
+ assert.equal(remoteReads,0);
+ assert.equal(state.localPending,0);
 });
 function streamService(){
  const streams=new Map(),s={sessionExpiresAt:Number.MAX_SAFE_INTEGER,auth:{currentUser:{uid:'owner',email:'owner@example.test'}},db:{},dbSDK:{collection:(_, ...p)=>p.join('/'),onSnapshot:(path,options,next,error)=>{const stream={options,next,error,stopped:false};streams.set(path,stream);return ()=>{stream.stopped=true;};}}};return {s,streams};

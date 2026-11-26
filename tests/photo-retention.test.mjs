@@ -47,10 +47,21 @@ test('Photo reads and uploads reject expired images, even before the server job 
 
 test('Local cache cleanup physically deletes only expired image bytes and closes IndexedDB',async()=>{
  const {purgeLocalPhotoCache}=await import('../src/data/local-extras.js');
- const original=globalThis.indexedDB,removed=[];let closed=false;
+ const original=globalThis.indexedDB,idle=globalThis.requestIdleCallback,removed=[];let closed=false,openCount=0,run;
+ globalThis.requestIdleCallback=callback=>{run=callback;};
  const records=[{key:'owner-a/old',value:{created_at:old}},{key:'owner-b/new',value:{created_at:fresh}}];
- globalThis.indexedDB={open:()=>{const opening={};queueMicrotask(()=>{opening.result={close:()=>{closed=true;},transaction:()=>{
+ globalThis.indexedDB={open:()=>{openCount++;const opening={};queueMicrotask(()=>{opening.result={close:()=>{closed=true;},transaction:()=>{
   const tx={objectStore:()=>({openCursor:()=>{const request={};let index=0;const next=()=>queueMicrotask(()=>{const item=records[index];request.result=item?{value:item.value,delete:()=>removed.push(item.key),continue:()=>{index++;next();}}:null;request.onsuccess();if(!item)queueMicrotask(()=>tx.oncomplete());});next();return request;}})};return tx;
  }};opening.onsuccess();});return opening;}};
- try{assert.equal(await purgeLocalPhotoCache(now),1);assert.deepEqual(removed,['owner-a/old']);assert.equal(closed,true);}finally{if(original===undefined)delete globalThis.indexedDB;else globalThis.indexedDB=original;}
+ try{
+  const cleaning=purgeLocalPhotoCache(now);
+  assert.equal(purgeLocalPhotoCache(now),cleaning);
+  assert.equal(openCount,0);
+  run();
+  assert.equal(await cleaning,1);
+  assert.deepEqual(removed,['owner-a/old']);
+  assert.equal(closed,true);
+  assert.equal(await purgeLocalPhotoCache(now),0);
+  assert.equal(openCount,1);
+ }finally{globalThis.indexedDB=original;globalThis.requestIdleCallback=idle;}
 });

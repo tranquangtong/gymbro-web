@@ -14,12 +14,14 @@ import {isAdmin} from './firebase.js';
 import {listLocalPhotos} from './local-extras.js';
 import {validatePhoto} from '../core/media.js';
 import {photoExpired} from '../core/photo-retention.js';
+import {runWhenIdle} from './idle.js';
 
 export const WINDOW_DAYS=120;
 export const POLL_MS=45000;
 const DATED=['WebMeals','WebWorkouts'],ALL=['WebProfile','Archive'],TABLES=[...Object.keys(SCHEMAS),'Archive'];
 const clone=v=>structuredClone(v);
 const strip=r=>{const c={...r};delete c._revision;delete c._originalUpdatedAt;return c;};
+const scheduledPhotoOwners=new Set();
 
 export class CloudflareRepository{
   constructor(s,targetUid=null,{apiBase,windowDays=WINDOW_DAYS,fetchImpl=(...a)=>fetch(...a),timeoutMs=15000,writeTimeoutMs=20000,pollMs=POLL_MS}={}){
@@ -62,7 +64,7 @@ export class CloudflareRepository{
       const recent=shiftDate(today(),-this.windowDays),from=this.loadedFrom&&(!force||this.loadedFrom<recent)?this.loadedFrom:recent,data=emptyData();data.Archive=[];
       const parts=await Promise.all([...DATED.map(k=>this.page(k,{from}).then(r=>[k,r])),...ALL.map(k=>this.page(k).then(r=>[k,r]))]);
       for(const [k,r] of parts)data[k]=r.rows;
-      this.seq=Math.min(...parts.map(([,r])=>r.seq));this.loadedFrom=from;this._cache=data;this.uploadLocalPhotos().catch(()=>{});return data;
+      this.seq=Math.min(...parts.map(([,r])=>r.seq));this.loadedFrom=from;this._cache=data;this.scheduleLocalPhotoUpload();return data;
     }finally{this._loadTask=null;}})();
     return clone(await this._loadTask);
   }
@@ -146,17 +148,27 @@ export class CloudflareRepository{
     try{await this.photos.savePhoto(photo);}catch{}
     return photo;
   }
+  scheduleLocalPhotoUpload(){
+    if(this.ownerUid!==this.uid||typeof indexedDB==='undefined'||scheduledPhotoOwners.has(this.uid))return;
+    scheduledPhotoOwners.add(this.uid);
+    runWhenIdle(async()=>{
+      try{this.check();await this.uploadLocalPhotos();}
+      catch{scheduledPhotoOwners.delete(this.uid);}
+    });
+  }
   // Photos taken before cloud sync existed only live in this device's cache: upload them once.
   async uploadLocalPhotos(){
     if(this.ownerUid!==this.uid||this._uploading)return 0;this._uploading=true;
-    const doneKey='gymbro.cf.uploaded.'+this.ownerUid;let done=[];try{done=JSON.parse(globalThis.localStorage?.getItem(doneKey)||'[]');}catch{}
-    const seen=new Set(done);let uploaded=0;
-    for(const photo of await listLocalPhotos(this.photos.key+'/').catch(()=>[])){
-      if(seen.has(photo.id)||photoExpired(photo))continue;
-      try{await this.api('/v1/photos',{method:'POST',body:{photo}});seen.add(photo.id);uploaded++;}catch(e){if(e.code==='photo/expired')seen.add(photo.id);}
-    }
-    try{globalThis.localStorage?.setItem(doneKey,JSON.stringify([...seen].slice(-200)));}catch{}
-    return uploaded;
+    try{
+      const doneKey='gymbro.cf.uploaded.'+this.ownerUid;let done=[];try{done=JSON.parse(globalThis.localStorage?.getItem(doneKey)||'[]');}catch{}
+      const seen=new Set(Array.isArray(done)?done:[]),previous=seen.size;let uploaded=0;
+      for(const photo of await listLocalPhotos(this.photos.key+'/')){
+        if(seen.has(photo.id)||photoExpired(photo))continue;
+        try{await this.api('/v1/photos',{method:'POST',body:{photo}});seen.add(photo.id);uploaded++;}catch(e){if(e.code==='photo/expired')seen.add(photo.id);}
+      }
+      if(seen.size!==previous)try{globalThis.localStorage?.setItem(doneKey,JSON.stringify([...seen].slice(-200)));}catch{}
+      return uploaded;
+    }finally{this._uploading=false;}
   }
   async importBundle(bundle,onProgress=()=>{}){
     let inserted=0,skipped=0,done=0;const total=TABLES.reduce((n,t)=>n+(bundle.data[t]||[]).length,0);
