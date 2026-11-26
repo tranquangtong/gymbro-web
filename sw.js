@@ -1,11 +1,43 @@
-// Network-first for this site's own files: every load revalidates with GitHub Pages
-// (cheap 304 when unchanged), so a phone never keeps running an old release.
-// Nothing is stored; when offline the browser's normal cache is used.
+// Revalidate with GitHub Pages on every load and keep a copy for offline use.
+const CACHE_NAME='gymbro-shell-v1';
+
 self.addEventListener('install',()=>self.skipWaiting());
-self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+self.addEventListener('activate',e=>e.waitUntil((async()=>{
+  const names=await caches.keys();
+  await Promise.all(names.filter(name=>name.startsWith('gymbro-')&&name!==CACHE_NAME)
+    .map(name=>caches.delete(name)));
+  await self.clients.claim();
+})()));
+
 self.addEventListener('fetch',e=>{
   const req=e.request,url=new URL(req.url);
-  if(req.method!=='GET'||url.origin!==self.location.origin)return;
-  // Navigation requests can't be re-issued with options, so rebuild a plain GET from the URL.
-  e.respondWith(fetch(new Request(url.href,{cache:'no-cache',credentials:'same-origin'})).catch(()=>fetch(req)));
+  if(req.method!=='GET'||req.cache==='no-store'||url.origin!==self.location.origin)return;
+
+  const navigation=req.mode==='navigate';
+  // Navigation requests cannot be reissued with a cache override.
+  const network=navigation
+    ? fetch(new Request(url.href,{cache:'no-cache',credentials:'same-origin'}))
+    : fetch(req,{cache:'no-cache'});
+  if(navigation)url.search='';
+  const key=navigation?url.href:req;
+
+  e.waitUntil(network.then(async res=>{
+    if(!res.ok||res.type!=='basic')return;
+    const copy=res.clone();
+    const cache=await caches.open(CACHE_NAME);
+    await cache.put(key,copy);
+  }).catch(()=>{}));
+
+  e.respondWith(network.catch(async error=>{
+    const options={cacheName:CACHE_NAME};
+    const cached=await caches.match(key,options);
+    if(cached)return cached;
+    if(navigation){
+      for(const path of ['./','./index.html']){
+        const shell=await caches.match(new URL(path,self.registration.scope).href,options);
+        if(shell)return shell;
+      }
+    }
+    throw error;
+  }));
 });
