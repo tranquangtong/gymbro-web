@@ -1,5 +1,6 @@
 import {isWalking,walkingSettings,applyWalkingSettings} from '../core/walking.js';
 import {exerciseChoices,exerciseForm} from './exercise-library.js';
+import {debounce} from './lazy.js';
 import {quotaMessage} from '../data/errors.js';
 import {forgetExpiredPhotos} from '../core/photo-retention.js';
 import {purgeLocalPhotoCache} from '../data/local-extras.js';
@@ -149,11 +150,14 @@ export function createQuickUI(env){
   const table=type=>type==='meals'?'WebMeals':'WebWorkouts';
   async function foods(seed=false){const repo=getState().repo;if(!repo)return DEFAULT_FOODS;library=seed?await repo.seedFoods():await repo.loadFoods();if(!library.length&&(getState().mode!=='firebase'||repo.ownerUid===repo.uid))library=await repo.seedFoods();return library.length?library:DEFAULT_FOODS;}
   function scopeGuard(expected){if(scope()!==expected)throw Error('Tài khoản hoặc chế độ đã thay đổi. Đóng và mở lại thao tác.');}
-  const draftKey=type=>'gymbro.quick.'+scope()+'.'+type;
-  function rememberCompose(){if(!ctx||ctx.view!=='compose')return;ctx.text=$('#quick-text')?.value??ctx.text;ctx.date=$('#quick-date')?.value||ctx.date;ctx.meal=$('#quick-meal')?.value||ctx.meal;for(const key of ['food','amount','unit','exercise','count','reps','kg','kind','duration','incline','speed'])ctx[key]=$('#compact-'+key)?.value??ctx[key];ctx.photoTarget=Number($('#photo-target')?.value??ctx.photoTarget??0);drafts.set(ctx.scope+ctx.type,ctx);try{sessionStorage.setItem(draftKey(ctx.type),JSON.stringify({text:ctx.text,date:ctx.date,meal:ctx.meal,method:ctx.method,food:ctx.food,amount:ctx.amount,exercise:ctx.exercise,count:ctx.count,reps:ctx.reps,kg:ctx.kg,kind:ctx.kind,duration:ctx.duration,incline:ctx.incline,speed:ctx.speed}));}catch{}}
-  function close(){if(busy)return;stopDemo();rememberCompose();dialog.close();}
+  const draftKey=(type,owner=scope())=>'gymbro.quick.'+owner+'.'+type;
+  function syncComposeFields(){if(!ctx||ctx.view!=='compose')return;ctx.text=$('#quick-text')?.value??ctx.text;ctx.date=$('#quick-date')?.value||ctx.date;ctx.meal=$('#quick-meal')?.value||ctx.meal;for(const key of ['food','amount','unit','exercise','count','reps','kg','kind','duration','incline','speed'])ctx[key]=$('#compact-'+key)?.value??ctx[key];ctx.photoTarget=Number($('#photo-target')?.value??ctx.photoTarget??0);drafts.set(ctx.scope+ctx.type,ctx);}
+  function persistComposeDraft(){if(!ctx||ctx.view!=='compose')return;try{sessionStorage.setItem(draftKey(ctx.type,ctx.scope),JSON.stringify({text:ctx.text,date:ctx.date,meal:ctx.meal,method:ctx.method,food:ctx.food,amount:ctx.amount,unit:ctx.unit,exercise:ctx.exercise,count:ctx.count,reps:ctx.reps,kg:ctx.kg,kind:ctx.kind,duration:ctx.duration,incline:ctx.incline,speed:ctx.speed}));}catch{}}
+  const schedulePersistCompose=debounce(persistComposeDraft,300);
+  function rememberCompose(){schedulePersistCompose.cancel();syncComposeFields();persistComposeDraft();}
+  function close(){if(busy)return;stopDemo();rememberCompose();schedulePersistEstimate.flush();dialog.close();}
   async function open(type,opts={}){
-    if(!writable())return;const currentScope=scope();let draft={};try{draft=JSON.parse(sessionStorage.getItem(draftKey(type))||'{}');}catch{}
+    if(!writable())return;flushDrafts();const currentScope=scope();let draft={};try{draft=JSON.parse(sessionStorage.getItem(draftKey(type))||'{}');}catch{}
     ctx=drafts.get(currentScope+type)||{view:'compose',type,scope:currentScope,text:'',date:getState().date,meal:'lunch',photos:[],preview:null,amount:1,count:3,reps:12,kg:'',kind:'strength',duration:'',...draft,method:draft.method==='text'&&draft.text?.trim()?'text':'form'};
     const legacyText=opts.text??(ctx.method==='text'?ctx.text:'');
     ctx={...ctx,...opts,method:'form',view:'compose'};
@@ -197,7 +201,7 @@ export function createQuickUI(env){
   }
   const unitLabel=()=>unitChoices().find(([k])=>k===ctx.unit)?.[1]||'khẩu phần';
   function drawCompose(){
-    const meal=ctx.type==='meals',known=library.length?library:DEFAULT_FOODS,choices=exerciseChoices(getState().data.WebWorkouts,ctx.date),walking=ctx.kind==='cardio'&&isWalking(ctx.exercise);
+    const meal=ctx.type==='meals',known=library.length?library:DEFAULT_FOODS,walking=ctx.kind==='cardio'&&isWalking(ctx.exercise);
     const form=meal?`<div class="compact-fields meal-fields"><div class="name-field-group"><label class="field">Món ăn<input id="compact-food" autocomplete="off" value="${esc(ctx.food||'')}" placeholder="Chọn món quen hoặc nhập tên món"></label><div id="food-suggestions" class="inline-suggestions" role="group" aria-label="Gợi ý món ăn" hidden></div></div><div class="field amount-field"><span id="amount-label">Khẩu phần</span><div class="amount-row"><input id="compact-amount" type="number" inputmode="decimal" value="${esc(ctx.amount||1)}" min="0.1" max="100000" step="any" aria-labelledby="amount-label"><select id="compact-unit" aria-label="Đơn vị khẩu phần" data-key="${esc(unitChoices().map(([k,v])=>k+v).join('|'))}">${unitOptions()}</select></div></div></div>`:
       `<div class="compact-fields workout-fields"><div class="name-field-group">${field('Bài tập','compact-exercise',ctx.exercise||'','text','autocomplete="off" placeholder="Chọn bài quen hoặc nhập tên bài"')}<div id="exercise-suggestions" class="inline-suggestions" role="group" aria-label="Gợi ý bài tập" hidden></div></div><div class="field-row workout-numbers">${ctx.kind==='cardio'?field('Phút','compact-duration',ctx.duration,'number','min="0.1" max="1440" step="0.1"')+(walking?field('Độ dốc (%)','compact-incline',ctx.incline??'','number','min="0" max="40" step="0.1"')+field('Tốc độ (kph)','compact-speed',ctx.speed??'','number','min="0.1" max="25" step="0.1"'):''):ctx.kind==='rest'?'':field('Set','compact-count',ctx.count||3,'number','min="1" max="50" step="1"')+field('Reps','compact-reps',ctx.reps||12,'number','min="1" max="1000" step="1"')+(field(ctx.kind==='assisted'?'Kg trợ lực':ctx.kind==='bodyweight'?'Kg tạ thêm':'Kg','compact-kg',ctx.kg,'number','min="0" max="2000" step="0.1"'+(ctx.kind==='bodyweight'?' placeholder="Không có"':'')))}</div></div>`;
     const photos=meal?`<details class="compose-food-library"><summary>Món quen &amp; thư viện</summary><div class="quick-foods">${known.slice(0,6).map(f=>btn('+ '+esc(f.name),'insert-food','chip-button',`data-id="${esc(f.id)}"`)).join('')}${btn('Thư viện món','library','text-button')}</div></details><div class="photo-tools"><label class="button upload-label">${icon('plus')}Thêm ảnh<input class="sr-only" type="file" id="meal-photo" accept="image/*" multiple></label><label class="button upload-label">${icon('camera')}Chụp ảnh<input class="sr-only" type="file" id="meal-camera" accept="image/*" capture="environment"></label><span class="subtle">Tối đa 3 ảnh · tự xóa sau 7 ngày</span></div><div class="photo-strip">${ctx.photos.map((p,i)=>`<figure><img src="${p.data_url}" alt="Ảnh bữa ăn ${i+1}"><button data-quick="remove-photo" data-index="${i}" aria-label="Bỏ ảnh ${i+1}">×</button></figure>`).join('')}</div>`:exercisePicker();
@@ -216,17 +220,19 @@ export function createQuickUI(env){
     try{
       if(ctx.type==='workouts'){const fresh=await repo.load();ensureWorkoutDay(active(fresh.WebWorkouts),rows);const calculated=estimateWorkoutBatch(rows,{weight:workoutWeight(fresh.WebProfile,ctx.date)});rows.splice(0,rows.length,...calculated);}
       if(ctx.type==='meals'&&ctx.photos.length){phase='photo';const target=rows[ctx.photoTarget||0];if(!target||target.skipped)throw Error('Chọn món có tên để gắn ảnh.');for(const p of ctx.photos){if(p.meal_id!=='pending'&&p.meal_id!==target.id)p.id=uid();p.meal_id=target.id;await repo.savePhoto(p);}target.photo_ids=ctx.photos.map(p=>p.id);}
-      phase='journal';scopeGuard(savedScope);await repo.saveMany(table(ctx.type),rows);drafts.delete(ctx.scope+ctx.type);try{sessionStorage.removeItem(draftKey(ctx.type));}catch{}
+      phase='journal';scopeGuard(savedScope);await repo.saveMany(table(ctx.type),rows);schedulePersistCompose.cancel();drafts.delete(ctx.scope+ctx.type);try{sessionStorage.removeItem(draftKey(ctx.type));}catch{}
       const type=ctx.type,message=saveMessage(rows.length);ctx=null;dialog.close();toast(message);try{await reload();render();}catch(e){toast(message+' · Chưa tải lại được: '+e.message,true);}if(!['eat','gym'].includes(location.hash.slice(1)))location.hash=type==='meals'?'eat':'gym';
     }catch(e){e.operation=phase;throw e;}finally{busy=false;lock(false);if(ctx?.preview){const b=dialog.querySelector('[data-quick="save"]');if(b)b.textContent='Lưu '+ctx.preview.length+' mục';}}
   }
   function lock(locked){dialog.querySelectorAll('button,input,select,textarea').forEach(x=>x.disabled=locked);}
   const requestKey=kind=>'gymbro.estimate.'+scope()+'.'+kind;
   function storeRequest(q){try{sessionStorage.setItem(requestKey(q.kind),JSON.stringify(q));}catch{throw Error('Không giữ được prompt trong phiên này. Giải phóng bộ nhớ trình duyệt rồi thử lại.');}}
-  function rememberEstimate(){
+  function persistEstimateDraft(){
     if(!estimate?.q||estimate.scope!==scope())return;
     try{sessionStorage.setItem(requestKey(estimate.type)+'.result',JSON.stringify({request_id:estimate.q.request_id,text:estimate.text}));}catch{}
   }
+  const schedulePersistEstimate=debounce(persistEstimateDraft,300);
+  function rememberEstimate(){schedulePersistEstimate.cancel();persistEstimateDraft();}
   function photoLabel(photo){const i=estimate.q.items.findIndex(x=>x.id===photo.meal_id);return {n:i+1,label:`Món ${i+1} · ${estimate.q.items[i]?.record.food||''}`.trim(),name:`mon${i+1}_anh${(estimate.q.items[i]?.record.photo_ids?.indexOf(photo.id)??0)+1}.jpg`};}
   async function estimatePhotoFile(photo){const l=photoLabel(photo);try{return await labeledPhotoFile(photo,l.label,l.name);}catch{return new File([photoFile(photo)],l.name,{type:'image/jpeg'});}}
   const missingPhotoNote=n=>`${n} ảnh không còn tải được. Ảnh được giữ 7 ngày rồi tự xoá; ảnh chụp trước khi có đồng bộ ảnh chỉ nằm trên máy đã chụp. AI vẫn ước tính được từ mô tả món.`;
@@ -292,7 +298,7 @@ export function createQuickUI(env){
     startDemo();
   }
   async function openEstimate(type,onlyId=null,opts={}){
-    if(!writable())return;rememberCompose();const s=getState(),rows=active(s.data[table(type)]).filter(r=>r.date===s.date&&(type==='meals'?needsMealEstimate(r):r.kind!=='rest')&&(!onlyId||r.id===onlyId));
+    if(!writable())return;rememberCompose();schedulePersistEstimate.flush();const s=getState(),rows=active(s.data[table(type)]).filter(r=>r.date===s.date&&(type==='meals'?needsMealEstimate(r):r.kind!=='rest')&&(!onlyId||r.id===onlyId));
     if(!rows.length){toast(type==='meals'?'Không có món cần ước tính: các món đã đủ kcal và P/C/F, hoặc ngày này chưa có món.':'Lưu nhật ký trước khi xuất prompt.');return;}
     if(type==='meals'&&!opts.skipHelp&&!helpSeenInSession&&shouldAutoShowHelp(readStorage())){markHelpSeen();return showEstimateHelp({from:'start',onlyId});}
     let old=null;try{old=JSON.parse(sessionStorage.getItem(requestKey(type))||'null');}catch{}
@@ -343,7 +349,7 @@ export function createQuickUI(env){
   }
   async function applyOutput(){
     const e=estimate;scopeGuard(e.scope);if(!writable()||!e.result)return;const repo=getState().repo;busy=true;lock(true);
-    try{const data=await repo.load();const records=parseEstimate(e.text,e.q,data[table(e.type)],scope());await repo.saveMany(table(e.type),records);sessionStorage.removeItem(requestKey(e.type));sessionStorage.removeItem(requestKey(e.type)+'.result');e.q=null;e.result=null;dialog.close();await reload();render();toast('Đã cập nhật '+records.length+' mục.');}finally{busy=false;lock(false);}
+    try{const data=await repo.load();const records=parseEstimate(e.text,e.q,data[table(e.type)],scope());await repo.saveMany(table(e.type),records);schedulePersistEstimate.cancel();sessionStorage.removeItem(requestKey(e.type));sessionStorage.removeItem(requestKey(e.type)+'.result');e.q=null;e.result=null;dialog.close();await reload();render();toast('Đã cập nhật '+records.length+' mục.');}finally{busy=false;lock(false);}
   }
   async function showLibrary(){
     if(!writable())return;rememberCompose();await foods();ctx={view:'library',scope:scope()};
@@ -444,17 +450,20 @@ export function createQuickUI(env){
     if(a==='start-estimate'){markHelpSeen();await openEstimate('meals',ctx?.onlyId||null,{skipHelp:true});if(ctx?.view==='estimate-help')close();return;}
     if(a==='entry-photos')return showPhotos(el.dataset.id);
   }
-  document.addEventListener('click',e=>{const el=e.target.closest('[data-quick]');if(el){e.preventDefault();if(busy)return;Promise.resolve(action(el)).catch(error);}});
+  const trigger=el=>{if(busy)return;return Promise.resolve(action(el)).catch(error);};
+  document.addEventListener('click',e=>{const el=e.target.closest('[data-quick]');if(el){e.preventDefault();trigger(el);}});
   dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
-  dialog.addEventListener('close',()=>{stopDemo();});
+  function flushDrafts(){schedulePersistCompose.flush();schedulePersistEstimate.flush();}
+  dialog.addEventListener('close',()=>{stopDemo();flushDrafts();});
+  globalThis.addEventListener?.('pagehide',flushDrafts);
   dialog.addEventListener('paste',e=>{
     if(e.target.id!=='estimate-output'||ctx?.view!=='estimate'||busy)return;
     const text=e.clipboardData?.getData('text/plain')||e.clipboardData?.getData('text')||'';if(!text.trim())return;
     e.preventDefault();Promise.resolve(pasteResult(text)).catch(error);
   });
   dialog.addEventListener('input',e=>{
-    if(ctx?.view==='compose'){rememberCompose();if(['compact-food','compact-exercise'].includes(e.target.id))renderNameSuggestions(e.target.id);if(e.target.id==='compact-food')syncUnits();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
-    if(e.target.id==='estimate-output'){estimate.text=e.target.value;rememberEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
+    if(ctx?.view==='compose'){syncComposeFields();schedulePersistCompose();if(['compact-food','compact-exercise'].includes(e.target.id))renderNameSuggestions(e.target.id);if(e.target.id==='compact-food')syncUnits();if(!['photo-target'].includes(e.target.id)){ctx.preview=null;const preview=$('#quick-preview');if(preview)preview.innerHTML='';dialog.querySelector('[data-quick="save"]')?.remove();}}
+    if(e.target.id==='estimate-output'){estimate.text=e.target.value;schedulePersistEstimate();estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();}
     if(e.target.id==='session-minutes'&&estimate?.q){estimate.sessionMinutes=e.target.value;estimate.q=null;estimate.result=null;drawEstimate();$('#session-minutes')?.focus();}
   });
   dialog.addEventListener('change',e=>{if(e.target.id==='estimate-result-file'){const file=e.target.files?.[0];if(!file)return;if(file.size>200000)return error(Error('File kết quả tối đa 200 KB.'));const target=estimate;file.text().then(text=>{if(estimate!==target||ctx?.view!=='estimate')return;estimate.text=text;estimate.result=null;dialog.querySelector('[data-quick="apply-estimate"]')?.remove();$('#estimate-output').value=text;rememberEstimate();return parseOutput();}).catch(error);return;}if(['meal-photo','meal-camera','existing-photo','existing-camera'].includes(e.target.id)){const files=[...(e.target.files||[])];e.target.value='';addPhotos(files).catch(error);}if(e.target.id==='compact-exercise'&&ctx?.view==='compose'&&ctx.type==='workouts'){
@@ -475,6 +484,6 @@ export function createQuickUI(env){
     if(ctx?.view==='compose')drawCompose();else if(ctx?.view==='photos'){ctx.record={...ctx.record,photo_ids:ctx.photos.map(p=>p.id)};drawPhotos();}else if(ctx?.view==='estimate'){estimate.text=$('#estimate-output')?.value??estimate.text;drawEstimate();}
   }
   const cleanup=()=>{purgeMemoryPhotos();purgeLocalPhotoCache().catch(()=>{});};
-  cleanup();setInterval(cleanup,60*1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)cleanup();});
-  return {open,openEstimate,showLibrary,showPhotos};
+  cleanup();setInterval(cleanup,60*1000);document.addEventListener('visibilitychange',()=>{if(document.hidden)flushDrafts();else cleanup();});
+  return {open,openEstimate,showLibrary,showPhotos,trigger};
 }

@@ -5,14 +5,14 @@ import {createQuickUI,ESTIMATE_HELP_KEY,shouldAutoShowHelp,createDemoPlayer} fro
 // Exercise the real composer without a browser or a live database.
 function composer(t,saved={}){
  const events={},dialogEvents={},values=new Map(),storage=new Map(Object.entries(saved));
- const dialog={innerHTML:'',open:false,classList:{toggle(){}},setAttribute(){},addEventListener:(name,fn)=>dialogEvents[name]=fn,showModal(){this.open=true;},querySelector(){return null;},querySelectorAll(){return [];}};
+ const dialog={innerHTML:'',open:false,classList:{toggle(){}},setAttribute(){},addEventListener:(name,fn)=>dialogEvents[name]=fn,showModal(){this.open=true;},close(){this.open=false;},querySelector(){return null;},querySelectorAll(){return [];}};
  t.mock.method(globalThis,'setInterval',()=>0);
  const setGlobal=(key,value)=>{const old=Object.getOwnPropertyDescriptor(globalThis,key);Object.defineProperty(globalThis,key,{configurable:true,writable:true,value});t.after(()=>old?Object.defineProperty(globalThis,key,old):delete globalThis[key]);};
  setGlobal('document',{createElement:tag=>tag==='canvas'?{getContext:()=>({fillRect(){},drawImage(){}}),toDataURL:()=> 'data:image/jpeg;base64,AAAA'}:dialog,body:{append(){}},querySelector:s=>values.get(s)||null,addEventListener:(name,fn)=>events[name]=fn});
  setGlobal('sessionStorage',{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)});
  const state={mode:'firebase',date:'2026-11-01',data:{WebProfile:[]},repo:{ownerUid:'test',uid:'test',loadFoods:async()=>[{id:'banana',name:'Chuối'}]}};
  const ui=createQuickUI({getState:()=>state,writable:()=>true,esc:v=>String(v??''),fmt:v=>String(v??''),icon:()=>'',toast:()=>{},reload:async()=>{},render(){},saveMessage:()=>''});
- return {ui,dialog,values,state,dialogEvents,click:(action,extra={})=>events.click({target:{closest:()=>({dataset:{quick:action,...extra}})},preventDefault(){}})};
+ return {ui,dialog,values,state,storage,events,dialogEvents,click:(action,extra={})=>events.click({target:{closest:()=>({dataset:{quick:action,...extra}})},preventDefault(){}})};
 }
 
 test('New meal and workout composers default to compact entry, retaining selected date and draft values',async t=>{
@@ -24,6 +24,25 @@ test('New meal and workout composers default to compact entry, retaining selecte
   assert.doesNotMatch(c.dialog.innerHTML,/id="quick-text"/);
   assert.match(c.dialog.innerHTML,type==='meals'?/id="compact-food"[^>]*value="Chuối"/:/id="compact-exercise"[^>]*value="Lat pulldown"/);
  });
+});
+
+test('Quick compose flushes the latest input and selected unit on close and when backgrounded',async t=>{
+ const c=composer(t);
+ await c.ui.open('meals');
+ const key='gymbro.quick.firebase:test.meals',initialDraft=c.storage.get(key);
+ c.values.set('#compact-food',{value:'Món tự nhập'});
+ c.values.set('#compact-unit',{value:'tô',dataset:{}});
+ c.dialogEvents.input({target:{id:'compact-unit'}});
+ assert.equal(c.storage.get(key),initialDraft);
+ c.click('close');
+ assert.equal(c.dialog.open,false);
+ assert.equal(JSON.parse(c.storage.get(key)).unit,'tô');
+ await c.ui.open('meals');
+ c.values.set('#compact-food',{value:'Món vừa sửa'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ document.hidden=true;
+ c.events.visibilitychange();
+ assert.equal(JSON.parse(c.storage.get(key)).food,'Món vừa sửa');
 });
 
 test('Unfinished text and explicit text shortcuts remain usable after changing the default',async t=>{
@@ -333,4 +352,41 @@ test('Demo pause keeps the remaining scene time and a step jump plays from that 
  t=9000;player.play();assert.equal(timers.at(-1).ms,2000);// resumes with what was left, not a full scene
  player.pause();player.goTo(3);
  assert.equal(player.state().scene,3);assert.equal(player.state().playing,true);assert.equal(timers.at(-1).ms,3000);
+});
+
+test('Typing in the composer debounces sessionStorage writes, flushes on close, and trigger forwards lazy data-quick clicks',async t=>{
+ let nextId=1;const timers=new Map(),writes=[];
+ t.mock.method(globalThis,'setTimeout',(fn,ms)=>{const id=nextId++;timers.set(id,{fn,ms});return id;});
+ t.mock.method(globalThis,'clearTimeout',id=>{timers.delete(id);});
+ const c=composer(t);
+ const origSetItem=globalThis.sessionStorage.setItem;
+ globalThis.sessionStorage.setItem=(k,v)=>{writes.push([k,v]);origSetItem(k,v);};
+ c.dialog.close=()=>{c.dialog.open=false;c.dialogEvents.close?.();};
+ await c.ui.open('meals');
+ writes.length=0;
+ const foodSuggestions={hidden:true,innerHTML:''};
+ c.values.set('#food-suggestions',foodSuggestions);
+ c.values.set('#compact-food',{value:'ch'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ c.values.set('#compact-food',{value:'chu'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ assert.equal(foodSuggestions.hidden,false,'in-memory suggestions still update synchronously');
+ assert.equal(writes.length,0,'rapid typing coalesces sessionStorage writes');
+ assert.equal(timers.size,1);
+ const [entry]=[...timers.values()];timers.clear();entry.fn();
+ assert.equal(writes.length,1);
+ assert.match(writes[0][1],/"food":"chu"/);
+
+ c.values.set('#compact-food',{value:'chuối chín'});
+ c.dialogEvents.input({target:{id:'compact-food'}});
+ assert.equal(writes.length,1);
+ c.click('close');
+ assert.equal(timers.size,0);
+ assert.equal(writes.length,2,'closing flushes the latest typed draft immediately');
+ assert.match(writes[1][1],/"food":"chuối chín"/);
+
+ // Lazy-load click forwarding: trigger() invokes a [data-quick] element directly.
+ await c.ui.trigger({dataset:{quick:'estimate-help'}});
+ assert.match(c.dialog.innerHTML,/Cách dùng Ước tính bằng AI/);
+ c.click('close');
 });

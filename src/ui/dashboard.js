@@ -21,8 +21,19 @@ export function macroProgress(rows,profile={}){
 }
 export function energyDays(data,end,range=DASHBOARD_DAYS){
   if(!Number.isInteger(range)||range<1||range>28)throw Error('Khoảng biểu đồ không hợp lệ.');
-  const meals=active(data.WebMeals||[]).filter(r=>!skipped(r)),workouts=active(data.WebWorkouts||[]);
-  return Array.from({length:range},(_,i)=>dayEnergy(meals,workouts,shiftDate(end,i-range+1)));
+  const start=shiftDate(end,1-range),mealsByDate=new Map(),workoutsByDate=new Map();
+  for(const r of active(data.WebMeals||[])){
+    if(skipped(r)||!r.date||r.date<start||r.date>end)continue;
+    let list=mealsByDate.get(r.date);if(!list){list=[];mealsByDate.set(r.date,list);}list.push(r);
+  }
+  for(const r of active(data.WebWorkouts||[])){
+    if(!r.date||r.date<start||r.date>end)continue;
+    let list=workoutsByDate.get(r.date);if(!list){list=[];workoutsByDate.set(r.date,list);}list.push(r);
+  }
+  return Array.from({length:range},(_,i)=>{
+    const date=shiftDate(end,i-range+1);
+    return dayEnergy(mealsByDate.get(date)||[],workoutsByDate.get(date)||[],date);
+  });
 }
 // Totals for one date from active meals/workouts: null = nothing known, * flags = partial.
 export function dayEnergy(meals,workouts,date){
@@ -142,10 +153,7 @@ export function energyStats(days){
 }
 const shortKcal=v=>v>=1000?format(v/1000,2)+'k':format(v);
 const percentOf=(v,goal)=>v!==null&&goal?Math.round(v/goal*100)+'% mục tiêu':'';
-// Phone layout: fits the card width for every range, one left axis, no per-bar numbers.
-// Protein and workout kcal keep their own zero-based scales; tapping a day shows its values.
-export function renderEnergyChartCompact(days,{currentDate=today(),target=null,proteinTarget=null,selectedDate=null}={}){
-  if(!days.some(d=>num(d.intake)!==null||num(d.burned)!==null||num(d.protein)!==null))return `<div class="chart-empty">Chưa có số liệu dinh dưỡng hoặc tập luyện trong ${days.length} ngày đã chọn.</div>`;
+function compactChartParts(days,{currentDate=today(),target=null,proteinTarget=null,selectedDate=null}={}){
   const hasProtein=days.some(d=>num(d.protein)!==null)||num(proteinTarget)>0,hasBurn=days.some(d=>num(d.burned)!==null);
   const goal=num(target)>0?num(target):null,proteinGoal=num(proteinTarget)>0?num(proteinTarget):null,n=days.length;
   const width=340,height=192,left=34,right=width-4,top=10,bottom=160,step=(right-left)/n,bw=Math.max(2,Math.min(12,step*(hasProtein?.36:.5)));
@@ -179,12 +187,30 @@ export function renderEnergyChartCompact(days,{currentDate=today(),target=null,p
     +days.map((d,i)=>showDate(i)?`<text class="chart-date${d.date===currentDate?' today':''}" x="${x(i)+16>width?width-1:x(i)}" y="${bottom+20}" text-anchor="${x(i)+16>width?'end':'middle'}">${dateLabel(d.date)}</text>`:'').join('')
     +days.map((d,i)=>`<rect class="chart-hit" data-action="chart-day" data-date="${d.date}" x="${x(i)-step/2}" y="0" width="${step}" height="${height}"><title>${escape(describe(d))}</title></rect>`).join('')
     +`</svg>`;
+  const star=flag=>flag?'*':'';
+  const readoutInner=`<strong>${dateLabel(selected)}${selected===currentDate?' · Hôm nay':''}</strong><span class="intake">Ăn ${format(num(sel.intake))}${star(sel.intakeIncomplete)}${goal?' / '+format(goal):''} kcal</span>${hasProtein?`<span class="protein">Protein ${format(num(sel.protein),1)}${star(sel.proteinIncomplete)}${proteinGoal?' / '+format(proteinGoal):''} g</span>`:''}<span class="burn">Tập ${sel.rest&&!num(sel.burned)?'nghỉ':format(num(sel.burned))+star(sel.burnIncomplete)+' kcal'}</span>`;
+  return {hasProtein,hasBurn,goal,proteinGoal,n,svg,readoutInner};
+}
+// Phone layout: fits the card width for every range, one left axis, no per-bar numbers.
+// Protein and workout kcal keep their own zero-based scales; tapping a day shows its values.
+export function renderEnergyChartCompact(days,opts={}){
+  if(!days.some(d=>num(d.intake)!==null||num(d.burned)!==null||num(d.protein)!==null))return `<div class="chart-empty">Chưa có số liệu dinh dưỡng hoặc tập luyện trong ${days.length} ngày đã chọn.</div>`;
+  const {hasProtein,hasBurn,goal,proteinGoal,n,svg,readoutInner}=compactChartParts(days,opts);
   const stats=energyStats(days),tile=(cls,label,value,unit,note)=>`<div class="chart-stat ${cls}"><small>${label}</small><strong>${value}<em>${unit}</em></strong>${note?`<span>${note}</span>`:''}</div>`;
   const statRow=`<div class="chart-stats">${tile('intake','Ăn vào TB',format(stats.intake.avg),'kcal',percentOf(stats.intake.avg,goal))}${hasProtein?tile('protein','Protein TB',format(stats.protein.avg),'g',percentOf(stats.protein.avg,proteinGoal)):''}${tile('burn','Tập luyện TB',format(stats.burned.avg),'kcal',stats.burned.count+' buổi tập')}</div><p class="chart-stats-note">Trung bình trên ${stats.intake.count}/${n} ngày có ghi ăn uống${stats.incomplete?', gồm cả ngày chưa đầy đủ (*)':''}.</p>`;
-  const star=flag=>flag?'*':'';
-  const readout=`<div class="chart-readout" aria-live="polite"><strong>${dateLabel(selected)}${selected===currentDate?' · Hôm nay':''}</strong><span class="intake">Ăn ${format(num(sel.intake))}${star(sel.intakeIncomplete)}${goal?' / '+format(goal):''} kcal</span>${hasProtein?`<span class="protein">Protein ${format(num(sel.protein),1)}${star(sel.proteinIncomplete)}${proteinGoal?' / '+format(proteinGoal):''} g</span>`:''}<span class="burn">Tập ${sel.rest&&!num(sel.burned)?'nghỉ':format(num(sel.burned))+star(sel.burnIncomplete)+' kcal'}</span></div>`;
+  const readout=`<div class="chart-readout" aria-live="polite">${readoutInner}</div>`;
   const legend=`<div class="energy-legend compact-legend"><span><i class="intake-key"></i>Ăn vào</span>${hasProtein?'<span><i class="protein-key"></i>Protein</span>':''}${hasBurn?'<span><i class="burn-key"></i>Tập luyện (kcal)</span>':''}${goal?'<span><i class="target-key"></i>Mục tiêu kcal</span>':''}${proteinGoal?'<span><i class="protein-target-key"></i>Mục tiêu protein</span>':''}</div>`;
-  return statRow+readout+svg+legend+`<p class="form-note">Chạm vào một ngày để xem số. Trục trái là kcal ăn vào; protein và kcal tập luyện dùng thang riêng, đều từ 0. Kcal tập luyện là ước tính, chưa trừ vào kcal ăn vào.</p>`+energyTable(days);
+  return statRow+readout+`<div class="compact-chart-wrap">${svg}</div>`+legend+`<p class="form-note">Chạm vào một ngày để xem số. Trục trái là kcal ăn vào; protein và kcal tập luyện dùng thang riêng, đều từ 0. Kcal tập luyện là ước tính, chưa trừ vào kcal ăn vào.</p>`+energyTable(days);
+}
+// Partial DOM update when tapping a day in the phone chart: keeps the aria-live readout node and avoids rebuilding the page.
+export function updateCompactChartSelection(root,days,opts={}){
+  if(!root||!days?.length||!days.some(d=>num(d.intake)!==null||num(d.burned)!==null||num(d.protein)!==null))return false;
+  const readout=root.querySelector('.chart-readout'),wrap=root.querySelector('.compact-chart-wrap');
+  if(!readout||!wrap)return false;
+  const {readoutInner,svg}=compactChartParts(days,opts);
+  readout.innerHTML=readoutInner;
+  wrap.innerHTML=svg;
+  return true;
 }
 
 // Name-based hints only; unknown exercises remain explicit and do not imply a body split.

@@ -1,5 +1,6 @@
-import {SCHEMAS} from '../core/core.js';
+import {LocalRepository,SCHEMAS} from '../core/core.js';
 import {validateBundle} from '../core/migration.js';
+import {runWhenIdle} from './idle.js';
 
 // Old releases persisted "local" indefinitely, even with a restored Google login.
 // Device-only/demo are now explicit choices for this page session, never a boot default.
@@ -8,6 +9,32 @@ export const localOnlyMessage=mode=>mode==='demo'?'Đã lưu vào dữ liệu m�
 export function saveMessage(state,count){return state.mode==='firebase'?`Đã lưu ${count??''} ${count?'mục ':''}vào ${state.repo?.backendName||'Firebase'} · ${state.repo?.s.auth.currentUser?.email||''}`.replace('  ',' '):localOnlyMessage(state.mode);}
 export const recordCount=data=>[...Object.keys(SCHEMAS),'Archive'].reduce((n,t)=>n+(data[t]||[]).length,0);
 export function localMissingCount(local,remote){return [...Object.keys(SCHEMAS),'Archive'].reduce((n,t)=>{const ids=new Set((remote[t]||[]).map(r=>r.id));return n+(local[t]||[]).filter(r=>!ids.has(r.id)).length;},0);}
+
+export function rememberRepoMode(storage,key,preferences,mode){
+  if(preferences?.mode!==mode){
+    const next={...preferences,mode};
+    storage.setItem(key,JSON.stringify(next));
+    return next;
+  }
+  return preferences;
+}
+
+// Returns whether the pending count changed and the UI needs to render again.
+export async function updateLocalPending(state,storage,{defer=false}={}){
+  const repo=state.repo;
+  if(defer)await new Promise(resolve=>runWhenIdle(resolve));
+  if(state.repo!==repo)return false;
+  let pending=0;
+  if(state.mode==='firebase'&&state.connected&&repo&&repo.ownerUid===repo.uid){
+    try{
+      const local=new LocalRepository(storage).read();
+      if(local)pending=localMissingCount(local,state.data);
+    }catch{}
+  }
+  const changed=state.localPending!==pending;
+  state.localPending=pending;
+  return changed;
+}
 
 export async function loadCurrentData(state,options={}){
   const repo=state.repo,mode=state.mode;if(!repo)return false;

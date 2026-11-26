@@ -25,12 +25,21 @@ export function kcalStatus(intake,target){
   const r=intake/target;return r<1-KCAL_BAND?'under':r>1+KCAL_BAND?'over':'on';
 }
 
-// One entry per date of the month, with targets applied.
+// One entry per date of the month, with targets applied. Indexed by date in O(N) once.
 export function calendarMonth(data,month,{current=today(),kcalTarget=null,proteinTarget=null}={}){
-  const meals=active(data.WebMeals||[]).filter(r=>!skipped(r)),workouts=active(data.WebWorkouts||[]);
+  const prefix=month+'-',mealsByDate=new Map(),workoutsByDate=new Map();
+  for(const r of active(data.WebMeals||[])){
+    if(skipped(r)||!String(r.date||'').startsWith(prefix))continue;
+    let list=mealsByDate.get(r.date);if(!list){list=[];mealsByDate.set(r.date,list);}list.push(r);
+  }
+  for(const r of active(data.WebWorkouts||[])){
+    if(!String(r.date||'').startsWith(prefix))continue;
+    let list=workoutsByDate.get(r.date);if(!list){list=[];workoutsByDate.set(r.date,list);}list.push(r);
+  }
   const kt=num(kcalTarget)>0?num(kcalTarget):null,pt=num(proteinTarget)>0?num(proteinTarget):null;
   return monthDates(month).map(date=>{
-    const e=dayEnergy(meals,workouts,date),training=workouts.filter(r=>r.date===date&&r.kind!=='rest');
+    const dayMeals=mealsByDate.get(date)||[],dayWorkouts=workoutsByDate.get(date)||[];
+    const e=dayEnergy(dayMeals,dayWorkouts,date),training=dayWorkouts.filter(r=>r.kind!=='rest');
     return {...e,sets:workoutSummary(training).sets,session:training.length>0,future:date>current,today:date===current,weekday:weekdayIndex(date),
       status:kcalStatus(e.intake,kt),intakePct:kt&&e.intake!==null?e.intake/kt*100:null,proteinPct:pt&&e.protein!==null?e.protein/pt*100:null,proteinHit:pt&&e.protein!==null?e.protein>=pt:null};
   });

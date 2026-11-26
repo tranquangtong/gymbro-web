@@ -2,6 +2,7 @@ import {photoExpired,photoExpiryError} from '../core/photo-retention.js';
 import {DEFAULT_FOODS,cleanFood,validateFood} from '../core/quick.js';
 import {validatePhoto} from '../core/media.js';
 import {LocalRepository} from '../core/core.js';
+import {runWhenIdle} from './idle.js';
 export function openPhotoDatabase({timeoutMs=15000}={}){return new Promise((resolve,reject)=>{
  let settled=false;const r=indexedDB.open('gymbro.media',1),fail=()=>{if(settled)return;settled=true;clearTimeout(timer);reject(Error('Trình duyệt không cho lưu ảnh.'));};
  const timer=setTimeout(fail,timeoutMs);
@@ -15,11 +16,27 @@ LocalRepository.prototype.saveFood=async function(food){validateFood(food);const
 LocalRepository.prototype.savePhoto=async function(photo){validatePhoto(photo);if(photoExpired(photo))throw photoExpiryError();const db=await database();try{await new Promise((resolve,reject)=>{const tx=db.transaction('photos','readwrite');tx.objectStore('photos').put(photo,this.key+'/'+photo.id);tx.oncomplete=resolve;tx.onerror=()=>reject(Error('Không lưu được ảnh trên thiết bị.'));tx.onabort=()=>reject(Error('Không lưu được ảnh trên thiết bị.'));});}finally{db.close();}};
 LocalRepository.prototype.getPhoto=async function(id){const db=await database();try{return await new Promise((resolve,reject)=>{let photo;const tx=db.transaction('photos'),req=tx.objectStore('photos').get(this.key+'/'+id);tx.oncomplete=()=>resolve(photo);tx.onabort=tx.onerror=()=>reject(Error('Không đọc được ảnh.'));req.onsuccess=()=>{if(!req.result){const e=Error('Không tìm thấy ảnh trên thiết bị; ảnh chỉ giữ 7 ngày.');e.code='photo/not-found';return reject(e);}if(photoExpired(req.result))return reject(photoExpiryError());try{photo=validatePhoto(req.result);}catch(e){reject(e);}};req.onerror=()=>reject(Error('Không đọc được ảnh.'));});}finally{db.close();}};
 
-export async function purgeLocalPhotoCache(now=Date.now()){
- if(typeof indexedDB==='undefined')return 0;
+let purgeTask=null,purgeDay=null;
+export function purgeLocalPhotoCache(now){
+ if(purgeTask)return purgeTask;
+ if(typeof indexedDB==='undefined'||globalThis.document?.hidden)return Promise.resolve(0);
+ const day=new Date(now??Date.now()).toDateString();
+ if(day===purgeDay)return Promise.resolve(0);
+ purgeTask=new Promise(resolve=>runWhenIdle(resolve)).then(async()=>{
+  if(globalThis.document?.hidden)return 0;
+  const time=now??Date.now();
+  const removed=await scanExpiredPhotos(time);
+  purgeDay=new Date(time).toDateString();
+  return removed;
+ }).finally(()=>{purgeTask=null;});
+ return purgeTask;
+}
+
+async function scanExpiredPhotos(now){
  const db=await database();try{return await new Promise((resolve,reject)=>{
   let removed=0;const tx=db.transaction('photos','readwrite'),req=tx.objectStore('photos').openCursor();
   req.onsuccess=()=>{const cursor=req.result;if(!cursor)return;if(photoExpired(cursor.value,now)){cursor.delete();removed++;}cursor.continue();};
+  req.onerror=()=>reject(Error('Không dọn được cache ảnh.'));
   tx.oncomplete=()=>resolve(removed);tx.onerror=()=>reject(Error('Không dọn được cache ảnh.'));tx.onabort=()=>reject(Error('Không dọn được cache ảnh.'));
  });}finally{db.close();}
 }

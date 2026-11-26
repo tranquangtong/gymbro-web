@@ -11,7 +11,7 @@ function setup(){
   const calls=[],dialogs={open:false,addEventListener:(event,run)=>{dialogs.onclose=run;}},repo={ownerUid:'owner',uid:'owner',s:{sessionExpiresAt:Date.now()+3600000},load:async options=>{calls.push(options);return {WebProfile:[]};}};
   const state={mode:'firebase',connected:true,initialized:true,repo};
   const timers=[];let context;const resumeRetry=createResumeRetry({run:()=>context.resume(),visible:()=>context.document.visibilityState!=='hidden',blocked:()=>dialogs.open||state.busy,setTimer:(run,ms)=>{const t={run,ms};timers.push(t);return t;},clearTimer:t=>{t.cancelled=true;}});
-  context=vm.createContext({authVersion:0,resumeRetry,state,document:{visibilityState:'visible'},$:()=>dialogs,sessionValid:()=>true,expireSession:()=>assert.fail('valid session'),restoreFirebase:()=>assert.fail('already connected'),activateFirebase:()=>assert.fail('already initialized'),latestProfile:()=>({}),liveSync:{stop:()=>calls.push('stop'),start:r=>{assert.equal(r,repo);calls.push('start');}},updateLocalPending:async()=>{},render:()=>{}});
+  context=vm.createContext({authVersion:0,resumeRetry,state,document:{visibilityState:'visible'},$:()=>dialogs,sessionValid:()=>true,expireSession:()=>assert.fail('valid session'),restoreFirebase:()=>assert.fail('already connected'),activateFirebase:()=>assert.fail('already initialized'),latestProfile:()=>({}),liveSync:{stop:()=>calls.push('stop'),start:r=>{assert.equal(r,repo);calls.push('start');}},refreshLocalPending:async options=>{assert.equal(options.defer,true);calls.push('pending');},render:()=>calls.push('render')});
   vm.runInContext(controller+'\nglobalThis.resume=resumeFirebase;globalThis.hideAt=t=>{hiddenAt=t;};',context);
   return {context,calls,dialogs,state,repo,resumeRetry,timers};
 }
@@ -19,7 +19,7 @@ function setup(){
 test('long background resume forces fresh data and restarts live sync; short resume uses cache',async()=>{
   const {context,calls}=setup();
   context.hideAt(Date.now()-6*60000);await context.resume();
-  assert.equal(calls[0],'stop');assert.equal(calls[1].force,true);assert.equal(calls[2],'start');
+  assert.equal(calls[0],'stop');assert.equal(calls[1].force,true);assert.deepEqual(calls.slice(2),['start','render','pending']);
   calls.length=0;context.hideAt(Date.now()-60000);await context.resume();
   assert.equal(calls[0].force,false);assert.equal(calls[1],'start');
 });
@@ -42,7 +42,7 @@ test('failed resumes back off while visible and cancel on success, hide or logou
  const {context,repo,resumeRetry,timers,state,calls}=setup(),load=repo.load;
  repo.load=async()=>{throw Error('offline');};
  await context.resume();for(const delay of [5000,15000,30000,60000,60000]){assert.equal(timers.at(-1).ms,delay);await timers.at(-1).run();}
- repo.load=load;await context.resume();assert.equal(timers.at(-1).cancelled,true);assert.equal(state.connectionError,'');assert.equal(calls.at(-1),'start');
+ repo.load=load;await context.resume();assert.equal(timers.at(-1).cancelled,true);assert.equal(state.connectionError,'');assert.deepEqual(calls.slice(-3),['start','render','pending']);
  resumeRetry.failed();assert.equal(timers.at(-1).ms,5000);resumeRetry.pause();assert.equal(timers.at(-1).cancelled,true);
  context.document.visibilityState='hidden';const count=timers.length;resumeRetry.failed();assert.equal(timers.length,count);
  context.document.visibilityState='visible';resumeRetry.reset();resumeRetry.closed();assert.equal(timers.length,count);
@@ -51,7 +51,8 @@ test('failed resumes back off while visible and cancel on success, hide or logou
 test('cached initial load failures schedule retry and dialog close is wired for all dialogs',async()=>{
  const {context,state,timers}=setup();state.initialized=false;state.cached={};
  context.activateFirebase=async()=>{throw Error('offline');};await context.resume();assert.equal(timers[0].ms,5000);
- assert.match(app,/for\(const id of \['#editor','#confirm-dialog','#quick-dialog'\]\).*addEventListener\('close'/);
+ assert.match(app,/for\(const id of \['#editor','#confirm-dialog'\]\).*addEventListener\('close',\(\)=>resumeRetry\.closed\(\)/);
+ assert.match(app,/\$\('#quick-dialog'\)\?\.addEventListener\('close',\(\)=>resumeRetry\.closed\(\)/);
  assert.match(app,/if\(a==='retry-connect'\)\{toast\([^)]*\);return resumeFirebase\(\);\}/);
 });
 

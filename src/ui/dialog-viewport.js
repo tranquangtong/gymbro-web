@@ -26,13 +26,14 @@ export function focusLiftDelta(field,container,viewHeight,gap=12){
 }
 const EDITABLE='input:not([type=file]):not([type=hidden]):not([type=date]):not([type=checkbox]):not([type=radio]),textarea';
 export function installDialogViewport(win=window,doc=document){
-  let scheduled=false;
+  let scheduled=false,lastHeight=null,lastTop=null,lastKeyboard=null;
   const update=()=>{
     scheduled=false;
     const bounds=viewportBounds(win),root=doc.documentElement;
-    root.style.setProperty('--dialog-viewport',bounds.height+'px');
-    root.style.setProperty('--dialog-viewport-top',bounds.top+'px');
-    root.classList.toggle('keyboard-open',bounds.keyboard);
+    // Only write CSS variables/classes when viewport bounds actually change so keystrokes do not invalidate document styles.
+    if(bounds.height!==lastHeight){lastHeight=bounds.height;root.style.setProperty('--dialog-viewport',bounds.height+'px');}
+    if(bounds.top!==lastTop){lastTop=bounds.top;root.style.setProperty('--dialog-viewport-top',bounds.top+'px');}
+    if(bounds.keyboard!==lastKeyboard){lastKeyboard=bounds.keyboard;root.classList.toggle('keyboard-open',bounds.keyboard);}
     const field=doc.activeElement;
     // Only fields that bring up the keyboard; a <select> opens a picker, scrolling for it only made the sheet jump.
     if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
@@ -48,13 +49,13 @@ export function installDialogViewport(win=window,doc=document){
   win.addEventListener('resize',schedule);
   doc.addEventListener('focusin',schedule);
   doc.addEventListener('input',schedule);
-  // Synchronously on focus (before the keyboard animates): mark the page as editing, which gives the
-  // sheet's scroll area room below its content, then lift the field into the upper part of the sheet.
+  // Synchronously on focus (before the keyboard animates): measure first to avoid layout thrash,
+  // then mark the page as editing and lift the field into the upper part of the sheet.
   doc.addEventListener('focusin',e=>{
     const field=e.target;if(!field?.matches?.(EDITABLE)||!field.closest('dialog[open]'))return;
     const container=field.closest('.quick-content,.editor-fields');if(!container)return;
-    doc.documentElement.classList.add('field-focus');
     const delta=focusLiftDelta(field.getBoundingClientRect(),container.getBoundingClientRect(),win.visualViewport?.height||win.innerHeight);
+    doc.documentElement.classList.add('field-focus');
     if(delta)container.scrollTop+=delta;
   });
   doc.addEventListener('focusout',()=>{win.setTimeout(()=>{const f=doc.activeElement;if(!(f?.matches?.(EDITABLE)&&f.closest('dialog[open]')))doc.documentElement.classList.remove('field-focus');},150);});
