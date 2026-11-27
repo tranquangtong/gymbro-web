@@ -1,9 +1,8 @@
 # Cloudflare backend (Workers + D1)
 
-GitHub Pages still serves the web app and Firebase Authentication still handles Google sign-in.
-Logs move from Firestore to a Cloudflare D1 database behind a Worker API. Free plan only:
-Workers Free (100,000 requests/day) and D1 Free (5 million rows read, 100,000 rows written per day, 5 GB).
-No R2 and no paid product is used. Meal photos stay on the device (IndexedDB) and expire after 5 days.
+GitHub Pages phục vụ ứng dụng. Firebase Authentication xử lý đăng nhập Google. Nhật ký và ảnh món ăn được lưu trong Cloudflare D1 qua Worker `gymbro-api`. Ảnh món ăn hết hạn sau 7 ngày.
+
+Firestore đã được xóa sạch ngày 2026-11-27. [Rules](../firestore.rules) chặn mọi thao tác đọc/ghi từ ứng dụng.
 
 ## How it fits together
 
@@ -13,7 +12,7 @@ No R2 and no paid product is used. Meal photos stay on the device (IndexedDB) an
 | Sign-in | Firebase Authentication (Google) |
 | API | `worker/` → `https://gymbro-api.<your-subdomain>.workers.dev` |
 | Database | D1 `gymbro`, schema in `worker/migrations/` |
-| Switch | `src/config/backend-config.js` (`kind: 'firebase'` → `'cloudflare'`) |
+| Switch | `src/config/backend-config.js` (`kind: 'cloudflare'`) |
 
 The Worker checks every request's Firebase ID token (signature against Google's public keys, project
 `gymbro-web`, expiry, and the 14-day session limit). Each user only reaches rows with their own UID.
@@ -42,27 +41,7 @@ while the tab is visible instead of holding realtime listeners.
 6. Run **Actions → Deploy Cloudflare API → Run workflow**. It creates D1 `gymbro` if missing, applies the
    migrations, deploys the Worker, then checks `/v1/health` and that unauthenticated calls get 401.
    The job summary prints `API_URL=…`.
-7. Put that URL in `src/config/backend-config.js` as `apiBase` (keep `kind: 'firebase'`) and publish.
-
-## Migrate Firestore → D1
-
-1. Sign in on the published app as `tongquangtran@gmail.com`.
-2. *Thêm → Chuyển dữ liệu sang Cloudflare → Chuyển mọi tài khoản* (or *Chuyển dữ liệu của tôi*).
-   It reads each Firestore collection once, copies rows with their IDs and owner UID, and never writes to
-   or deletes from Firestore. Running it again is safe: an existing D1 row is only replaced when Firestore
-   has a later `updated_at`.
-3. Check the reconcile table: every type must say **Khớp** (same count and same SHA-256 fingerprint of
-   `id|updated_at|deleted`). Any difference lists the missing / changed / extra IDs.
-
-If Firestore still reports *Quota exceeded*, wait for the daily reset (midnight Pacific time) and run
-step 2 again. Nothing is lost by retrying.
-
-## Switch over
-
-When every account reconciles, set `kind: 'cloudflare'` in `src/config/backend-config.js` and publish. Firestore
-stays untouched as a read-only copy; the app no longer loads the Firestore SDK except for the migration
-tool. To roll back, set `kind: 'firebase'` again (logs written to D1 after the switch would then need
-copying back).
+7. Put that URL in `src/config/backend-config.js` as `apiBase` (with `kind: 'cloudflare'`) and publish.
 
 ## Cloudflare Workers (bản sao song song)
 

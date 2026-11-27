@@ -1,6 +1,6 @@
 # GymBro Web
 
-Ứng dụng web tiếng Việt để ghi ăn uống, tập luyện và xem tiến bộ. GitHub Pages + Firebase Authentication (Google) + Cloud Firestore. Không cần GAS hoặc Telegram.
+Ứng dụng web tiếng Việt để ghi ăn uống, tập luyện và xem tiến bộ. GitHub Pages + Firebase Authentication (Google) + Cloudflare Workers và D1. Không cần GAS hoặc Telegram.
 
 ## Chạy và kiểm thử
 
@@ -30,17 +30,11 @@ Sửa `src/core/` sẽ kích hoạt deploy Worker khi push lên main.
 
 ## Thiết lập
 
-Đang chuyển backend sang Cloudflare Workers + D1 (gói Free), vẫn dùng Firebase Authentication để đăng nhập: xem [docs/cloudflare.md](docs/cloudflare.md). Công tắc nằm ở `src/config/backend-config.js`.
+Dữ liệu được lưu trong Cloudflare D1 qua Worker `gymbro-api`. Firebase chỉ còn dùng cho đăng nhập Google. Firestore đã được xóa sạch ngày 2026-11-27 và [rules](firestore.rules) chặn mọi thao tác đọc/ghi từ ứng dụng.
 
-Xem [hướng dẫn Firebase](docs/setup.md). Cần bật Google provider, thêm domain GitHub Pages và publish [firestore.rules](firestore.rules). Trước khi publish, database Production mode vẫn từ chối đọc/ghi. App không tự mở quyền.
+Xem [hướng dẫn Firebase](docs/setup.md) để cấu hình đăng nhập và áp dụng rules khóa Firestore. Cấu hình backend nằm trong [hướng dẫn Cloudflare](docs/cloudflare.md).
 
-## Các chế độ
-
-- **Firebase**: tài khoản Google sở hữu dữ liệu ở `users/{uid}/WebMeals`, `WebWorkouts`, `WebProfile`, `Archive`.
-- **Trên thiết bị**: dùng localStorage của trình duyệt; không tự đồng bộ.
-- **Minh họa**: dữ liệu giả lưu riêng, không được import lên cloud.
-
-Giao diện giữ bản nháp form mới trong sessionStorage. Phiên Firebase Auth được SDK lưu trên trình duyệt; đăng xuất khi dùng máy chung. Firestore hiện đọc từ server; chưa có hàng đợi ghi offline. Dữ liệu cập nhật khi tải lại, quay lại tab hoặc bấm Làm mới, chưa dùng realtime listener.
+Phiên đăng nhập Google và bản nháp được lưu trên trình duyệt. Dữ liệu đồng bộ qua Worker `gymbro-api` khi có mạng.
 
 ## Dữ liệu và lịch sử
 
@@ -57,40 +51,40 @@ Không migrate Config/Logs vận hành, `source_message_id`, messageId, messageD
 
 ## Giới hạn và bảo mật
 
-Rules giới hạn quyền theo Firebase UID và schema. Kiểm tra đồng thời khi sửa dùng transaction và revision; code giữ bản nháp khi lỗi. File nguồn Sheets giữ nguyên. Bộ nhập không tải Sheets trực tiếp bằng OAuth nữa; file chuyển đổi là dữ liệu riêng tư, không được commit.
+Worker kiểm tra Firebase ID token, giới hạn quyền theo UID và lọc trường dữ liệu trước khi ghi vào D1. Kiểm tra đồng thời khi sửa dùng transaction và revision; code giữ bản nháp khi lỗi. File nguồn Sheets giữ nguyên. Bộ nhập không tải Sheets trực tiếp bằng OAuth nữa; file chuyển đổi là dữ liệu riêng tư, không được commit.
 
 Đường dẫn `.migration/` bị ignore. Chỉ commit code, Rules và fixture giả. Không đưa lịch sử, bản sao JSON cá nhân, service-account key hoặc token lên repo public. File `firebase.json` chỉ cấu hình triển khai Rules bằng CLI nếu muốn; không chuyển hosting khỏi GitHub Pages.
 
 ## Quản trị viên
 
-`tongquangtran@gmail.com` có quyền admin khi email được Firebase Auth xác minh. Firestore Rules kiểm tra token, không đọc role tự khai từ client. Admin mở màn hình Admin, làm mới danh sách tài khoản và chọn tài khoản để xem/sửa/xóa mềm log; Tư liệu hỗ trợ sửa nội dung báo cáo/giáo án dạng JSON. Banner luôn hiện UID đang quản lý. Nút quay về dữ liệu của mình tránh nhập nhầm tài khoản. Migrate/chuyển local bị chặn khi đang quản lý tài khoản khác.
+`tongquangtran@gmail.com` có quyền admin khi email được Firebase Auth xác minh. Worker kiểm tra token Firebase Auth để xác định quyền admin. Admin mở màn hình Admin, làm mới danh sách tài khoản và chọn tài khoản để xem/sửa/xóa mềm log; Tư liệu hỗ trợ sửa nội dung báo cáo/giáo án dạng JSON. Banner luôn hiện UID đang quản lý. Nút quay về dữ liệu của mình tránh nhập nhầm tài khoản. Migrate/chuyển local bị chặn khi đang quản lý tài khoản khác.
 
-Mỗi tài khoản đăng nhập tạo một bản directory `users/{uid}` chỉ chứa uid, email, display_name và updated_at. Người thường không list directory hoặc mở dữ liệu của người khác. Không cấp IAM Owner hoặc quyền Firebase Console bằng vai trò admin của ứng dụng.
+Mỗi tài khoản đăng nhập tạo một mục danh bạ trong D1 chỉ chứa uid, email, display_name và updated_at. Người thường không list directory hoặc mở dữ liệu của người khác. Không cấp IAM Owner hoặc quyền Firebase Console bằng vai trò admin của ứng dụng.
 
 ## Ghi nhanh (v2)
 
 - Ăn uống → Thêm món → **Viết nhanh**: `2 chuối, 1 whey Nuta` hoặc `3 trứng luộc không lòng đỏ`. Có thể ghi `200g đậu hũ`. Mỗi lần nhập luôn tạo đúng **1 món**, giữ nguyên dấu phẩy, dấu chấm, chấm phẩy và xuống dòng trong mô tả. Ví dụ `2 chuối, 1 whey Nuta` được lưu chung một mục; app chỉ tự tính từ thư viện khi toàn bộ mô tả khớp một món quen, món phức tạp giữ macro trống để ước tính qua ChatGPT. **Điền gọn** chỉ cần tên món và số khẩu phần. Xem trước trước khi lưu.
 - Tập luyện → Thêm bài: `Chin-up trợ lực 27.2kg 3x12`, `Lat pulldown 40kg 3x12`, `Đi bộ 30 phút`, mỗi bài một dòng. Cú pháp GAS `Dumbbell curl, 10kg x2, 12` ghi một set, tổng 20kg; `10kg mỗi tay, 12` cũng dùng tổng hai tay. `10kg 3x12` là ba set, không nhân đôi kg. Điền gọn có loại bài, set/reps/kg hoặc phút.
 - Nhập là parser quy tắc chạy trong trình duyệt, **không có AI/API**. Nếu câu chưa được hỗ trợ, app báo lỗi; dùng mẫu hiển thị hoặc form gọn/chi tiết.
-- Thư viện riêng nằm ở `users/{uid}/FoodLibrary`. Lần đầu mở Thêm món/Thư viện sẽ khởi tạo 7 món mẫu nếu thư viện rỗng. Nút lưu mẫu bổ sung món còn thiếu, không ghi đè món đã chỉnh sửa. Có thể thêm/sửa theo nhãn sản phẩm; thay đổi chỉ áp dụng cho log mới.
+- Thư viện riêng được lưu theo tài khoản trong D1. Lần đầu mở Thêm món/Thư viện sẽ khởi tạo 7 món mẫu nếu thư viện rỗng. Nút lưu mẫu bổ sung món còn thiếu, không ghi đè món đã chỉnh sửa. Có thể thêm/sửa theo nhãn sản phẩm; thay đổi chỉ áp dụng cho log mới.
 - Nuta Ultimate Plant Protein: nhà sản xuất công bố **27g protein/43g** tại https://nutafood.vn/bot-protein-thuc-vat-ultilmate-plant-protein-2 (30/10/2026). Kcal/carbs/fat chưa được xác minh nên để trống; không tự lấy baseline GAS cũ hay sản phẩm Nuta khác. Alias `whey Nuta` được giữ cho tiện nhập, tên chính thức là protein thực vật.
 
 ### Ảnh bữa ăn và ChatGPT
 
 1. Thêm ảnh/Chụp ảnh khi nhập món; hoặc bấm biểu tượng ảnh ở một món đã lưu. Tối đa 3 ảnh/món. Tất cả ảnh của lần nhập được gắn vào đúng một mục món ăn đó.
-2. Ảnh được decode và vẽ lại qua canvas (không giữ EXIF), chuyển JPEG tối đa 1280px, chuỗi base64 không quá 360.000 ký tự. Tệp được lưu riêng ở `users/{uid}/MealPhotos/{id}`, món chứa `photo_ids`. Chỉ tải ảnh khi mở ảnh/tạo prompt; không tải toàn bộ cùng lịch sử. Browser không decode được HEIC sẽ yêu cầu chọn JPG/PNG.
+2. Ảnh được decode và vẽ lại qua canvas (không giữ EXIF), chuyển JPEG tối đa 1280px, chuỗi base64 không quá 360.000 ký tự. Tệp được lưu riêng trong D1, món chứa `photo_ids`. Chỉ tải ảnh khi mở ảnh/tạo prompt; không tải toàn bộ cùng lịch sử. Browser không decode được HEIC sẽ yêu cầu chọn JPG/PNG.
 3. Bấm **Ước tính với ChatGPT** → Tạo prompt → Copy prompt. Copy chỉ có chữ; dùng Chia sẻ prompt + ảnh trên browser hỗ trợ Web Share files, hoặc tải từng ảnh và đính kèm vào ChatGPT. Tên ảnh chứa ID món để đối chiếu.
 4. Dán JSON ChatGPT trả về → Đọc kết quả → Xem trước → Áp dụng. App kiểm tra request_id, ngày, loại, tài khoản, đủ ID duy nhất, số hợp lệ và phiên bản log. Log đã sửa sau khi tạo prompt sẽ bị từ chối, yêu cầu tạo lại. Prompt được giữ trong sessionStorage theo tài khoản và loại để tiếp tục sau khi tải lại; sau khi áp dụng phải tạo prompt mới.
 5. Tập luyện dùng cùng luồng qua **Ước tính kcal với ChatGPT**. Nhập tổng phút cả buổi nếu biết. Output `kcal_burned` lưu vào `kcal_burned_est`, là gross kcal và được gắn nhãn ước tính. Thiếu thời gian có thể trả null. Không suy thời gian từ số set, không cộng EPOC và không tính cả buổi lặp lại cho mỗi bài. Sửa bài/sets/phút hoặc lặp buổi tập sẽ xóa estimate cũ.
 
-Không gửi dữ liệu/ảnh tự động đến ChatGPT. File ảnh chỉ gửi khi người dùng chọn trong luồng chia sẻ/đính kèm. Với Spark, bản này dùng ảnh nén trong Firestore vì Cloud Storage for Firebase yêu cầu Blaze; phù hợp quy mô cá nhân, vẫn chịu hạn mức dung lượng/đọc/ghi Firestore. Có thể chuyển ảnh sang object storage khi tăng quy mô.
+Ảnh chỉ được gửi đến ChatGPT khi người dùng chọn chia sẻ hoặc đính kèm.
 
 Ảnh có nội dung bất biến; bỏ ảnh là gỡ tham chiếu, không hard delete tài liệu ảnh. Bản sao lưu JSON hiện chỉ gồm log và ID ảnh, **không gồm byte ảnh hoặc FoodLibrary**; tải ảnh riêng nếu cần. Chế độ local lưu ảnh trong IndexedDB và thư viện trong localStorage, tách khỏi chế độ mẫu. Không có hàng đợi ghi offline.
 
-Publish bản `firestore.rules` mới trước khi sử dụng FoodLibrary/MealPhotos. Giữ nguyên owner/admin, không mở public reads. Không đổi billing plan.
-
 
 ## Bản sửa đồng bộ điện thoại (v2.0.1)
+
+Ghi chú lịch sử từ thời còn dùng Firestore, trước khi chuyển dữ liệu sang D1.
 
 - Mỗi lần mở app mặc định khôi phục Firebase, không tiếp tục âm thầm lưu local do preference cũ. Chế độ trên thiết bị phải được chọn rõ trong phiên hiện tại và có thông báo không đồng bộ.
 - Firestore realtime listeners nhận tạo/sửa/xóa mềm từ thiết bị khác trong cùng tài khoản, không cần refresh. Listener tách khi đăng xuất/đổi UID, mở dữ liệu admin khác hoặc rời trang; callback cũ không được đưa dữ liệu sang tài khoản mới. Cache ban đầu không ghi đè dữ liệu đã tải từ server.
@@ -119,7 +113,7 @@ Trước khi ghi nhật ký, tài khoản phải có cân nặng hiện tại, c
 
 Các field giữ tương thích với Rules đã publish: `weight_kg`, `height_cm`, `TDEE`; map `goal` chứa `bmr_kcal`, `target_weight_kg`, `training_goal`, `activity_factor`. `age` và `gender` chỉ cần nếu sử dụng helper ước tính. Hồ sơ legacy có `goal` dạng string vẫn được đọc để gợi ý mục tiêu, nhưng cần bổ sung thông tin bắt buộc.
 
-BMR/TDEE có thể nhập thủ công. Helper cho người từ 18–100 tuổi dùng Mifflin–St Jeor (https://pubmed.ncbi.nlm.nih.gov/2305711/), ước tính REE/BMR rồi nhân hệ số vận động người dùng chọn để ước tính TDEE; không tự chọn giới tính/hệ số. Mọi kết quả đều sửa được và không tự biến thành mục tiêu ăn uống. Không cần đổi Firestore Rules cho bản cập nhật này.
+BMR/TDEE có thể nhập thủ công. Helper cho người từ 18–100 tuổi dùng Mifflin–St Jeor (https://pubmed.ncbi.nlm.nih.gov/2305711/), ước tính REE/BMR rồi nhân hệ số vận động người dùng chọn để ước tính TDEE; không tự chọn giới tính/hệ số. Mọi kết quả đều sửa được và không tự biến thành mục tiêu ăn uống.
 
 ### Test thủ công v2.1
 
@@ -232,10 +226,12 @@ Test: chọn ngày có nhiều set legacy trùng tên (vd 29/10) → thẻ Vận
 
 ### Tự dọn ảnh món ăn
 
-Ảnh món ăn được lưu trên Cloudflare D1 và hết hạn sau 7 ngày. Worker `gymbro-api` dọn ảnh hết hạn mỗi ngày lúc 03:17 UTC. App dọn cache ảnh trên thiết bị khi hoạt động và chặn đọc hoặc tải lên ảnh quá hạn. Macro và nhật ký được giữ lại. Workflow GitHub Actions **Clean expired meal photos** chỉ chạy thủ công để dọn ảnh Firestore còn sót, với chế độ xem trước bật mặc định. [Hướng dẫn dọn ảnh Firestore](docs/photo-retention.md).
+Ảnh món ăn được lưu trên Cloudflare D1 và hết hạn sau 7 ngày. Worker `gymbro-api` dọn ảnh hết hạn mỗi ngày lúc 03:17 UTC. App dọn cache ảnh trên thiết bị khi hoạt động và chặn đọc hoặc tải lên ảnh quá hạn. Macro và nhật ký được giữ lại. [Chi tiết thời hạn lưu ảnh](docs/photo-retention.md).
 
 
 ### Giảm lượt đọc và phân loại lỗi quota (v2.7.1)
+
+Ghi chú lịch sử từ thời còn dùng Firestore, trước khi chuyển dữ liệu sang D1.
 
 Lỗi Quota exceeded không đủ để kết luận đã dùng hết 1 GiB. Firestore có quota read/write/delete/bandwidth riêng; browser storage cũng có QuotaExceededError. Xem Firebase → Firestore Database → Usage để xác định. Tài liệu chính hãng: https://firebase.google.com/docs/firestore/quotas và https://firebase.google.com/docs/firestore/pricing . Quota ngày reset theo Pacific time, không theo 0h Việt Nam. Xóa ảnh không trả lại các lượt đọc/ghi đã tiêu thụ.
 

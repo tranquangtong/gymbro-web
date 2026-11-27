@@ -2,8 +2,7 @@
 
 ## Stack
 - Vanilla JS ES modules (no npm deps, no build step), static PWA on GitHub Pages (`index.html`, `sw.js`)
-- Auth: Firebase Authentication (Google). Data: Firestore (`firestore.rules`) → migrating to
-  Cloudflare Worker + D1 (`worker/`, switch in `src/config/backend-config.js`, see `docs/cloudflare.md`)
+- Auth: Firebase Authentication (Google). Data: Cloudflare Worker + D1 (`worker/`, switch in `src/config/backend-config.js`, see `docs/cloudflare.md`)
 - UI text and commit messages are in Vietnamese
 
 ## Commands
@@ -31,8 +30,8 @@
 - User-facing change: bump `version` in package.json (semver) and mention it in the commit (e.g. "v2.18.0")
 - Keep the app dependency-free; Firebase SDK stays loaded from the official CDN
 - Only allowlisted fields are written/exported/imported; keep schema changes in sync across
-  `SCHEMAS` (src/core/core.js), `cleanRecord` (src/core/migration.js), `cleanFood` (src/core/quick.js),
-  firestore.rules and `cleanForKind` (worker/src/store.js)
+  `SCHEMAS` (src/core/core.js), `cleanRecord` (src/core/migration.js), `cleanFood` (src/core/quick.js)
+  and `cleanForKind` (worker/src/store.js)
 - Unknown kcal/macro = empty, not 0
 - Lead commits on a branch and opens a PR (history uses squash-merged PRs)
 - Layout: see README "Cấu trúc thư mục"; `src/core/` must not import from data/ or ui/ (Worker bundles it)
