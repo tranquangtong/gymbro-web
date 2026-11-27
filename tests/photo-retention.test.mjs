@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {generateKeyPairSync} from 'node:crypto';
 import {PHOTO_RETENTION_MS,photoExpired,photoExpiresAt,forgetExpiredPhotos} from '../src/core/photo-retention.js';
 import {photoCleanupWrites,cleanupPhotos} from '../scripts/photo-cleanup.mjs';
@@ -8,7 +9,8 @@ const now=Date.parse('2026-10-31T07:00:00Z'),old=new Date(now-PHOTO_RETENTION_MS
 const root='projects/gymbro-web/databases/(default)/documents';
 const photo={name:root+'/users/u/MealPhotos/p',updateTime:'v1',fields:{created_at:{stringValue:old},meal_id:{stringValue:'m'}}};
 const meal={name:root+'/users/u/WebMeals/m',updateTime:'v2',fields:{photo_ids:{arrayValue:{values:[{stringValue:'p'},{stringValue:'keep'}]}},kcal:{integerValue:'400'},food:{stringValue:'Food'}}};
-test('Photo expiry uses exactly 120 hours from image creation, including old photos, with a fail-closed invalid-date guard',()=>{
+test('Photo expiry uses exactly 168 hours from image creation, including old photos, with a fail-closed invalid-date guard',()=>{
+ assert.equal(PHOTO_RETENTION_MS,168*60*60*1000);
  assert.equal(photoExpired({created_at:old},now),true);assert.equal(photoExpired({created_at:fresh},now),false);assert.equal(photoExpiresAt({created_at:old}),now);assert.equal(photoExpired({created_at:'invalid'},now),false);
  assert.deepEqual(forgetExpiredPhotos([{id:'old',created_at:old},{id:'new',created_at:fresh}],now).map(r=>r.id),['new']);
 });
@@ -33,7 +35,7 @@ function api({conflict=false}={}){
   throw Error('unexpected endpoint');
  }};
 }
-test('Scheduled cleaner dry-run makes no writes; apply uses one atomic guarded commit per expired image',async()=>{
+test('Firestore cleaner dry-run makes no writes; apply uses one atomic guarded commit per expired image',async()=>{
  const dry=api(),preview=await cleanupPhotos({account,fetcher:dry.fetcher,now});assert.equal(preview.wouldDelete,1);assert.equal(dry.commits.length,0);
  const live=api(),result=await cleanupPhotos({account,fetcher:live.fetcher,now,dryRun:false});assert.equal(result.deleted,1);assert.equal(live.commits.length,1);assert.equal(live.commits[0].writes.length,2);
  const race=api({conflict:true}),retry=await cleanupPhotos({account,fetcher:race.fetcher,now,dryRun:false});assert.equal(retry.deleted,0);assert.equal(retry.conflicts,1);
@@ -64,4 +66,10 @@ test('Local cache cleanup physically deletes only expired image bytes and closes
   assert.equal(await purgeLocalPhotoCache(now),0);
   assert.equal(openCount,1);
  }finally{globalThis.indexedDB=original;globalThis.requestIdleCallback=idle;}
+});
+
+test('Legacy Firestore photo cleanup runs only by manual dispatch and defaults to dry-run',()=>{
+ const workflow=readFileSync(new URL('../.github/workflows/cleanup-meal-photos.yml',import.meta.url),'utf8');
+ assert.doesNotMatch(workflow,/^[ \t]*schedule\s*:/m);
+ assert.match(workflow,/^on:\r?\n  workflow_dispatch:\r?\n    inputs:\r?\n      dry_run:(?:\r?\n {8}[^\r\n]*)*\r?\n {8}default: true[ \t]*$/m);
 });

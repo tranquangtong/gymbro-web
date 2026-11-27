@@ -230,9 +230,9 @@ Dashboard bỏ danh sách tên bài/tạ/reps theo từng record khỏi thẻ V�
 
 Test: chọn ngày có nhiều set legacy trùng tên (vd 29/10) → thẻ Vận động ngắn, không có hàng set lặp lại → Chi tiết: trang Tập luyện đúng ngày, đầy đủ record/tạ/reps. Kiểm tra số bài khác nhau và tổng set; ngày nghỉ/không log không hiển thị 0 bài/0 set vô ích. Không dùng Chrome.
 
-### Tự dọn ảnh sau 5 ngày (v2.7.0)
+### Tự dọn ảnh món ăn
 
-Ảnh hết hạn sau 120 giờ từ created_at; cache ảnh GymBro trên thiết bị được dọn khi app hoạt động. Upload/read ảnh quá hạn bị chặn; macro và nhật ký giữ nguyên. Có lịch GitHub Actions mỗi giờ để xóa thật document ảnh hết hạn và gỡ đúng photo_ids khỏi món ăn, không cần mở app. **Phần cloud cần thêm secret FIREBASE_SERVICE_ACCOUNT một lần mới hoạt động.** Hướng dẫn cụ thể: [docs/photo-retention.md](docs/photo-retention.md). Không dùng TTL vì TTL deletes yêu cầu billing. Không cần đổi Firestore Rules. Script và lịch đã chuẩn bị; chưa xác nhận xóa production nếu chưa có credential.
+Ảnh món ăn được lưu trên Cloudflare D1 và hết hạn sau 7 ngày. Worker `gymbro-api` dọn ảnh hết hạn mỗi ngày lúc 03:17 UTC. App dọn cache ảnh trên thiết bị khi hoạt động và chặn đọc hoặc tải lên ảnh quá hạn. Macro và nhật ký được giữ lại. Workflow GitHub Actions **Clean expired meal photos** chỉ chạy thủ công để dọn ảnh Firestore còn sót, với chế độ xem trước bật mặc định. [Hướng dẫn dọn ảnh Firestore](docs/photo-retention.md).
 
 
 ### Giảm lượt đọc và phân loại lỗi quota (v2.7.1)

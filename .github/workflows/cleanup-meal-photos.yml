@@ -1,7 +1,6 @@
+# Cron của Worker dọn ảnh trên D1. Chạy workflow này thủ công để dọn ảnh Firestore cũ.
 name: Clean expired meal photos
 on:
-  schedule:
-    - cron: '23 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -34,7 +33,7 @@ jobs:
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Delete photos older than five days
+      - name: Delete photos older than seven days
         if: steps.credentials.outputs.ready == 'true'
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
